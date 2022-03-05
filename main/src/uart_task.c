@@ -24,14 +24,17 @@
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
 #define BIT_0	( 1 << 0 )
+#define DEVID "1kffafafff"
 
 extern QueueHandle_t xQueue1;
 extern EventGroupHandle_t xEventGroup1;
 static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
+HproFuncCode funcCode;
+// HproOpReadCode opCode;
 char controlerStr[128] = {0};
-uint8_t dataBuffer[1024] = {0};
-char sendDataBUffer[16] = {0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01, 0x21, 0x68};
+char sendDataBuffer[16] = {0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02};
+const uint16_t polynom = 0xA001;
 
 typedef struct {
     uint32_t front;
@@ -42,6 +45,43 @@ typedef struct {
 UartBuffer uart1Buffer;
 HproComFrame dataFrame;
 HproComFrame sendDataFrame;
+
+uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len)
+{
+	uint8_t i;
+	uint16_t crc = 0xffff;
+ 
+	if (len == 0) {
+		len = 1;
+	}
+	while (len--) {
+		crc ^= *ptr;
+		for (i = 0; i<8; i++)
+		{
+			if (crc & 1) {
+				crc >>= 1;
+				crc ^= polynom;
+			}
+			else {
+				crc >>= 1;
+			}
+		}
+		ptr++;
+	}
+	return(crc);
+}
+
+int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
+{
+    uint16_t crc;
+
+    crc = crc16bitbybit(ptr, len);
+    if (rcrc != crc) {
+        return -1; 
+    }
+
+    return 0;
+}
 
 static void UART_InitBuffer(void)
 {
@@ -95,11 +135,32 @@ int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 	return 0;
 }
 
+void ParseOpCode(char *str, uint8_t op)
+{
+    switch (op) {
+        case BREAK: {
+            // (void)sprintf(str, "{\"DeviceType\":%d,\"Item\":{\"opration\":%d,\"time\":%lld,\"func\":%d,\"status\":%d}}", 
+			//     CONTROLERTYPE, dataFrame.func, (long long)0, dataFrame.operate, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            // (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'电机转数\',\n valueUnit:\'个\',\n value:\'%d\',\n expand:NULL\n}\n", 
+			//     DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'dev status\',\n valueUnit:\'NULL\',\n value:\'%d\',\n expand:\'NULL\'\n}\n", 
+            DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;
+        }
+        case HMISTATUS: {
+            (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'work status\',\n valueUnit:\'NULL\',\n value:\'%d\',\n expand:\'NULL\'\n}\n", 
+            DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;
+        }
+    }
+}
+
 int GetDataFromControler(void)
 {
 	uint8_t curData = 0;
 	uint8_t lastData = 0;
     uint16_t length;
+    uint16_t crc;
 	int ret;
     static const char *GET_DATA_TAG = "GET_DATA_TASK";
     esp_log_level_set(GET_DATA_TAG, ESP_LOG_INFO);
@@ -123,17 +184,22 @@ int GetDataFromControler(void)
 
     ret += UART_ReadBufferByte(&dataFrame.func);
 	ret += UART_ReadBufferByte(&dataFrame.operate);
-    ret += UART_ReadBufferBytes(dataBuffer, length - 2);
+    ret += UART_ReadBufferBytes(&dataFrame.data[0], length - 2);
     if (ret != 0) {
         return -1;
     }
-	dataFrame.data = dataBuffer;
 
     ret = UART_ReadBufferBytes(&dataFrame.crc[0], 2);
     if (ret != 0) {
         return -1;
     }
-
+    
+    // // CRC16 check
+    // if (CheckCRC16((uint8_t *)&dataFrame.head[0], length + 4, (dataFrame.crc[1] << 8) | dataFrame.crc[0]) != 0) {
+    //     crc = crc16bitbybit((uint8_t *)&dataFrame.head[0], length + 4);
+    //     ESP_LOGI(GET_DATA_TAG, "rec crc:%x%x, cal crc:%x%x", dataFrame.crc[0], dataFrame.crc[1], crc >> 8, crc & 0xff);
+    //     return -1;
+    // }
 
 	return 0;
 }
@@ -171,10 +237,13 @@ void tx_task(void *arg)
     static const char *TX_TASK_TAG = "TX_TASK";
     EventBits_t uxBits;
     uint32_t recvp;
+    uint16_t crc;
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
-        uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBUffer, 8);
+        crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
+        memcpy(&sendDataBuffer[6], &crc, 2);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         // uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0, pdTRUE, pdFALSE, (TickType_t)10);
         // if ((uxBits & BIT_0) != 0) {
@@ -204,8 +273,9 @@ void rx_task(void *arg)
         ret = GetDataFromControler();
 		if (ret == 0) {
 			// parameter = (dataFrame.data.data[2] << 8) | dataFrame.data.data[1];
-            (void)sprintf(controlerStr, "{\"DeviceType\":%d,\"Item\":{\"opration\":%d,\"time\":%lld,\"func\":%d,\"status\":%d}}", 
-			    CONTROLERTYPE, dataFrame.func, (long long)0, dataFrame.operate, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            // (void)sprintf(controlerStr, "{\"DeviceType\":%d,\"Item\":{\"opration\":%d,\"time\":%lld,\"func\":%d,\"status\":%d}}", 
+			//     CONTROLERTYPE, dataFrame.func, (long long)0, dataFrame.operate, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            ParseOpCode(controlerStr, dataFrame.operate);
             ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
             
 			if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {

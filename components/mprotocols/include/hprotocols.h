@@ -12,13 +12,21 @@ typedef enum {
 } HproFuncCode;
 
 typedef enum {
-    HMISTATUS = 0x01,
-    BREAK,
+    BREAK = 0x01,
+    HMISTATUS,
     MODEL,
-    RATE,
-    APARAMETER,
-    PARAMETER,
-    PAPASTATUS
+    COUNT,
+    SCHEDULE,
+    PATTERN,
+    PITCH,
+    PITCHCOUNT,
+    SPINDLERATE,
+    BOOTTIME,
+    APPVERSION,
+    CONTROLVERSION,
+    MECHANICCALL,
+    MATERIALCALL,
+    OTHERCALL
 } HproOpReadCode;
 
 typedef enum {
@@ -38,7 +46,7 @@ typedef struct {
     uint8_t length[2];
     uint8_t func;
     uint8_t operate;
-    uint8_t* data;
+    uint8_t data[1024];
     uint8_t crc[2];
 } HproComFrame;
 #pragma pack()
