@@ -32,7 +32,8 @@ void app_main(void)
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
-    xTaskCreate(tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES - 3, NULL);
-    xTaskCreate(uart_event_task, "uart_event_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(tcp_client_task, "tcp_client", 4096, NULL, 5, NULL);
+    xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
+    xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
+    xTaskCreate(tcp_client_recv_task, "tcp_recv_client", 1024*4, NULL, 5, NULL);
 }

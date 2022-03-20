@@ -14,7 +14,7 @@ typedef enum {
 typedef enum {
     BREAK = 0x01,
     HMISTATUS,
-    MODEL,
+    MODE,
     COUNT,
     SCHEDULE,
     PATTERN,

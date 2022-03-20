@@ -32,8 +32,8 @@ static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
-char controlerStr[128] = {0};
-char sendDataBuffer[16] = {0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02};
+char controlerStr[256] = {0};
+char sendDataBuffer[16] = { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 };
 const uint16_t polynom = 0xA001;
 
 typedef struct {
@@ -139,17 +139,81 @@ void ParseOpCode(char *str, uint8_t op)
 {
     switch (op) {
         case BREAK: {
-            // (void)sprintf(str, "{\"DeviceType\":%d,\"Item\":{\"opration\":%d,\"time\":%lld,\"func\":%d,\"status\":%d}}", 
-			//     CONTROLERTYPE, dataFrame.func, (long long)0, dataFrame.operate, dataFrame.data[0] << 8 | dataFrame.data[1]);
-            // (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'电机转数\',\n valueUnit:\'个\',\n value:\'%d\',\n expand:NULL\n}\n", 
-			//     DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
-            (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'dev status\',\n valueUnit:\'NULL\',\n value:\'%d\',\n expand:\'NULL\'\n}\n", 
-            DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n   \"devId\":\"%s\",\n   \"timeStamp\":%d,\n   \"devType\":\"dev status\",\n   \"valueUnit\":\"NULL\",\n   \"value\":%d,\n   \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case HMISTATUS: {
-            (void)sprintf(str, "{\n devId:\'%s\',\n timeStamp:\'%d\',\n devType:\'work status\',\n valueUnit:\'NULL\',\n value:\'%d\',\n expand:\'NULL\'\n}\n", 
-            DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"work status\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;
+        }
+        case MODE: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"mode\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0]);
+            break;    
+        }
+        case COUNT: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"count\",\n    \"valueUnit\":\"jian\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case SCHEDULE: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"task count\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case PATTERN: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pattern number\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case PITCH: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pitch distance\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case PITCHCOUNT: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pitch count\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case SPINDLERATE: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"main axis rate\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            break;    
+        }
+        case BOOTTIME: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"boot time\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d;%d;%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1], dataFrame.data[2] << 8 | dataFrame.data[3], dataFrame.data[4] << 8 | dataFrame.data[5]);
+            break;    
+        }
+        case APPVERSION: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"app version\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%s,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, (char *)&dataFrame.data[0]);
+            break;    
+        }
+        case CONTROLVERSION: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"controler version\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%s,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, (char *)&dataFrame.data[0]);
+            break;    
+        }
+        case MECHANICCALL: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"mechanic call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0]);
+            break;    
+        }
+        case MATERIALCALL: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"meterial call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0]);
+            break;    
+        }
+        case OTHERCALL: {
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"other call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
+                DEVID, 0, dataFrame.data[0]);
+            break;    
+        }
+        default: {
             break;
         }
     }
@@ -245,12 +309,13 @@ void tx_task(void *arg)
         memcpy(&sendDataBuffer[6], &crc, 2);
         uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+        
         // uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0, pdTRUE, pdFALSE, (TickType_t)10);
         // if ((uxBits & BIT_0) != 0) {
-        //     uart_write_bytes(UART_NUM_1, (uint8_t *)&dataFrame, 4);
-        //     uart_write_bytes(UART_NUM_1, (uint8_t *)&dataFrame.data[0], (dataFrame.length[0] << 8) | 
-        //     dataFrame.length[1]);
-        //     uart_write_bytes(UART_NUM_1, (uint8_t *)&dataFrame.crc[0], 2);
+        //     crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
+        //     memcpy(&sendDataBuffer[6], &crc, 2);
+        //     uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
         // }
     }
 }
@@ -272,16 +337,11 @@ void rx_task(void *arg)
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         ret = GetDataFromControler();
 		if (ret == 0) {
-			// parameter = (dataFrame.data.data[2] << 8) | dataFrame.data.data[1];
-            // (void)sprintf(controlerStr, "{\"DeviceType\":%d,\"Item\":{\"opration\":%d,\"time\":%lld,\"func\":%d,\"status\":%d}}", 
-			//     CONTROLERTYPE, dataFrame.func, (long long)0, dataFrame.operate, dataFrame.data[0] << 8 | dataFrame.data[1]);
             ParseOpCode(controlerStr, dataFrame.operate);
             ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
-            
 			if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                 //TO DO
             }
-            xEventGroupSetBits(xEventGroup1, BIT_0);
 		}
     }
 }

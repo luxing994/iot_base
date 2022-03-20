@@ -20,6 +20,8 @@
 #include "addr_from_stdin.h"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
+#include "cJSON.h"
+
 
 #if defined(CONFIG_EXAMPLE_IPV4)
 #define HOST_IP_ADDR CONFIG_EXAMPLE_IPV4_ADDR
@@ -30,15 +32,18 @@
 #endif
 
 #define PORT CONFIG_EXAMPLE_PORT
+#define BIT_0	( 1 << 0 )
 
+extern EventGroupHandle_t xEventGroup1;
 extern QueueHandle_t xQueue1;
 static const char *TAG = "example";
 static const char *payload = "Message from ESP32\n";
+char host_ip[] = HOST_IP_ADDR;
+int sock, flag = 0;
 
 void tcp_client_task(void *pvParameters)
 {
     char rx_buffer[128];
-    char host_ip[] = HOST_IP_ADDR;
     int addr_family = 0;
     int ip_protocol = 0;
     uint32_t recvp;
@@ -63,43 +68,29 @@ void tcp_client_task(void *pvParameters)
         struct sockaddr_storage dest_addr = { 0 };
         ESP_ERROR_CHECK(get_addr_from_stdin(PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
-        int sock =  socket(addr_family, SOCK_STREAM, ip_protocol);
+        sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            break;
+            continue;
         }
         ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT);
 
         int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {
             ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-            break;
+            continue;
         }
         ESP_LOGI(TAG, "Successfully connected");
+        flag = 1;
 
         while (1) {
             if(xQueueReceive(xQueue1, &recvp, (TickType_t)10) == pdPASS) {
-                ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
+                // ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
                 int err = send(sock, (uint8_t *)recvp, strlen(recvp), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                     break;
                 }
-
-                // int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-                // // Error occurred during receiving
-                // if (len < 0) {
-                //     ESP_LOGE(TAG, "recv failed: errno %d", errno);
-                //     break;
-                // }
-                // // Data received
-                // else {
-                //     rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
-                //     ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
-                //     ESP_LOGI(TAG, "%s", rx_buffer);
-                // }
-
-                // vTaskDelay(2000 / portTICK_PERIOD_MS);
             }
         }
 
@@ -107,7 +98,51 @@ void tcp_client_task(void *pvParameters)
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
             shutdown(sock, 0);
             close(sock);
+            flag = 0;
         }
     }
     vTaskDelete(NULL);
+}
+
+void tcp_client_recv_task(void *pvParameters)
+{
+    static const char *TCP_RECV_TASK_TAG = "TCP_RECV_TASK";
+    TickType_t xLastWakeTime;
+ 	const TickType_t xFrequency = 10;
+    char rx_buffer[128];
+    cJSON *root = NULL;
+    cJSON *token = NULL;
+    char *devId = NULL;
+
+    xLastWakeTime = xTaskGetTickCount();
+    esp_log_level_set(TCP_RECV_TASK_TAG, ESP_LOG_INFO);
+
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        if (flag == 1) {
+            int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
+            // Error occurred during receiving
+            if (len < 0) {
+                ESP_LOGE(TCP_RECV_TASK_TAG, "recv failed: errno %d", errno);
+                break;
+            }
+            // Data received
+            else {
+                rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
+                ESP_LOGI(TCP_RECV_TASK_TAG, "Received %d bytes from %s:", len, host_ip);
+                ESP_LOGI(TCP_RECV_TASK_TAG, "%s", rx_buffer);
+                root = cJSON_Parse(rx_buffer);
+                if (root == NULL) {
+                    ESP_LOGE(TCP_RECV_TASK_TAG, "JSON parse error\n");
+                }
+                token = cJSON_GetObjectItem(root, "devId");
+                ESP_LOGI(TCP_RECV_TASK_TAG, "devId:%s", token->valuestring);
+                token = cJSON_GetObjectItem(root, "devType");
+                ESP_LOGI(TCP_RECV_TASK_TAG, "devType:%s", token->valuestring);
+                if (strcmp(token->valuestring, "dev status") == 0) {
+                    xEventGroupSetBits(xEventGroup1, BIT_0);
+                }
+            }
+        }
+    }
 }
