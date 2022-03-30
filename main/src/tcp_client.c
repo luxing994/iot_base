@@ -36,7 +36,7 @@
 
 extern EventGroupHandle_t xEventGroup1;
 extern QueueHandle_t xQueue1;
-static const char *TAG = "example";
+static const char *TAG = "tcp client";
 static const char *payload = "Message from ESP32\n";
 char host_ip[] = HOST_IP_ADDR;
 int sock, flag = 0;
@@ -85,7 +85,7 @@ void tcp_client_task(void *pvParameters)
 
         while (1) {
             if(xQueueReceive(xQueue1, &recvp, (TickType_t)10) == pdPASS) {
-                // ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
+                ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
                 int err = send(sock, (uint8_t *)recvp, strlen(recvp), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -135,13 +135,17 @@ void tcp_client_recv_task(void *pvParameters)
                 if (root == NULL) {
                     ESP_LOGE(TCP_RECV_TASK_TAG, "JSON parse error\n");
                 }
-                token = cJSON_GetObjectItem(root, "devId");
-                ESP_LOGI(TCP_RECV_TASK_TAG, "devId:%s", token->valuestring);
-                token = cJSON_GetObjectItem(root, "devType");
-                ESP_LOGI(TCP_RECV_TASK_TAG, "devType:%s", token->valuestring);
-                if (strcmp(token->valuestring, "dev status") == 0) {
+                token = cJSON_GetObjectItem(root, "respnoseInfo");
+                if (token != NULL) {
                     xEventGroupSetBits(xEventGroup1, BIT_0);
                 }
+                // ESP_LOGI(TCP_RECV_TASK_TAG, "respnoseInfo:%s", token->valuestring);
+                
+                // token = cJSON_GetObjectItem(root, "devType");
+                // ESP_LOGI(TCP_RECV_TASK_TAG, "devType:%s", token->valuestring);
+                // if (strcmp(token->valuestring, "dev status") == 0) {
+                //     xEventGroupSetBits(xEventGroup1, BIT_0);
+                // }
             }
         }
     }

@@ -10,6 +10,7 @@
 #include "protocol_examples_common.h"
 #include "addr_from_stdin.h"
 #include "tcp_client.h"
+#include "tcp_server.h"
 #include "uart_task.h"
 
 QueueHandle_t xQueue1;
@@ -36,4 +37,5 @@ void app_main(void)
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_client_recv_task, "tcp_recv_client", 1024*4, NULL, 5, NULL);
+    xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
 }

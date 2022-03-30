@@ -24,7 +24,9 @@
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
 #define BIT_0	( 1 << 0 )
-#define DEVID "1kffafafff"
+#define DEVID "Hello"
+#define DEVNAME  "1111"
+#define DEVTYPE  "222"
 
 extern QueueHandle_t xQueue1;
 extern EventGroupHandle_t xEventGroup1;
@@ -35,6 +37,7 @@ HproFuncCode funcCode;
 char controlerStr[256] = {0};
 char sendDataBuffer[16] = { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 };
 const uint16_t polynom = 0xA001;
+int sendflag = 0;
 
 typedef struct {
     uint32_t front;
@@ -139,13 +142,13 @@ void ParseOpCode(char *str, uint8_t op)
 {
     switch (op) {
         case BREAK: {
-            (void)sprintf(str, "{\n   \"devId\":\"%s\",\n   \"timeStamp\":%d,\n   \"devType\":\"dev status\",\n   \"valueUnit\":\"NULL\",\n   \"value\":%d,\n   \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":\"%d\",\n    \"devType\":\"break\",\n    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", 
+                DEVID, 0, dataFrame.data[0]);
             break;
         }
         case HMISTATUS: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"work status\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":\"%d\",\n    \"devType\":\"hmi status\",\n    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", 
+                DEVID, 0, dataFrame.data[0]);
             break;
         }
         case MODE: {
@@ -305,18 +308,20 @@ void tx_task(void *arg)
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
-        crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
-        memcpy(&sendDataBuffer[6], &crc, 2);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        if (sendflag == 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
+            memcpy(&sendDataBuffer[6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            sendflag = 1;
+        }
 
-        
-        // uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0, pdTRUE, pdFALSE, (TickType_t)10);
-        // if ((uxBits & BIT_0) != 0) {
-        //     crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
-        //     memcpy(&sendDataBuffer[6], &crc, 2);
-        //     uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
-        // }
+        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0, pdTRUE, pdFALSE, (TickType_t)10);
+        if ((uxBits & BIT_0) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
+            memcpy(&sendDataBuffer[6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
+        }
     }
 }
 
