@@ -16,6 +16,7 @@
 #include "driver/gpio.h"
 #include "mprotocols.h"
 #include "hprotocols.h"
+#include "iot_common.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -23,19 +24,20 @@
 #define RX_BUF_SIZE  (BUF_SIZE * 2)
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
-#define BIT_0	( 1 << 0 )
-#define DEVID "Hello"
-#define DEVNAME  "1111"
-#define DEVTYPE  "222"
 
-extern QueueHandle_t xQueue1;
-extern EventGroupHandle_t xEventGroup1;
 static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
 char controlerStr[256] = {0};
-char sendDataBuffer[16] = { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 };
+char sendDataBuffer[15][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02 },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x03 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x04 },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x05 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x06 },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x07 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x08 },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x09 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0A },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0B }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0C },
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0D }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0E } };
+                               
 const uint16_t polynom = 0xA001;
 int sendflag = 0;
 
@@ -142,78 +144,109 @@ void ParseOpCode(char *str, uint8_t op)
 {
     switch (op) {
         case BREAK: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":\"%d\",\n    \"devType\":\"break\",\n    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR001", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case HMISTATUS: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":\"%d\",\n    \"devType\":\"hmi status\",\n    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR002", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case MODE: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"mode\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR003", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case COUNT: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"count\",\n    \"valueUnit\":\"jian\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"jian\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR004", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SCHEDULE: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"task count\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR005", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PATTERN: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pattern number\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR006", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PITCH: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pitch distance\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR007", DEVTYPENAME, 0, (dataFrame.data[0] << 8 | dataFrame.data[1]) / 10.0);
             break;    
         }
         case PITCHCOUNT: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"pitch count\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR008", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SPINDLERATE: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"main axis rate\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR009", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case BOOTTIME: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"boot time\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d;%d;%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0] << 8 | dataFrame.data[1], dataFrame.data[2] << 8 | dataFrame.data[3], dataFrame.data[4] << 8 | dataFrame.data[5]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d;%d;%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR010", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1],
+                dataFrame.data[2] << 8 | dataFrame.data[3], dataFrame.data[4] << 8 | dataFrame.data[5]);
             break;    
         }
         case APPVERSION: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"app version\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%s,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, (char *)&dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR011", DEVTYPENAME, 0, (char *)(&(dataFrame.data[0])));
             break;    
         }
         case CONTROLVERSION: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"controler version\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%s,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, (char *)&dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR012", DEVTYPENAME, 0, (char *)(&(dataFrame.data[0])));
             break;    
         }
         case MECHANICCALL: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"mechanic call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR013", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case MATERIALCALL: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"meterial call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR014", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case OTHERCALL: {
-            (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"timeStamp\":%d,\n    \"devType\":\"other call\",\n    \"valueUnit\":\"NULL\",\n    \"value\":%d,\n    \"expand\":\"NULL\"\n}\n", 
-                DEVID, 0, dataFrame.data[0]);
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         default: {
@@ -284,10 +317,6 @@ void uart_init(void) {
     uart_driver_install(UART_NUM_1, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    //Set uart pattern detect function.
-    // uart_enable_pattern_det_baud_intr(UART_NUM_1, '+', PATTERN_CHR_NUM, 9, 0, 0);
-    // //Reset the pattern queue length to record at most 20 pattern positions.
-    // uart_pattern_queue_reset(UART_NUM_1, 20);
     UART_InitBuffer();
 }
 
@@ -308,19 +337,68 @@ void tx_task(void *arg)
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
-        if (sendflag == 0) {
-            crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
-            memcpy(&sendDataBuffer[6], &crc, 2);
-            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            sendflag = 1;
-        }
-
-        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0, pdTRUE, pdFALSE, (TickType_t)10);
+        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
-            crc = crc16bitbybit((uint8_t *)sendDataBuffer, 6);
-            memcpy(&sendDataBuffer[6], &crc, 2);
-            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer, 8);
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
+            memcpy(&sendDataBuffer[0][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[0], 8);
+        } else if ((uxBits & BIT_1) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[1], 6);
+            memcpy(&sendDataBuffer[1][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[1], 8);
+        } else if ((uxBits & BIT_2) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[2], 6);
+            memcpy(&sendDataBuffer[2][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[2], 8);
+        } else if ((uxBits & BIT_3) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[3], 6);
+            memcpy(&sendDataBuffer[3][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[3], 8);
+        } else if ((uxBits & BIT_4) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[4], 6);
+            memcpy(&sendDataBuffer[4][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[4], 8);
+        } else if ((uxBits & BIT_5) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[5], 6);
+            memcpy(&sendDataBuffer[5][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[5], 8);
+        } else if ((uxBits & BIT_6) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[6], 6);
+            memcpy(&sendDataBuffer[6][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[6], 8);
+        } else if ((uxBits & BIT_7) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[7], 6);
+            memcpy(&sendDataBuffer[7][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[7], 8);
+        } else if ((uxBits & BIT_8) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[8], 6);
+            memcpy(&sendDataBuffer[8][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[8], 8);
+        } else if ((uxBits & BIT_9) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[9], 6);
+            memcpy(&sendDataBuffer[9][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[9], 8);
+        } else if ((uxBits & BIT_10) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[10], 6);
+            memcpy(&sendDataBuffer[10][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[10], 8);
+        } else if ((uxBits & BIT_11) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[11], 6);
+            memcpy(&sendDataBuffer[11][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[11], 8);
+        } else if ((uxBits & BIT_12) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[12], 6);
+            memcpy(&sendDataBuffer[12][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[12], 8);
+        } else if ((uxBits & BIT_13) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[13], 6);
+            memcpy(&sendDataBuffer[13][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[13], 8);
+        } else if ((uxBits & BIT_14) != 0) {
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[14], 6);
+            memcpy(&sendDataBuffer[14][6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
         }
     }
 }

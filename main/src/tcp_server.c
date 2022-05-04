@@ -19,12 +19,14 @@
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
 #include "tcp_server.h"
+#include "hprotocols.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
 #include "cJSON.h"
+#include "iot_common.h"
 
 
 #define PORT                        CONFIG_EXAMPLE_PORT
@@ -32,14 +34,12 @@
 #define KEEPALIVE_INTERVAL          CONFIG_EXAMPLE_KEEPALIVE_INTERVAL
 #define KEEPALIVE_COUNT             CONFIG_EXAMPLE_KEEPALIVE_COUNT
 
-#define BIT_0	( 1 << 0 )
-
 static const char *TAG = "tcp_server";
-extern EventGroupHandle_t xEventGroup1;
 
 static void do_retransmit(const int sock)
 {
     int len;
+    int orderId;
     char rx_buffer[512];
     cJSON *root = NULL;
     cJSON *token = NULL;
@@ -53,32 +53,81 @@ static void do_retransmit(const int sock)
         } else {
             rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
             ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
-            root = cJSON_Parse(rx_buffer);
+            root = cJSON_Parse(&rx_buffer);
             if (root == NULL) {
                 ESP_LOGE(TAG, "JSON parse error\n");
+                break;
             }
-            token = cJSON_GetObjectItem(root, "respnoseInfo");
+            token = cJSON_GetObjectItem(root, "orderId");
             if (token != NULL) {
-                xEventGroupSetBits(xEventGroup1, BIT_0);
+                orderId = atoi(&(token->valuestring)[2]);
+                ESP_LOGI(TAG, "orderId:%d", orderId);
+                switch (orderId) {
+                    case BREAK: {
+                        xEventGroupSetBits(xEventGroup1, BIT_0);
+                        break;
+                    }
+                    case HMISTATUS: {
+                        xEventGroupSetBits(xEventGroup1, BIT_1);
+                        break;
+                    }
+                    case MODE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_2);
+                        break;
+                    }
+                    case COUNT: {
+                        xEventGroupSetBits(xEventGroup1, BIT_3);
+                        break;
+                    }
+                    case SCHEDULE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_4);
+                        break;
+                    }
+                    case PATTERN: {
+                        xEventGroupSetBits(xEventGroup1, BIT_5);
+                        break;
+                    }
+                    case PITCH: {
+                        xEventGroupSetBits(xEventGroup1, BIT_6);
+                        break;
+                    }
+                    case PITCHCOUNT: {
+                        xEventGroupSetBits(xEventGroup1, BIT_7);
+                        break;
+                    }
+                    case SPINDLERATE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_8);
+                        break;
+                    }
+                    case BOOTTIME: {
+                        xEventGroupSetBits(xEventGroup1, BIT_9);
+                        break;
+                    }
+                    case APPVERSION: {
+                        xEventGroupSetBits(xEventGroup1, BIT_10);
+                        break;
+                    }
+                    case CONTROLVERSION: {
+                        xEventGroupSetBits(xEventGroup1, BIT_11);
+                        break;
+                    }
+                    case MECHANICCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_12);
+                        break;
+                    }
+                    case MATERIALCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_13);
+                        break;
+                    }
+                    case OTHERCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_14);
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
             }
-            // ESP_LOGI(TCP_RECV_TASK_TAG, "respnoseInfo:%s", token->valuestring);
-            
-            // token = cJSON_GetObjectItem(root, "devType");
-            // ESP_LOGI(TCP_RECV_TASK_TAG, "devType:%s", token->valuestring);
-            // if (strcmp(token->valuestring, "dev status") == 0) {
-            //     xEventGroupSetBits(xEventGroup1, BIT_0);
-            // }
-
-            // send() can return less bytes than supplied length.
-            // Walk-around for robust implementation.
-            // int to_write = len;
-            // while (to_write > 0) {
-            //     int written = send(sock, rx_buffer + (len - to_write), to_write, 0);
-            //     if (written < 0) {
-            //         ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-            //     }
-            //     to_write -= written;
-            // }
         }
     } while (len > 0);
 }

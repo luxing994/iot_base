@@ -20,6 +20,7 @@
 #include "addr_from_stdin.h"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
+#include "iot_common.h"
 
 
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -32,7 +33,6 @@
 
 #define PORT CONFIG_EXAMPLE_PORT
 
-extern QueueHandle_t xQueue1;
 static const char *TAG = "tcp client";
 static const char *payload = "Message from ESP32\n";
 
