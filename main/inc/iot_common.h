@@ -43,4 +43,6 @@ extern EventGroupHandle_t xEventGroup1;
 #define DEVTYPEID    "222"
 #define DEVTYPENAME  "Hello"
 
+#define FILETRANSSIZE 240
+
 #endif

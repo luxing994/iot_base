@@ -17,11 +17,13 @@
 #include "mprotocols.h"
 #include "hprotocols.h"
 #include "iot_common.h"
+#include "ringbuffer.h"
+#include "tcp_server.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
-#define BUF_SIZE 1024
-#define RX_BUF_SIZE  (BUF_SIZE * 2)
+#define UART_BUFF_SIZE 1024
+#define RX_BUF_SIZE  (UART_BUFF_SIZE * 2)
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
 
@@ -37,17 +39,14 @@ char sendDataBuffer[15][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x09 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0A },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0B }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0C },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0D }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0E } };
+char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x02 }, 
+                                    { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x03 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x04 },
+                                    { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x05 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x06 } };
                                
 const uint16_t polynom = 0xA001;
 int sendflag = 0;
 
-typedef struct {
-    uint32_t front;
-    uint32_t rear;
-    uint8_t rdata;
-    uint8_t recBuffer[RX_BUF_SIZE];
-} UartBuffer;
-UartBuffer uart1Buffer;
+RingBuffer *uart1Buffer;
 HproComFrame dataFrame;
 HproComFrame sendDataFrame;
 
@@ -88,54 +87,27 @@ int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
     return 0;
 }
 
-static void UART_InitBuffer(void)
+static int UART_InitBuffer(void)
 {
-    uart1Buffer.front = uart1Buffer.rear = 0;
-    memset(uart1Buffer.recBuffer, 0, RX_BUF_SIZE);
-}
+    if (RING_InitBuffer(uart1Buffer, UART_BUFF_SIZE) != 0) {
+        return -1;
+    }
 
-static int UART_WriteBufferByte(uint8_t data)
-{
-    if ((uart1Buffer.rear + 1) % (RX_BUF_SIZE) == uart1Buffer.front) {
-		return -1;
-	}
-
-    uart1Buffer.recBuffer[uart1Buffer.rear] = data;
-	uart1Buffer.rear = (uart1Buffer.rear + 1) % RX_BUF_SIZE;
-	return 0;
+    return 0;
 }
 
 static int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 {
-    int i;
-
-    for (i = 0; i < size; i++) {
-        if (UART_WriteBufferByte(data[i]) != 0) {
-            return -1;
-        }
+    if (RING_WriteBufferBytes(uart1Buffer, data, size) != 0) {
+        return -1;
     }
 	return 0;
 }
 
-int UART_ReadBufferByte(uint8_t *data)
+static int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 {
-    if (uart1Buffer.front == uart1Buffer.rear) {
+    if (RING_ReadBufferBytes(uart1Buffer, data, size) != 0) {
         return -1;
-    }
-
-    *data = uart1Buffer.recBuffer[uart1Buffer.front];
-    uart1Buffer.front = (uart1Buffer.front + 1) % RX_BUF_SIZE;
-    return 0;
-}
-
-int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
-{
-    int i;
-
-    for (i = 0; i < size; i++) {
-        if (UART_ReadBufferByte(&data[i]) != 0) {
-            return -1;
-        }
     }
 	return 0;
 }
@@ -266,7 +238,7 @@ int GetDataFromControler(void)
     esp_log_level_set(GET_DATA_TAG, ESP_LOG_INFO);
 	while (!((curData == HPRO_HEAD_SECOND_BYTE) && (lastData == HPRO_HEAD_FIRST_BYTE))) {
 		lastData = curData;
-		ret = UART_ReadBufferByte(&curData);
+		ret = UART_ReadBufferBytes(&curData, 1);
 		if (ret != 0) {
 			return -1;
 		}
@@ -282,8 +254,8 @@ int GetDataFromControler(void)
     length = (dataFrame.length[0] << 8) | dataFrame.length[1];
     ESP_LOGI(GET_DATA_TAG, "read data length:%d\n", length);
 
-    ret += UART_ReadBufferByte(&dataFrame.func);
-	ret += UART_ReadBufferByte(&dataFrame.operate);
+    ret += UART_ReadBufferBytes(&dataFrame.func, 1);
+	ret += UART_ReadBufferBytes(&dataFrame.operate, 1);
     ret += UART_ReadBufferBytes(&dataFrame.data[0], length - 2);
     if (ret != 0) {
         return -1;
@@ -314,7 +286,7 @@ void uart_init(void) {
         .source_clk = UART_SCLK_APB,
     };
     
-    uart_driver_install(UART_NUM_1, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart1_queue, 0);
+    uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     UART_InitBuffer();
@@ -338,7 +310,7 @@ void tx_task(void *arg)
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
-            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14, pdTRUE, pdFALSE, (TickType_t)10);
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
@@ -399,6 +371,11 @@ void tx_task(void *arg)
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[14], 6);
             memcpy(&sendDataBuffer[14][6], &crc, 2);
             uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
+        } else if ((uxBits & BIT_15) != 0) {
+            GetFileData((uint8_t *)&sendFileDataBuffer[0][6], FILETRANSSIZE);
+            crc = crc16bitbybit((uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 6);
+            memcpy(&sendFileDataBuffer[0][FILETRANSSIZE + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 8);
         }
     }
 }
