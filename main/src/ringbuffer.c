@@ -34,7 +34,7 @@ int RING_WriteBufferBytes(RingBuffer *ptr, uint8_t *data, uint32_t length)
 {
     int i;
 
-	if ((ptr == NULL) || (data == NULL) || (length == 0)) {
+	if ((ptr == NULL) || (data == NULL) || (ptr->recBuffer == NULL) || (length == 0)) {
 		return -1;
 	}
 
@@ -61,7 +61,7 @@ int RING_ReadBufferBytes(RingBuffer *ptr, uint8_t *data, uint32_t length)
 {
     int i;
 
-	if (ptr == NULL || data == NULL || length == 0) {
+	if ((ptr == NULL) || (data == NULL) || (ptr->recBuffer == NULL) || (length == 0)) {
 		return -1;
 	}
 
