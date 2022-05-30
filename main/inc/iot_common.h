@@ -3,6 +3,7 @@
 
 extern QueueHandle_t xQueue1;
 extern EventGroupHandle_t xEventGroup1;
+extern EventGroupHandle_t xEventGroup2;
 
 #define BIT_0	( 1 << 0 )
 #define BIT_1	( 1 << 1 )

@@ -44,7 +44,18 @@ struct FileData {
     char buffer[FILETRANSSIZE];
 };
 
+struct ConfigData {
+    uint16_t tasknum;
+    uint16_t taskpitch;
+    uint16_t taskspeed;
+    uint16_t taskcount;
+    uint16_t tasktime;
+    uint8_t mode;
+};
+
 struct FileData file = {0};
+struct ConfigData config = {0};
+uint16_t configdata[10] = {0};
 
 int GetFileCount(uint8_t *count)
 {
@@ -64,6 +75,72 @@ int GetFileData(uint8_t *data, int size)
     }
 
     memcpy(data, file.buffer, FILETRANSSIZE);
+
+    return 0;
+}
+
+int GetTaskNum(uint16_t *tasknum)
+{
+    if (tasknum == NULL) {
+        return -1;
+    }
+
+    *tasknum = config.tasknum;
+
+    return 0;
+}
+
+int GetTaskPitch(uint16_t *taskpitch)
+{
+    if (taskpitch == NULL) {
+        return -1;
+    }
+
+    *taskpitch = config.taskpitch;
+
+    return 0;
+}
+
+int GetTaskSpeed(uint16_t *taskspeed)
+{
+    if (taskspeed == NULL) {
+        return -1;
+    }
+
+    *taskspeed = config.taskspeed;
+
+    return 0;
+}
+
+int GetTaskCount(uint16_t *taskcount)
+{
+    if (taskcount == NULL) {
+        return -1;
+    }
+
+    *taskcount = config.taskcount;
+
+    return 0;
+}
+
+int GetTaskTime(uint16_t *tasktime)
+{
+    if (tasktime == NULL) {
+        return -1;
+    }
+
+    *tasktime = config.tasktime;
+
+    return 0;
+}
+
+int GetMode(uint8_t *mode)
+{
+    if (mode == NULL) {
+        return -1;
+    }
+
+    *mode = config.mode;
 
     return 0;
 }
@@ -103,7 +180,7 @@ int ParseFile(char *buffer, int length)
             switch (atoi(&((file.name)[2]))) {
                 ESP_LOGI("ParseFile", "Number %d\n", atoi(&((file.name)[2])));
                 case APPUPDATE: {
-                    xEventGroupSetBits(xEventGroup1, BIT_15);
+                    xEventGroupSetBits(xEventGroup2, BIT_0);
                     break;
                 }
                 default: {
@@ -118,11 +195,13 @@ int ParseFile(char *buffer, int length)
 
 static void do_retransmit(const int sock)
 {
-    int len;
+    int len, i;
     int orderId;
-    char rx_buffer[512] = {0};
+    int arraysize;
+    char rx_buffer[1024] = {0};
     cJSON *root = NULL;
     cJSON *token = NULL;
+    cJSON *item = NULL;
     const char *TAG = "tcp_server";
 
     do {
@@ -140,6 +219,24 @@ static void do_retransmit(const int sock)
                 if (token != NULL) {
                     orderId = atoi(&(token->valuestring)[2]);
                     ESP_LOGI(TAG, "orderId:%d", orderId);
+                    token = cJSON_GetObjectItem(root, "parameters");
+                    if (token != NULL) {
+                        arraysize = cJSON_GetArraySize(token);
+                        ESP_LOGI(TAG, "arraysize %d", arraysize);
+                        item = token->child;
+                        
+                        for (i = 0; i < arraysize; i++) {
+                            configdata[i] = atoi(cJSON_GetObjectItem(item, "value")->valuestring);
+                            ESP_LOGI(TAG, "configdata[%d]: %d", i, configdata[i]);
+                            item = item->next;
+                        }
+                        config.tasknum = configdata[0];
+                        config.taskpitch = configdata[1];
+                        config.taskspeed = configdata[2];
+                        config.taskcount = configdata[3];
+                        config.tasktime = configdata[4];
+                        config.mode = (uint8_t)configdata[5];
+                    }
                     switch (orderId) {
                         case BREAK: {
                             xEventGroupSetBits(xEventGroup1, BIT_0);
@@ -199,6 +296,30 @@ static void do_retransmit(const int sock)
                         }
                         case OTHERCALL: {
                             xEventGroupSetBits(xEventGroup1, BIT_14);
+                            break;
+                        }
+                        case TASKNUMBER: {
+                            xEventGroupSetBits(xEventGroup2, BIT_6);
+                            break;
+                        }
+                        case TASKPITCH: {
+                            xEventGroupSetBits(xEventGroup2, BIT_7);
+                            break;
+                        }
+                        case TASKSPEED: {
+                            xEventGroupSetBits(xEventGroup2, BIT_8);
+                            break;
+                        }
+                        case TASKCOUNT: {
+                            xEventGroupSetBits(xEventGroup2, BIT_9);
+                            break;
+                        }
+                        case TASKTIME: {
+                            xEventGroupSetBits(xEventGroup2, BIT_10);
+                            break;
+                        }
+                        case SETMODE: {
+                            xEventGroupSetBits(xEventGroup2, BIT_11);
                             break;
                         }
                         default: {

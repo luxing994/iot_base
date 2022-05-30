@@ -32,13 +32,16 @@ static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
 char controlerStr[256] = {0};
-char sendDataBuffer[15][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02 },
+char sendDataBuffer[21][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x03 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x04 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x05 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x06 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x07 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x08 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x09 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0A },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0B }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0C },
-                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0D }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0E } };
+                               { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0D }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0E }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x0F },
+                               { 0x5A, 0xA5, 0x00, 0x04, 0x02, 0x07 }, { 0x5A, 0xA5, 0x00, 0x04, 0x02, 0x08 },
+                               { 0x5A, 0xA5, 0x00, 0x04, 0x02, 0x09 }, { 0x5A, 0xA5, 0x00, 0x04, 0x02, 0x0A },
+                               { 0x5A, 0xA5, 0x00, 0x04, 0x02, 0x0B }, { 0x5A, 0xA5, 0x00, 0x03, 0x02, 0x0C } };
 char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x02 }, 
                                     { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x03 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x04 },
                                     { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x05 }, { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x06 } };
@@ -313,10 +316,10 @@ void tx_task(void *arg)
     uint32_t recvp;
     uint16_t crc;
 
-    esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
+    esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
-            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15, pdTRUE, pdFALSE, (TickType_t)10);
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
@@ -377,11 +380,85 @@ void tx_task(void *arg)
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[14], 6);
             memcpy(&sendDataBuffer[14][6], &crc, 2);
             uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
-        } else if ((uxBits & BIT_15) != 0) {
+        }
+    }
+}
+
+void tx1_task(void *arg)
+{
+    static const char *TX1_TASK_TAG = "TX1_TASK";
+    EventBits_t uxBits;
+    uint32_t recvp;
+    uint16_t crc;
+    uint16_t data;
+    int temp;
+
+    esp_log_level_set(TX1_TASK_TAG, ESP_LOG_INFO);
+    while (1) {
+        uxBits = xEventGroupWaitBits(xEventGroup2, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
+            | BIT_9 | BIT_10 | BIT_11, pdTRUE, pdFALSE, (TickType_t)10);
+        if ((uxBits & BIT_0) != 0) {
             GetFileData((uint8_t *)&sendFileDataBuffer[0][6], FILETRANSSIZE);
             crc = crc16bitbybit((uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 6);
             memcpy(&sendFileDataBuffer[0][FILETRANSSIZE + 6], &crc, 2);
             uart_write_bytes(UART_NUM_1, (uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 8);
+        } else if ((uxBits & BIT_6) != 0) {
+            GetTaskNum(&data);
+            ESP_LOGI(TX1_TASK_TAG, "tasknum:%d\n", data);
+            GetTaskNum((uint8_t *)&sendDataBuffer[15][6]);
+            temp = sendDataBuffer[15][6];
+            sendDataBuffer[15][6] = sendDataBuffer[15][7];
+            sendDataBuffer[15][7] = temp;
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[15], 2 + 6);
+            memcpy(&sendDataBuffer[15][2 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[15], 2 + 8);
+        } else if ((uxBits & BIT_7) != 0) {
+            GetTaskPitch(&data);
+            ESP_LOGI(TX1_TASK_TAG, "taskpitch:%d\n", data);
+            GetTaskPitch((uint8_t *)&sendDataBuffer[16][6]);
+            temp = sendDataBuffer[16][6];
+            sendDataBuffer[16][6] = sendDataBuffer[16][7];
+            sendDataBuffer[16][7] = temp;
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[16], 2 + 6);
+            memcpy(&sendDataBuffer[16][2 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[16], 2 + 8);
+        } else if ((uxBits & BIT_8) != 0) {
+            GetTaskSpeed(&data);
+            ESP_LOGI(TX1_TASK_TAG, "taskspeed:%d\n", data);
+            GetTaskSpeed((uint8_t *)&sendDataBuffer[17][6]);
+            temp = sendDataBuffer[17][6];
+            sendDataBuffer[17][6] = sendDataBuffer[17][7];
+            sendDataBuffer[17][7] = temp;
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[17], 2 + 6);
+            memcpy(&sendDataBuffer[17][2 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[17], 2 + 8);
+        } else if ((uxBits & BIT_9) != 0) {
+            GetTaskCount(&data);
+            ESP_LOGI(TX1_TASK_TAG, "taskcount:%d\n", data);
+            GetTaskCount((uint8_t *)&sendDataBuffer[18][6]);
+            temp = sendDataBuffer[18][6];
+            sendDataBuffer[18][6] = sendDataBuffer[18][7];
+            sendDataBuffer[18][7] = temp;
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[18], 2 + 6);
+            memcpy(&sendDataBuffer[18][2 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[18], 2 + 8);
+        } else if ((uxBits & BIT_10) != 0) {
+            GetTaskTime(&data);
+            ESP_LOGI(TX1_TASK_TAG, "tasktime:%d\n", data);
+            GetTaskTime((uint8_t *)&sendDataBuffer[19][6]);
+            temp = sendDataBuffer[19][6];
+            sendDataBuffer[19][6] = sendDataBuffer[19][7];
+            sendDataBuffer[19][7] = temp;
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[19], 2 + 6);
+            memcpy(&sendDataBuffer[19][2 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[19], 2 + 8);
+        } else if ((uxBits & BIT_11) != 0) {
+            GetMode(&data);
+            ESP_LOGI(TX1_TASK_TAG, "mode:%d\n", (uint8_t)data);
+            GetMode((uint8_t *)&sendDataBuffer[20][6]);
+            crc = crc16bitbybit((uint8_t *)sendDataBuffer[20], 1 + 6);
+            memcpy(&sendDataBuffer[20][1 + 6], &crc, 2);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[20], 1 + 8);
         }
     }
 }
