@@ -68,14 +68,14 @@ void tcp_client_task(void *pvParameters)
         sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            continue;
+            break;
         }
         ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT);
 
         int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {
             ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-            continue;
+            goto end;
         }
         ESP_LOGI(TAG, "Successfully connected");
 
@@ -90,6 +90,7 @@ void tcp_client_task(void *pvParameters)
             }
         }
 
+        end:
         if (sock != -1) {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
             shutdown(sock, 0);

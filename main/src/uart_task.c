@@ -121,106 +121,106 @@ void ParseOpCode(char *str, uint8_t op)
         case BREAK: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR001", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case HMISTATUS: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR002", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case MODE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR003", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case COUNT: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"jian\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"jian\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR004", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SCHEDULE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR005", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PATTERN: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR006", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PITCH: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR007", DEVTYPENAME, 0, (dataFrame.data[0] << 8 | dataFrame.data[1]) / 10.0);
             break;    
         }
         case PITCHCOUNT: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR008", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SPINDLERATE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR009", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case BOOTTIME: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d;%d;%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
-                ID, DEVID, DEVNAME, "FR010", DEVTYPENAME, 0, dataFrame.data[0] << 8 | dataFrame.data[1],
-                dataFrame.data[2] << 8 | dataFrame.data[3], dataFrame.data[4] << 8 | dataFrame.data[5]);
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d;%d;%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+                ID, DEVID, DEVNAME, "FR010", DEVTYPENAME, 0, dataFrame.data[0], dataFrame.data[1], 
+                dataFrame.data[2]);
             break;    
         }
         case APPVERSION: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR011", DEVTYPENAME, 0, (char *)(&(dataFrame.data[0])));
             break;    
         }
         case CONTROLVERSION: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR012", DEVTYPENAME, 0, (char *)(&(dataFrame.data[0])));
             break;    
         }
         case MECHANICCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR013", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case MATERIALCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR014", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
         case OTHERCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%d\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};\n", \ 
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
                 ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, 0, dataFrame.data[0]);
             break;    
         }
