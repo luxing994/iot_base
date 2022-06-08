@@ -34,6 +34,13 @@ menu "TCP Server IP Configuration"
         default 3333
         help
             The remote port to which the client example will connect to.
+    
+    config EXAMPLE_PORT1
+        int "Port1"
+        range 0 65535
+        default 3333
+        help
+            The remote port to which the client example will connect to.
 
     choice EXAMPLE_SOCKET_IP_INPUT
         prompt "Socket example source"
@@ -61,8 +68,15 @@ menu "Server Mode Configuration"
         default n
         select EXAMPLE_CONNECT_IPV6
 
-    config EXAMPLE_PORT
+    config SERVER_PORT
         int "Port"
+        range 0 65535
+        default 3333
+        help
+            Local port the example server will listen on.
+    
+    config SERVER_PORT1
+        int "Port1"
         range 0 65535
         default 3333
         help

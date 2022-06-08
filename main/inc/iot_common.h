@@ -43,6 +43,7 @@ extern EventGroupHandle_t xEventGroup2;
 #define DEVNAME      "1111"
 #define DEVTYPEID    "222"
 #define DEVTYPENAME  "Hello"
+#define INITORDERID  "FR000"
 
 #define FILETRANSSIZE 240
 
@@ -93,7 +94,7 @@ typedef struct {
     char *orderId;
     char *orderName;
     char *parameterType;
-    struct parametersData paradata[10];
+    parametersData paradata[10];
     char *responseType;
     char *timeStamp;
 } CommandJsonData;

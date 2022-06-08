@@ -21,6 +21,7 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "iot_common.h"
+#include "protocol_examples_common.h"
 
 
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -32,9 +33,43 @@
 #endif
 
 #define PORT CONFIG_EXAMPLE_PORT
+#define PORT1 CONFIG_EXAMPLE_PORT1
 
-static const char *TAG = "tcp client";
-static const char *payload = "Message from ESP32\n";
+static char initdata[1024] = {0};
+
+// static const char *payload = {
+//     "devId": DEVID,
+//     "devName": "",
+//     "devTypeId": "1516606339298758656",
+//     "deviceOrderFile": "",
+//     "deviceOrderMode": "",
+//     "deviceOrderWay": "write",
+//     "orderDate": "2022-05-30 21:46:21",
+//     "orderId": "FR022",
+//     "orderName": "",
+//     "parameterType": "",
+//     "parameters": [{"type":"","value":"2000"},{"type":"","value":"2000"},
+//     {"type":"","value":"2000"},{"type":"","value":"2000"},
+//     {"type":"","value":"2000"},{"type":"","value":"1"}],
+//     "responseType": "",
+//     "timeStamp": "1653918381719"
+// };
+
+void PackInitData(void)
+{
+    char sta_ip[32] = {0};
+    esp_netif_ip_info_t ip_info;
+    esp_netif_t *netif = get_example_netif();
+    esp_netif_get_ip_info(netif, &ip_info);
+
+    (void)sprintf(sta_ip, "" IPSTR, IP2STR(&ip_info.ip));
+    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n    \"devTypeIp\":\"%s\",\n    \"devTypeId\":\"%s\",\n"  
+                "    \"deviceOrderFile\": \"\",\n    \"deviceOrderMode\":\"\",\n    \"deviceOrderWay\":\"\",\n"
+                "    \"orderDate\": \"\",\n    \"orderId\":\"%s\",\n    \"orderName\":\"\",\n"
+                "    \"parameterType\": \"\",\n    \"parameters\":\"\",\n    \"responseType\":\"\",\n"
+                "    \"timeStamp\":\"\",\n};;**##", \ 
+                DEVID, DEVNAME, sta_ip, DEVTYPEID, INITORDERID);
+}
 
 void tcp_client_task(void *pvParameters)
 {
@@ -44,6 +79,7 @@ void tcp_client_task(void *pvParameters)
     int sock;
     uint32_t recvp;
     char host_ip[] = HOST_IP_ADDR;
+    const char *TAG = "tcp client";
 
     while (1) {
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -99,3 +135,66 @@ void tcp_client_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
+
+void tcp_client1_task(void *pvParameters)
+{
+    char rx_buffer[128];
+    int addr_family = 0;
+    int ip_protocol = 0;
+    int sock;
+    uint32_t recvp;
+    char host_ip[] = HOST_IP_ADDR;
+    const char *TAG = "tcp client1";
+
+    while (1) {
+#if defined(CONFIG_EXAMPLE_IPV4)
+        struct sockaddr_in dest_addr;
+        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+        dest_addr.sin_family = AF_INET;
+        dest_addr.sin_port = htons(PORT1);
+        addr_family = AF_INET;
+        ip_protocol = IPPROTO_IP;
+#elif defined(CONFIG_EXAMPLE_IPV6)
+        struct sockaddr_in6 dest_addr = { 0 };
+        inet6_aton(host_ip, &dest_addr.sin6_addr);
+        dest_addr.sin6_family = AF_INET6;
+        dest_addr.sin6_port = htons(PORT1);
+        dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
+        addr_family = AF_INET6;
+        ip_protocol = IPPROTO_IPV6;
+#elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
+        struct sockaddr_storage dest_addr = { 0 };
+        ESP_ERROR_CHECK(get_addr_from_stdin(PORT1, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
+#endif
+        sock = socket(addr_family, SOCK_STREAM, ip_protocol);
+        if (sock < 0) {
+            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+            break;
+        }
+        // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT1);
+        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT1);
+
+        int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
+        if (err != 0) {
+            ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+            goto end;
+        }
+        ESP_LOGI(TAG, "Successfully connected");
+
+        PackInitData();
+        err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
+        if (err < 0) {
+            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+        }
+        break;
+
+        end:
+        if (sock != -1) {
+            ESP_LOGE(TAG, "Shutting down socket and restarting...");
+            shutdown(sock, 0);
+            close(sock);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
