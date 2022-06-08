@@ -44,18 +44,116 @@ struct FileData {
     char buffer[FILETRANSSIZE];
 };
 
-struct ConfigData {
-    uint16_t tasknum;
-    uint16_t taskpitch;
-    uint16_t taskspeed;
-    uint16_t taskcount;
-    uint16_t tasktime;
-    uint8_t mode;
-};
-
 struct FileData file = {0};
 struct ConfigData config = {0};
 uint16_t configdata[10] = {0};
+CommandJsonData comdata = {0};
+
+/*
+{
+    "devId": "1531243721197228032",
+    "devName": "",
+    "devTypeId": "1516606339298758656",
+    "deviceOrderFile": "",
+    "deviceOrderMode": "",
+    "deviceOrderWay": "write",
+    "orderDate": "2022-05-30 21:46:21",
+    "orderId": "FR022",
+    "orderName": "",
+    "parameterType": "",
+    "parameters": [{"type":"","value":"2000"},{"type":"","value":"2000"},
+    {"type":"","value":"2000"},{"type":"","value":"2000"},
+    {"type":"","value":"2000"},{"type":"","value":"1"}],
+    "responseType": "",
+    "timeStamp": "1653918381719"
+}
+*/
+
+// static int GetCommandData(cJSON *root, char *dest, char *src)
+// {
+//     cJSON *token;
+
+//     token = cJSON_GetObjectItem(root, src);
+//     if (token == NULL) {
+//         return -1;
+//     }
+    
+//     dest = (token->valuestring);
+//     return 0;
+// }
+
+void GetCommandJsonData(cJSON *root)
+{
+    cJSON *token;
+
+    token = cJSON_GetObjectItem(root, "devId");
+    if (token != NULL) {
+        comdata.devId = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "devName");
+    if (token != NULL) {
+        comdata.devName = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "devTypeId");
+    if (token != NULL) {
+        comdata.devTypeId = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "deviceOrderFile");
+    if (token != NULL) {
+        comdata.deviceOrderFile = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "deviceOrderMode");
+    if (token != NULL) {
+        comdata.deviceOrderMode = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "deviceOrderWay");
+    if (token != NULL) {
+        comdata.deviceOrderWay = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "orderDate");
+    if (token != NULL) {
+        comdata.orderDate = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "orderId");
+    if (token != NULL) {
+        comdata.orderId = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "orderName");
+    if (token != NULL) {
+        comdata.orderName = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "parameterType");
+    if (token != NULL) {
+        comdata.parameterType = (token->valuestring);
+    }
+
+    if (token != NULL) {
+        arraysize = cJSON_GetArraySize(token);
+        ESP_LOGI(TAG, "arraysize %d", arraysize);
+        item = token->child;
+        
+        for (i = 0; i < arraysize; i++) {
+            configdata[i] = atoi(cJSON_GetObjectItem(item, "value")->valuestring);
+            ESP_LOGI(TAG, "configdata[%d]: %d", i, configdata[i]);
+            item = item->next;
+        }
+        config.tasknum = configdata[0];
+        config.taskpitch = configdata[1];
+        config.taskspeed = configdata[2];
+        config.taskcount = configdata[3];
+        config.tasktime = configdata[4];
+        config.mode = (uint8_t)configdata[5];
+    }
+}
 
 int GetFileCount(uint8_t *count)
 {
@@ -215,6 +313,7 @@ static void do_retransmit(const int sock)
             ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
             root = cJSON_Parse(&rx_buffer);
             if (root != NULL) {
+                // GetCommandJsonData(cJSON *token);
                 token = cJSON_GetObjectItem(root, "orderId");
                 if (token != NULL) {
                     orderId = atoi(&(token->valuestring)[2]);

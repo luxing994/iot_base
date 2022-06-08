@@ -46,4 +46,56 @@ extern EventGroupHandle_t xEventGroup2;
 
 #define FILETRANSSIZE 240
 
+// 命令接收JSON格式
+/*
+{
+    "devId": "1531243721197228032",
+    "devName": "",
+    "devTypeId": "1516606339298758656",
+    "deviceOrderFile": "",
+    "deviceOrderMode": "",
+    "deviceOrderWay": "write",
+    "orderDate": "2022-05-30 21:46:21",
+    "orderId": "FR022",
+    "orderName": "",
+    "parameterType": "",
+    "parameters": [{"type":"","value":"2000"},{"type":"","value":"2000"},
+    {"type":"","value":"2000"},{"type":"","value":"2000"},
+    {"type":"","value":"2000"},{"type":"","value":"1"}],
+    "responseType": "",
+    "timeStamp": "1653918381719"
+}
+*/
+
+// 乐江机械罗拉车配置项
+struct ConfigData {
+    uint16_t tasknum;
+    uint16_t taskpitch;
+    uint16_t taskspeed;
+    uint16_t taskcount;
+    uint16_t tasktime;
+    uint8_t mode;
+};
+
+typedef struct {
+    char *type;
+    char *value;
+} parametersData;
+
+typedef struct {
+    char *devId;
+    char *devName;
+    char *devTypeId;
+    char *deviceOrderFile;
+    char *deviceOrderMode;
+    char *deviceOrderWay;
+    char *orderDate;
+    char *orderId;
+    char *orderName;
+    char *parameterType;
+    struct parametersData paradata[10];
+    char *responseType;
+    char *timeStamp;
+} CommandJsonData;
+
 #endif
