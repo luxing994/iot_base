@@ -20,6 +20,7 @@
 #include "ringbuffer.h"
 #include "tcp_server.h"
 #include "time.h"
+#include "sensor.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -479,6 +480,7 @@ void rx_task(void *arg)
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        ESP_LOGI(RX_TASK_TAG, "Level: %d, Count: '%d'", GetSwitchSensorLevel(), GetSwitchCount());
         ret = GetDataFromControler();
 		if (ret == 0) {
             ParseOpCode(controlerStr, dataFrame.operate);

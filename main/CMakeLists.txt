@@ -4,4 +4,5 @@ idf_component_register(SRCS "./src/tcp_client.c"
                        SRCS "./src/app_main.c"
                        SRCS "./src/ringbuffer.c"
                        SRCS "./src/time.c"
+                       SRCS "./src/sensor.c"
                     INCLUDE_DIRS "./inc")

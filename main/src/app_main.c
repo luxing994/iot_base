@@ -12,6 +12,7 @@
 #include "tcp_client.h"
 #include "tcp_server.h"
 #include "uart_task.h"
+#include "sensor.h"
 
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;
@@ -30,6 +31,7 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     uart_init();
+    InitSwitchSensor();
 
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
