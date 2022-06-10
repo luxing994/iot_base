@@ -25,8 +25,8 @@
 #define PATTERN_CHR_NUM    (3) 
 #define UART_BUFF_SIZE 1024
 #define RX_BUF_SIZE  (UART_BUFF_SIZE * 2)
-#define TXD_PIN (GPIO_NUM_19)
-#define RXD_PIN (GPIO_NUM_20)
+#define TXD_PIN (GPIO_NUM_17)
+#define RXD_PIN (GPIO_NUM_18)
 
 static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
@@ -293,9 +293,9 @@ void uart_init(void) {
         .source_clk = UART_SCLK_APB,
     };
     
-    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
-    uart_param_config(UART_NUM_2, &uart_config);
-    uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
+    uart_param_config(UART_NUM_1, &uart_config);
+    uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     ret = UART_InitBuffer();
     if (ret != 0) {
         ESP_LOGE(TAG, "uart buffer init failed\n");
@@ -305,7 +305,7 @@ void uart_init(void) {
 int sendData(const char* logName, const char* data)
 {
     const int len = strlen(data);
-    const int txBytes = uart_write_bytes(UART_NUM_2, data, len);
+    const int txBytes = uart_write_bytes(UART_NUM_1, data, len);
     ESP_LOGI(logName, "Wrote %d bytes", txBytes);
     return txBytes;
 }
@@ -324,63 +324,63 @@ void tx_task(void *arg)
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[0], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[0], 8);
         } else if ((uxBits & BIT_1) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[1], 6);
             memcpy(&sendDataBuffer[1][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[1], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[1], 8);
         } else if ((uxBits & BIT_2) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[2], 6);
             memcpy(&sendDataBuffer[2][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[2], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[2], 8);
         } else if ((uxBits & BIT_3) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[3], 6);
             memcpy(&sendDataBuffer[3][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[3], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[3], 8);
         } else if ((uxBits & BIT_4) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[4], 6);
             memcpy(&sendDataBuffer[4][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[4], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[4], 8);
         } else if ((uxBits & BIT_5) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[5], 6);
             memcpy(&sendDataBuffer[5][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[5], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[5], 8);
         } else if ((uxBits & BIT_6) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[6], 6);
             memcpy(&sendDataBuffer[6][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[6], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[6], 8);
         } else if ((uxBits & BIT_7) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[7], 6);
             memcpy(&sendDataBuffer[7][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[7], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[7], 8);
         } else if ((uxBits & BIT_8) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[8], 6);
             memcpy(&sendDataBuffer[8][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[8], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[8], 8);
         } else if ((uxBits & BIT_9) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[9], 6);
             memcpy(&sendDataBuffer[9][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[9], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[9], 8);
         } else if ((uxBits & BIT_10) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[10], 6);
             memcpy(&sendDataBuffer[10][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[10], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[10], 8);
         } else if ((uxBits & BIT_11) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[11], 6);
             memcpy(&sendDataBuffer[11][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[11], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[11], 8);
         } else if ((uxBits & BIT_12) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[12], 6);
             memcpy(&sendDataBuffer[12][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[12], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[12], 8);
         } else if ((uxBits & BIT_13) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[13], 6);
             memcpy(&sendDataBuffer[13][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[13], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[13], 8);
         } else if ((uxBits & BIT_14) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[14], 6);
             memcpy(&sendDataBuffer[14][6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[14], 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
         }
     }
 }
@@ -402,7 +402,7 @@ void tx1_task(void *arg)
             GetFileData((uint8_t *)&sendFileDataBuffer[0][6], FILETRANSSIZE);
             crc = crc16bitbybit((uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 6);
             memcpy(&sendFileDataBuffer[0][FILETRANSSIZE + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendFileDataBuffer[0], FILETRANSSIZE + 8);
         } else if ((uxBits & BIT_6) != 0) {
             GetTaskNum(&data);
             ESP_LOGI(TX1_TASK_TAG, "tasknum:%d\n", data);
@@ -412,7 +412,7 @@ void tx1_task(void *arg)
             sendDataBuffer[15][7] = temp;
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[15], 2 + 6);
             memcpy(&sendDataBuffer[15][2 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[15], 2 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[15], 2 + 8);
         } else if ((uxBits & BIT_7) != 0) {
             GetTaskPitch(&data);
             ESP_LOGI(TX1_TASK_TAG, "taskpitch:%d\n", data);
@@ -422,7 +422,7 @@ void tx1_task(void *arg)
             sendDataBuffer[16][7] = temp;
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[16], 2 + 6);
             memcpy(&sendDataBuffer[16][2 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[16], 2 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[16], 2 + 8);
         } else if ((uxBits & BIT_8) != 0) {
             GetTaskSpeed(&data);
             ESP_LOGI(TX1_TASK_TAG, "taskspeed:%d\n", data);
@@ -432,7 +432,7 @@ void tx1_task(void *arg)
             sendDataBuffer[17][7] = temp;
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[17], 2 + 6);
             memcpy(&sendDataBuffer[17][2 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[17], 2 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[17], 2 + 8);
         } else if ((uxBits & BIT_9) != 0) {
             GetTaskCount(&data);
             ESP_LOGI(TX1_TASK_TAG, "taskcount:%d\n", data);
@@ -442,7 +442,7 @@ void tx1_task(void *arg)
             sendDataBuffer[18][7] = temp;
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[18], 2 + 6);
             memcpy(&sendDataBuffer[18][2 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[18], 2 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[18], 2 + 8);
         } else if ((uxBits & BIT_10) != 0) {
             GetTaskTime(&data);
             ESP_LOGI(TX1_TASK_TAG, "tasktime:%d\n", data);
@@ -452,14 +452,14 @@ void tx1_task(void *arg)
             sendDataBuffer[19][7] = temp;
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[19], 2 + 6);
             memcpy(&sendDataBuffer[19][2 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[19], 2 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[19], 2 + 8);
         } else if ((uxBits & BIT_11) != 0) {
             GetMode(&data);
             ESP_LOGI(TX1_TASK_TAG, "mode:%d\n", (uint8_t)data);
             GetMode((uint8_t *)&sendDataBuffer[20][6]);
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[20], 1 + 6);
             memcpy(&sendDataBuffer[20][1 + 6], &crc, 2);
-            uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[20], 1 + 8);
+            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[20], 1 + 8);
         }
     }
 }
@@ -501,7 +501,7 @@ void uart_event_task(void *pvParameters)
         //Waiting for UART event.
         if(xQueueReceive(uart1_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
-            ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_2);
+            ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
                 //Event of UART receving data
                 /*We'd better handler data event fast, there would be much more data events than
@@ -509,10 +509,10 @@ void uart_event_task(void *pvParameters)
                 be full.*/
                 case UART_DATA:
                     ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
-                    uart_read_bytes(UART_NUM_2, dtmp, event.size, portMAX_DELAY);
+                    uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
                     ESP_LOGI(TAG, "[DATA EVT]:");
                     UART_WriteBufferBytes(dtmp, event.size);
-                    // uart_write_bytes(UART_NUM_2, (const char*) dtmp, event.size);
+                    // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
                     break;
                 //Event of HW FIFO overflow detected
                 case UART_FIFO_OVF:
@@ -520,7 +520,7 @@ void uart_event_task(void *pvParameters)
                     // If fifo overflow happened, you should consider adding flow control for your application.
                     // The ISR has already reset the rx FIFO,
                     // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(UART_NUM_2);
+                    uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
                     break;
                 //Event of UART ring buffer full
@@ -528,7 +528,7 @@ void uart_event_task(void *pvParameters)
                     ESP_LOGI(TAG, "ring buffer full");
                     // If buffer full happened, you should consider encreasing your buffer size
                     // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(UART_NUM_2);
+                    uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
                     break;
                 //Event of UART RX break detected
@@ -545,19 +545,19 @@ void uart_event_task(void *pvParameters)
                     break;
                 //UART_PATTERN_DET
                 case UART_PATTERN_DET:
-                    uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
-                    int pos = uart_pattern_pop_pos(UART_NUM_2);
+                    uart_get_buffered_data_len(UART_NUM_1, &buffered_size);
+                    int pos = uart_pattern_pop_pos(UART_NUM_1);
                     ESP_LOGI(TAG, "[UART PATTERN DETECTED] pos: %d, buffered size: %d", pos, buffered_size);
                     if (pos == -1) {
                         // There used to be a UART_PATTERN_DET event, but the pattern position queue is full so that it can not
                         // record the position. We should set a larger queue size.
                         // As an example, we directly flush the rx buffer here.
-                        uart_flush_input(UART_NUM_2);
+                        uart_flush_input(UART_NUM_1);
                     } else {
-                        uart_read_bytes(UART_NUM_2, dtmp, pos, 100 / portTICK_PERIOD_MS);
+                        uart_read_bytes(UART_NUM_1, dtmp, pos, 100 / portTICK_PERIOD_MS);
                         uint8_t pat[PATTERN_CHR_NUM + 1];
                         memset(pat, 0, sizeof(pat));
-                        uart_read_bytes(UART_NUM_2, pat, PATTERN_CHR_NUM, 100 / portTICK_PERIOD_MS);
+                        uart_read_bytes(UART_NUM_1, pat, PATTERN_CHR_NUM, 100 / portTICK_PERIOD_MS);
                         ESP_LOGI(TAG, "read data: %s", dtmp);
                         ESP_LOGI(TAG, "read pat : %s", pat);
                     }
