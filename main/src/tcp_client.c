@@ -45,7 +45,7 @@ void PackInitData(void)
     esp_netif_get_ip_info(netif, &ip_info);
 
     (void)sprintf(sta_ip, "" IPSTR, IP2STR(&ip_info.ip));
-    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n    \"devTypeIp\":\"%s\",\n    \"devTypeId\":\"%s\",\n"  
+    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n    \"devIp\":\"%s\",\n    \"devTypeId\":\"%s\",\n"  
                 "    \"deviceOrderFile\": \"\",\n    \"deviceOrderMode\":\"\",\n    \"deviceOrderWay\":\"\",\n"
                 "    \"orderDate\": \"\",\n    \"orderId\":\"%s\",\n    \"orderName\":\"\",\n"
                 "    \"parameterType\": \"\",\n    \"parameters\":\"\",\n    \"responseType\":\"\",\n"

@@ -54,6 +54,7 @@ CommandJsonData comdata = {0};
 {
     "devId": "1531243721197228032",
     "devName": "",
+    "devIp":"",
     "devTypeId": "1516606339298758656",
     "deviceOrderFile": "",
     "deviceOrderMode": "",
