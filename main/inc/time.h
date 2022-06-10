@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-void InitBaseTime(uint64_t abstime);
+void CalBaseTime(uint64_t abstime);
 uint64_t GetMilliTimeNow();
 
 #endif

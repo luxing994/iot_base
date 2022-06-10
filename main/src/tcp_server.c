@@ -26,7 +26,6 @@
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
 #include "cJSON.h"
-#include "iot_common.h"
 #include "ringbuffer.h"
 #include "time.h"
 
@@ -71,7 +70,12 @@ CommandJsonData comdata = {0};
 }
 */
 
-void GetCommandJsonData(cJSON *root)
+CommandJsonData GetCommandJsonData()
+{
+    return comdata;
+}
+
+void ParseCommandJsonData(cJSON *root)
 {
     cJSON *token = NULL;
     cJSON *item = NULL;
@@ -319,13 +323,14 @@ static void do_retransmit(const int sock)
             ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
             root = cJSON_Parse(&rx_buffer);
             if (root != NULL) {
-                GetCommandJsonData(root);
+                ParseCommandJsonData(root);
+                CalBaseTime(atoll(comdata.timeStamp));
                 orderId = atoi(&((comdata.orderId)[2]));
                 ESP_LOGI(TAG, "OrderId: %d\n", orderId);
                 switch (orderId) {
                     case INIT: {
                         if (atoll(comdata.timeStamp) > 0) {
-                            InitBaseTime(atoll(comdata.timeStamp));
+                            // TO DO
                         }
                         break;
                     }

@@ -12,7 +12,12 @@ uint64_t GetMilliTimeNow()
     return g_baseTime + esp_log_timestamp();
 }
 
-void InitBaseTime(uint64_t abstime)
+void CalBaseTime(uint64_t abstime)
 {   
-    g_baseTime = abstime - GetMilliTimeNow();
+    uint64_t timenow;
+
+    timenow = GetMilliTimeNow();
+    if (abs(abstime - timenow) > 10) {
+        g_baseTime = abstime - (timenow - g_baseTime);
+    }
 }

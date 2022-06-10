@@ -22,6 +22,7 @@
 #include "lwip/sockets.h"
 #include "iot_common.h"
 #include "protocol_examples_common.h"
+#include "time.h"
 
 
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -49,8 +50,8 @@ void PackInitData(void)
                 "    \"deviceOrderFile\": \"\",\n    \"deviceOrderMode\":\"\",\n    \"deviceOrderWay\":\"\",\n"
                 "    \"orderDate\": \"\",\n    \"orderId\":\"%s\",\n    \"orderName\":\"\",\n"
                 "    \"parameterType\": \"\",\n    \"parameters\":\"\",\n    \"responseType\":\"\",\n"
-                "    \"timeStamp\":\"\",\n};;**##", \ 
-                DEVID, DEVNAME, sta_ip, DEVTYPEID, INITORDERID);
+                "    \"timeStamp\":\"%lld\",\n};;**##", \ 
+                DEVID, DEVNAME, sta_ip, DEVTYPEID, INITORDERID, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
