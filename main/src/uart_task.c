@@ -28,7 +28,7 @@
 #define TXD_PIN (GPIO_NUM_19)
 #define RXD_PIN (GPIO_NUM_20)
 
-static QueueHandle_t uart1_queue;
+static QueueHandle_t uart2_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
@@ -293,7 +293,7 @@ void uart_init(void) {
         .source_clk = UART_SCLK_APB,
     };
     
-    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
+    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart2_queue, 0);
     uart_param_config(UART_NUM_2, &uart_config);
     uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     ret = UART_InitBuffer();
@@ -499,7 +499,7 @@ void uart_event_task(void *pvParameters)
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
-        if(xQueueReceive(uart1_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
+        if(xQueueReceive(uart2_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_2);
             switch(event.type) {
@@ -521,7 +521,7 @@ void uart_event_task(void *pvParameters)
                     // The ISR has already reset the rx FIFO,
                     // As an example, we directly flush the rx buffer here in order to read more data.
                     uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart1_queue);
+                    xQueueReset(uart2_queue);
                     break;
                 //Event of UART ring buffer full
                 case UART_BUFFER_FULL:
@@ -529,7 +529,7 @@ void uart_event_task(void *pvParameters)
                     // If buffer full happened, you should consider encreasing your buffer size
                     // As an example, we directly flush the rx buffer here in order to read more data.
                     uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart1_queue);
+                    xQueueReset(uart2_queue);
                     break;
                 //Event of UART RX break detected
                 case UART_BREAK:
