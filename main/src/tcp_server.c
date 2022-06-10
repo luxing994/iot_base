@@ -156,6 +156,7 @@ void GetCommandJsonData(cJSON *root)
     token = cJSON_GetObjectItem(root, "timeStamp");
     if (token != NULL) {
         comdata.timeStamp = (token->valuestring);
+        ESP_LOGI(TAG, "timenow: %lld", atoll(comdata.timeStamp));
     }
 }
 
@@ -322,8 +323,8 @@ static void do_retransmit(const int sock)
                 ESP_LOGI(TAG, "OrderId: %d\n", orderId);
                 switch (orderId) {
                     case INIT: {
-                        if (atol(comdata.timeStamp) > 0) {
-                            InitBaseTime(atol(comdata.timeStamp));
+                        if (atoll(comdata.timeStamp) > 0) {
+                            InitBaseTime(atoll(comdata.timeStamp));
                         }
                         break;
                     }
