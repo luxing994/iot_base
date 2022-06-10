@@ -32,28 +32,10 @@
 #define HOST_IP_ADDR ""
 #endif
 
-#define PORT CONFIG_EXAMPLE_PORT
-#define PORT1 CONFIG_EXAMPLE_PORT1
+#define PORT CONFIG_EXAMPLE_PORT     // read data com
+#define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
 
 static char initdata[1024] = {0};
-
-// static const char *payload = {
-//     "devId": DEVID,
-//     "devName": "",
-//     "devTypeId": "1516606339298758656",
-//     "deviceOrderFile": "",
-//     "deviceOrderMode": "",
-//     "deviceOrderWay": "write",
-//     "orderDate": "2022-05-30 21:46:21",
-//     "orderId": "FR022",
-//     "orderName": "",
-//     "parameterType": "",
-//     "parameters": [{"type":"","value":"2000"},{"type":"","value":"2000"},
-//     {"type":"","value":"2000"},{"type":"","value":"2000"},
-//     {"type":"","value":"2000"},{"type":"","value":"1"}],
-//     "responseType": "",
-//     "timeStamp": "1653918381719"
-// };
 
 void PackInitData(void)
 {

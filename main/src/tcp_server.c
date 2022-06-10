@@ -28,9 +28,10 @@
 #include "cJSON.h"
 #include "iot_common.h"
 #include "ringbuffer.h"
+#include "time.h"
 
-#define PORT1                       CONFIG_SERVER_PORT1
-#define PORT                        CONFIG_SERVER_PORT
+#define PORT1                       CONFIG_SERVER_PORT1     // file data com
+#define PORT                        CONFIG_SERVER_PORT      // command com
 #define KEEPALIVE_IDLE              CONFIG_EXAMPLE_KEEPALIVE_IDLE
 #define KEEPALIVE_INTERVAL          CONFIG_EXAMPLE_KEEPALIVE_INTERVAL
 #define KEEPALIVE_COUNT             CONFIG_EXAMPLE_KEEPALIVE_COUNT
@@ -69,91 +70,94 @@ CommandJsonData comdata = {0};
 }
 */
 
-// static int GetCommandData(cJSON *root, char *dest, char *src)
-// {
-//     cJSON *token;
+void GetCommandJsonData(cJSON *root)
+{
+    cJSON *token = NULL;
+    cJSON *item = NULL;
+    const char *TAG = "parse json data";
+    int arraysize, i;
 
-//     token = cJSON_GetObjectItem(root, src);
-//     if (token == NULL) {
-//         return -1;
-//     }
-    
-//     dest = (token->valuestring);
-//     return 0;
-// }
+    token = cJSON_GetObjectItem(root, "devId");
+    if (token != NULL) {
+        comdata.devId = (token->valuestring);
+    }
 
-// void GetCommandJsonData(cJSON *root)
-// {
-//     cJSON *token;
+    token = cJSON_GetObjectItem(root, "devName");
+    if (token != NULL) {
+        comdata.devName = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "devId");
-//     if (token != NULL) {
-//         comdata.devId = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "devTypeId");
+    if (token != NULL) {
+        comdata.devTypeId = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "devName");
-//     if (token != NULL) {
-//         comdata.devName = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "deviceOrderFile");
+    if (token != NULL) {
+        comdata.deviceOrderFile = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "devTypeId");
-//     if (token != NULL) {
-//         comdata.devTypeId = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "deviceOrderMode");
+    if (token != NULL) {
+        comdata.deviceOrderMode = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "deviceOrderFile");
-//     if (token != NULL) {
-//         comdata.deviceOrderFile = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "deviceOrderWay");
+    if (token != NULL) {
+        comdata.deviceOrderWay = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "deviceOrderMode");
-//     if (token != NULL) {
-//         comdata.deviceOrderMode = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "orderDate");
+    if (token != NULL) {
+        comdata.orderDate = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "deviceOrderWay");
-//     if (token != NULL) {
-//         comdata.deviceOrderWay = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "orderId");
+    if (token != NULL) {
+        comdata.orderId = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "orderDate");
-//     if (token != NULL) {
-//         comdata.orderDate = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "orderName");
+    if (token != NULL) {
+        comdata.orderName = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "orderId");
-//     if (token != NULL) {
-//         comdata.orderId = (token->valuestring);
-//     }
+    token = cJSON_GetObjectItem(root, "parameterType");
+    if (token != NULL) {
+        comdata.parameterType = (token->valuestring);
+    }
 
-//     token = cJSON_GetObjectItem(root, "orderName");
-//     if (token != NULL) {
-//         comdata.orderName = (token->valuestring);
-//     }
-
-//     token = cJSON_GetObjectItem(root, "parameterType");
-//     if (token != NULL) {
-//         comdata.parameterType = (token->valuestring);
-//     }
-
-//     if (token != NULL) {
-//         arraysize = cJSON_GetArraySize(token);
-//         ESP_LOGI(TAG, "arraysize %d", arraysize);
-//         item = token->child;
+    token = cJSON_GetObjectItem(root, "parameters");
+    if (token != NULL) {
+        arraysize = cJSON_GetArraySize(token);
+        ESP_LOGI(TAG, "arraysize %d", arraysize);
+        item = token->child;
         
-//         for (i = 0; i < arraysize; i++) {
-//             configdata[i] = atoi(cJSON_GetObjectItem(item, "value")->valuestring);
-//             ESP_LOGI(TAG, "configdata[%d]: %d", i, configdata[i]);
-//             item = item->next;
-//         }
-//         config.tasknum = configdata[0];
-//         config.taskpitch = configdata[1];
-//         config.taskspeed = configdata[2];
-//         config.taskcount = configdata[3];
-//         config.tasktime = configdata[4];
-//         config.mode = (uint8_t)configdata[5];
-//     }
-// }
+        for (i = 0; i < arraysize; i++) {
+            comdata.paradata[i].type = cJSON_GetObjectItem(item, "type")->valuestring;
+            comdata.paradata[i].value = cJSON_GetObjectItem(item, "value")->valuestring;
+            // configdata[i] = atoi(cJSON_GetObjectItem(item, "value")->valuestring);
+            ESP_LOGI(TAG, "paradata[%d]: %d", i, atoi(comdata.paradata[i].value));
+            item = item->next;
+        }
+        config.tasknum = atoi(comdata.paradata[0].value);
+        config.taskpitch = atoi(comdata.paradata[1].value);
+        config.taskspeed = atoi(comdata.paradata[2].value);
+        config.taskcount = atoi(comdata.paradata[3].value);
+        config.tasktime = atoi(comdata.paradata[4].value);
+        config.mode = (uint8_t)atoi(comdata.paradata[5].value);
+    }
+
+    token = cJSON_GetObjectItem(root, "responseType");
+    if (token != NULL) {
+        comdata.responseType = (token->valuestring);
+    }
+
+    token = cJSON_GetObjectItem(root, "timeStamp");
+    if (token != NULL) {
+        comdata.timeStamp = (token->valuestring);
+    }
+}
 
 int GetFileCount(uint8_t *count)
 {
@@ -313,117 +317,102 @@ static void do_retransmit(const int sock)
             ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
             root = cJSON_Parse(&rx_buffer);
             if (root != NULL) {
-                // GetCommandJsonData(cJSON *token);
-                token = cJSON_GetObjectItem(root, "orderId");
-                if (token != NULL) {
-                    orderId = atoi(&(token->valuestring)[2]);
-                    ESP_LOGI(TAG, "orderId:%d", orderId);
-                    token = cJSON_GetObjectItem(root, "parameters");
-                    if (token != NULL) {
-                        arraysize = cJSON_GetArraySize(token);
-                        ESP_LOGI(TAG, "arraysize %d", arraysize);
-                        item = token->child;
-                        
-                        for (i = 0; i < arraysize; i++) {
-                            configdata[i] = atoi(cJSON_GetObjectItem(item, "value")->valuestring);
-                            ESP_LOGI(TAG, "configdata[%d]: %d", i, configdata[i]);
-                            item = item->next;
+                GetCommandJsonData(root);
+                orderId = atoi(&((comdata.orderId)[2]));
+                ESP_LOGI(TAG, "OrderId: %d\n", orderId);
+                switch (orderId) {
+                    case INIT: {
+                        if (atol(comdata.timeStamp) > 0) {
+                            InitBaseTime(atol(comdata.timeStamp));
                         }
-                        config.tasknum = configdata[0];
-                        config.taskpitch = configdata[1];
-                        config.taskspeed = configdata[2];
-                        config.taskcount = configdata[3];
-                        config.tasktime = configdata[4];
-                        config.mode = (uint8_t)configdata[5];
+                        break;
                     }
-                    switch (orderId) {
-                        case BREAK: {
-                            xEventGroupSetBits(xEventGroup1, BIT_0);
-                            break;
-                        }
-                        case HMISTATUS: {
-                            xEventGroupSetBits(xEventGroup1, BIT_1);
-                            break;
-                        }
-                        case MODE: {
-                            xEventGroupSetBits(xEventGroup1, BIT_2);
-                            break;
-                        }
-                        case COUNT: {
-                            xEventGroupSetBits(xEventGroup1, BIT_3);
-                            break;
-                        }
-                        case SCHEDULE: {
-                            xEventGroupSetBits(xEventGroup1, BIT_4);
-                            break;
-                        }
-                        case PATTERN: {
-                            xEventGroupSetBits(xEventGroup1, BIT_5);
-                            break;
-                        }
-                        case PITCH: {
-                            xEventGroupSetBits(xEventGroup1, BIT_6);
-                            break;
-                        }
-                        case PITCHCOUNT: {
-                            xEventGroupSetBits(xEventGroup1, BIT_7);
-                            break;
-                        }
-                        case SPINDLERATE: {
-                            xEventGroupSetBits(xEventGroup1, BIT_8);
-                            break;
-                        }
-                        case BOOTTIME: {
-                            xEventGroupSetBits(xEventGroup1, BIT_9);
-                            break;
-                        }
-                        case APPVERSION: {
-                            xEventGroupSetBits(xEventGroup1, BIT_10);
-                            break;
-                        }
-                        case CONTROLVERSION: {
-                            xEventGroupSetBits(xEventGroup1, BIT_11);
-                            break;
-                        }
-                        case MECHANICCALL: {
-                            xEventGroupSetBits(xEventGroup1, BIT_12);
-                            break;
-                        }
-                        case MATERIALCALL: {
-                            xEventGroupSetBits(xEventGroup1, BIT_13);
-                            break;
-                        }
-                        case OTHERCALL: {
-                            xEventGroupSetBits(xEventGroup1, BIT_14);
-                            break;
-                        }
-                        case TASKNUMBER: {
-                            xEventGroupSetBits(xEventGroup2, BIT_6);
-                            break;
-                        }
-                        case TASKPITCH: {
-                            xEventGroupSetBits(xEventGroup2, BIT_7);
-                            break;
-                        }
-                        case TASKSPEED: {
-                            xEventGroupSetBits(xEventGroup2, BIT_8);
-                            break;
-                        }
-                        case TASKCOUNT: {
-                            xEventGroupSetBits(xEventGroup2, BIT_9);
-                            break;
-                        }
-                        case TASKTIME: {
-                            xEventGroupSetBits(xEventGroup2, BIT_10);
-                            break;
-                        }
-                        case SETMODE: {
-                            xEventGroupSetBits(xEventGroup2, BIT_11);
-                            break;
-                        }
-                        default: {
-                            break;
-                        }
+                    case BREAK: {
+                        xEventGroupSetBits(xEventGroup1, BIT_0);
+                        break;
+                    }
+                    case HMISTATUS: {
+                        xEventGroupSetBits(xEventGroup1, BIT_1);
+                        break;
+                    }
+                    case MODE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_2);
+                        break;
+                    }
+                    case COUNT: {
+                        xEventGroupSetBits(xEventGroup1, BIT_3);
+                        break;
+                    }
+                    case SCHEDULE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_4);
+                        break;
+                    }
+                    case PATTERN: {
+                        xEventGroupSetBits(xEventGroup1, BIT_5);
+                        break;
+                    }
+                    case PITCH: {
+                        xEventGroupSetBits(xEventGroup1, BIT_6);
+                        break;
+                    }
+                    case PITCHCOUNT: {
+                        xEventGroupSetBits(xEventGroup1, BIT_7);
+                        break;
+                    }
+                    case SPINDLERATE: {
+                        xEventGroupSetBits(xEventGroup1, BIT_8);
+                        break;
+                    }
+                    case BOOTTIME: {
+                        xEventGroupSetBits(xEventGroup1, BIT_9);
+                        break;
+                    }
+                    case APPVERSION: {
+                        xEventGroupSetBits(xEventGroup1, BIT_10);
+                        break;
+                    }
+                    case CONTROLVERSION: {
+                        xEventGroupSetBits(xEventGroup1, BIT_11);
+                        break;
+                    }
+                    case MECHANICCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_12);
+                        break;
+                    }
+                    case MATERIALCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_13);
+                        break;
+                    }
+                    case OTHERCALL: {
+                        xEventGroupSetBits(xEventGroup1, BIT_14);
+                        break;
+                    }
+                    case TASKNUMBER: {
+                        xEventGroupSetBits(xEventGroup2, BIT_6);
+                        break;
+                    }
+                    case TASKPITCH: {
+                        xEventGroupSetBits(xEventGroup2, BIT_7);
+                        break;
+                    }
+                    case TASKSPEED: {
+                        xEventGroupSetBits(xEventGroup2, BIT_8);
+                        break;
+                    }
+                    case TASKCOUNT: {
+                        xEventGroupSetBits(xEventGroup2, BIT_9);
+                        break;
+                    }
+                    case TASKTIME: {
+                        xEventGroupSetBits(xEventGroup2, BIT_10);
+                        break;
+                    }
+                    case SETMODE: {
+                        xEventGroupSetBits(xEventGroup2, BIT_11);
+                        break;
+                    }
+                    default: {
+                        break;
                     }
                 }
             }
