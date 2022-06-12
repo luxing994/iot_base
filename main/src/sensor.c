@@ -27,7 +27,7 @@ void InitSwitchSensor(void)
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = 1,
         .pull_down_en = 0,
-        .intr_type = GPIO_INTR_NEGEDGE,
+        .intr_type = GPIO_INTR_POSEDGE,
     };
 
     gpio_config(&io_conf);
