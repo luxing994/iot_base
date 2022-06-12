@@ -19,6 +19,7 @@
 #include "iot_common.h"
 #include "ringbuffer.h"
 #include "tcp_server.h"
+#include "tcp_client.h"
 #include "time.h"
 
 #define CONTROLERTYPE 2
@@ -28,7 +29,7 @@
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
 
-static QueueHandle_t uart1_queue;
+static QueueHandle_t uart2_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
@@ -50,7 +51,7 @@ char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x
 const uint16_t polynom = 0xA001;
 int sendflag = 0;
 
-RingBuffer uart1Buffer;
+RingBuffer uart2Buffer;
 HproComFrame dataFrame;
 HproComFrame sendDataFrame;
 
@@ -93,7 +94,7 @@ int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
 
 static int UART_InitBuffer(void)
 {
-    if (RING_InitBuffer(&uart1Buffer, UART_BUFF_SIZE) != 0) {
+    if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {
         return -1;
     }
 
@@ -102,7 +103,7 @@ static int UART_InitBuffer(void)
 
 static int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 {
-    if (RING_WriteBufferBytes(&uart1Buffer, data, size) != 0) {
+    if (RING_WriteBufferBytes(&uart2Buffer, data, size) != 0) {
         return -1;
     }
 	return 0;
@@ -110,7 +111,7 @@ static int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 
 static int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 {
-    if (RING_ReadBufferBytes(&uart1Buffer, data, size) != 0) {
+    if (RING_ReadBufferBytes(&uart2Buffer, data, size) != 0) {
         return -1;
     }
 	return 0;
@@ -121,108 +122,108 @@ void ParseOpCode(char *str, uint8_t op)
     switch (op) {
         case BREAK: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR001", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR001", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case HMISTATUS: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR002", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR002", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
         case MODE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR003", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0]);
+                ID, DEVID, DEVNAME, "FR003", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0]);
             break;    
         }
         case COUNT: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"jian\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR004", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR004", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SCHEDULE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR005", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR005", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PATTERN: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR006", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR006", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case PITCH: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR007", DEVTYPENAME, GetMilliTimeNow(), (dataFrame.data[0] << 8 | dataFrame.data[1]) / 10.0);
+                ID, DEVID, DEVNAME, "FR007", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), (dataFrame.data[0] << 8 | dataFrame.data[1]) / 10.0);
             break;    
         }
         case PITCHCOUNT: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR008", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR008", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case SPINDLERATE: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR009", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
+                ID, DEVID, DEVNAME, "FR009", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;    
         }
         case BOOTTIME: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d;%d;%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR010", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0], dataFrame.data[1], 
+                ID, DEVID, DEVNAME, "FR010", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0], dataFrame.data[1], 
                 dataFrame.data[2]);
             break;    
         }
         case APPVERSION: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR011", DEVTYPENAME, GetMilliTimeNow(), (char *)(&(dataFrame.data[0])));
+                ID, DEVID, DEVNAME, "FR011", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), (char *)(&(dataFrame.data[0])));
             break;    
         }
         case CONTROLVERSION: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR012", DEVTYPENAME, GetMilliTimeNow(), (char *)(&(dataFrame.data[0])));
+                ID, DEVID, DEVNAME, "FR012", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), (char *)(&(dataFrame.data[0])));
             break;    
         }
         case MECHANICCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR013", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0]);
+                ID, DEVID, DEVNAME, "FR013", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0]);
             break;    
         }
         case MATERIALCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR014", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0]);
+                ID, DEVID, DEVNAME, "FR014", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0]);
             break;    
         }
         case OTHERCALL: {
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, GetMilliTimeNow(), dataFrame.data[0]);
+                ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0]);
             break;    
         }
         default: {
@@ -293,9 +294,15 @@ void uart_init(void) {
         .source_clk = UART_SCLK_APB,
     };
     
+<<<<<<< HEAD
     uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+=======
+    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart2_queue, 0);
+    uart_param_config(UART_NUM_2, &uart_config);
+    uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+>>>>>>> dev
     ret = UART_InitBuffer();
     if (ret != 0) {
         ESP_LOGE(TAG, "uart buffer init failed\n");
@@ -499,7 +506,7 @@ void uart_event_task(void *pvParameters)
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
-        if(xQueueReceive(uart1_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
+        if(xQueueReceive(uart2_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
@@ -520,16 +527,26 @@ void uart_event_task(void *pvParameters)
                     // If fifo overflow happened, you should consider adding flow control for your application.
                     // The ISR has already reset the rx FIFO,
                     // As an example, we directly flush the rx buffer here in order to read more data.
+<<<<<<< HEAD
                     uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
+=======
+                    uart_flush_input(UART_NUM_2);
+                    xQueueReset(uart2_queue);
+>>>>>>> dev
                     break;
                 //Event of UART ring buffer full
                 case UART_BUFFER_FULL:
                     ESP_LOGI(TAG, "ring buffer full");
                     // If buffer full happened, you should consider encreasing your buffer size
                     // As an example, we directly flush the rx buffer here in order to read more data.
+<<<<<<< HEAD
                     uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
+=======
+                    uart_flush_input(UART_NUM_2);
+                    xQueueReset(uart2_queue);
+>>>>>>> dev
                     break;
                 //Event of UART RX break detected
                 case UART_BREAK:
