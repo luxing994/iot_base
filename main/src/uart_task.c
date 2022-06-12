@@ -29,7 +29,7 @@
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
 
-static QueueHandle_t uart2_queue;
+static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
@@ -51,7 +51,7 @@ char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x
 const uint16_t polynom = 0xA001;
 int sendflag = 0;
 
-RingBuffer uart2Buffer;
+RingBuffer uart1Buffer;
 HproComFrame dataFrame;
 HproComFrame sendDataFrame;
 
@@ -94,7 +94,7 @@ int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
 
 static int UART_InitBuffer(void)
 {
-    if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {
+    if (RING_InitBuffer(&uart1Buffer, UART_BUFF_SIZE) != 0) {
         return -1;
     }
 
@@ -103,7 +103,7 @@ static int UART_InitBuffer(void)
 
 static int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 {
-    if (RING_WriteBufferBytes(&uart2Buffer, data, size) != 0) {
+    if (RING_WriteBufferBytes(&uart1Buffer, data, size) != 0) {
         return -1;
     }
 	return 0;
@@ -111,7 +111,7 @@ static int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 
 static int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 {
-    if (RING_ReadBufferBytes(&uart2Buffer, data, size) != 0) {
+    if (RING_ReadBufferBytes(&uart1Buffer, data, size) != 0) {
         return -1;
     }
 	return 0;
@@ -299,7 +299,7 @@ void uart_init(void) {
     uart_param_config(UART_NUM_1, &uart_config);
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 =======
-    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart2_queue, 0);
+    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_2, &uart_config);
     uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 >>>>>>> dev
@@ -506,7 +506,7 @@ void uart_event_task(void *pvParameters)
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
-        if(xQueueReceive(uart2_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
+        if(xQueueReceive(uart1_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
@@ -532,7 +532,7 @@ void uart_event_task(void *pvParameters)
                     xQueueReset(uart1_queue);
 =======
                     uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart2_queue);
+                    xQueueReset(uart1_queue);
 >>>>>>> dev
                     break;
                 //Event of UART ring buffer full
@@ -545,7 +545,7 @@ void uart_event_task(void *pvParameters)
                     xQueueReset(uart1_queue);
 =======
                     uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart2_queue);
+                    xQueueReset(uart1_queue);
 >>>>>>> dev
                     break;
                 //Event of UART RX break detected
