@@ -53,7 +53,6 @@ CommandJsonData comdata = {0};
 {
     "devId": "1531243721197228032",
     "devName": "",
-    "devIp":"",
     "devTypeId": "1516606339298758656",
     "deviceOrderFile": "",
     "deviceOrderMode": "",
@@ -324,7 +323,9 @@ static void do_retransmit(const int sock)
             root = cJSON_Parse(&rx_buffer);
             if (root != NULL) {
                 ParseCommandJsonData(root);
-                CalBaseTime(atoll(comdata.timeStamp));
+                if (atoll(comdata.timeStamp) > 0) {
+                    CalBaseTime(atoll(comdata.timeStamp));
+                }
                 orderId = atoi(&((comdata.orderId)[2]));
                 ESP_LOGI(TAG, "OrderId: %d\n", orderId);
                 switch (orderId) {

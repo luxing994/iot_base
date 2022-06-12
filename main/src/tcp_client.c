@@ -37,21 +37,24 @@
 #define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
 
 static char initdata[1024] = {0};
+char sta_ip[32] = {0};
+
+char* GetStaIp(void)
+{
+    return sta_ip;
+}
 
 void PackInitData(void)
 {
-    char sta_ip[32] = {0};
     esp_netif_ip_info_t ip_info;
     esp_netif_t *netif = get_example_netif();
     esp_netif_get_ip_info(netif, &ip_info);
 
     (void)sprintf(sta_ip, "" IPSTR, IP2STR(&ip_info.ip));
-    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n    \"devIp\":\"%s\",\n    \"devTypeId\":\"%s\",\n"  
-                "    \"deviceOrderFile\": \"\",\n    \"deviceOrderMode\":\"\",\n    \"deviceOrderWay\":\"\",\n"
-                "    \"orderDate\": \"\",\n    \"orderId\":\"%s\",\n    \"orderName\":\"\",\n"
-                "    \"parameterType\": \"\",\n    \"parameters\":\"\",\n    \"responseType\":\"\",\n"
-                "    \"timeStamp\":\"%lld\",\n};;**##", \ 
-                DEVID, DEVNAME, sta_ip, DEVTYPEID, INITORDERID, GetMilliTimeNow());
+    (void)sprintf(initdata, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
+                ID, DEVID, DEVNAME, "FR000", DEVTYPENAME, sta_ip, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
