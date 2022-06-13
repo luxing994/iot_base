@@ -6,6 +6,8 @@
 #define HPRO_HEAD_FIRST_BYTE      0x5A
 #define HPRO_HEAD_SECOND_BYTE     0xA5
 
+#define SWITCHCOUNT  30
+
 typedef enum {
     READ = 0x01,
     WRITE

@@ -1,9 +1,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
-#include "driver/gpio.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "driver/uart.h"
+#include "string.h"
+#include "driver/gpio.h"
+#include "iot_common.h"
 #include "sensor.h"
 
 #define SWITCH_SENSOR_GPIO   (GPIO_NUM_38)
@@ -18,6 +21,7 @@ int GetSwitchCount(void)
 void switch_sensor_gpio_isr_callback(void *arg)
 {
     g_count++;
+    xEventGroupSetBitsFromISR(xEventGroup1, BIT_15, NULL);
 }
 
 void InitSwitchSensor(void)

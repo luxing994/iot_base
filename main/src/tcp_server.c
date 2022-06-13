@@ -395,6 +395,10 @@ static void do_retransmit(const int sock)
                         xEventGroupSetBits(xEventGroup1, BIT_14);
                         break;
                     }
+                    case SWITCHCOUNT: {
+                        xEventGroupSetBits(xEventGroup1, BIT_15);
+                        break;
+                    }
                     case TASKNUMBER: {
                         xEventGroupSetBits(xEventGroup2, BIT_6);
                         break;

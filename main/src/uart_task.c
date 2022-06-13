@@ -227,6 +227,13 @@ void ParseOpCode(char *str, uint8_t op)
                 ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), dataFrame.data[0]);
             break;    
         }
+        case SWITCHCOUNT: {
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+                ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), GetSwitchCount());
+            break;    
+        }
         default: {
             break;
         }
@@ -315,6 +322,7 @@ int sendData(const char* logName, const char* data)
 void tx_task(void *arg)
 {
     static const char *TX_TASK_TAG = "TX_TASK";
+    uint32_t sendaddr = (uint32_t)&controlerStr;
     EventBits_t uxBits;
     uint32_t recvp;
     uint16_t crc;
@@ -322,7 +330,7 @@ void tx_task(void *arg)
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
-            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14, pdTRUE, pdFALSE, (TickType_t)10);
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
@@ -383,6 +391,11 @@ void tx_task(void *arg)
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[14], 6);
             memcpy(&sendDataBuffer[14][6], &crc, 2);
             uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[14], 8);
+        } else if ((uxBits & BIT_15) != 0) {
+            ParseOpCode(controlerStr, SWITCHCOUNT);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                //TO DO
+            }
         }
     }
 }
@@ -481,7 +494,6 @@ void rx_task(void *arg)
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ESP_LOGI(RX_TASK_TAG, "Level: %d, Count: '%d'", GetSwitchSensorLevel(), GetSwitchCount());
         ret = GetDataFromControler();
 		if (ret == 0) {
             ParseOpCode(controlerStr, dataFrame.operate);
