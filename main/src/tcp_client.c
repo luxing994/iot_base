@@ -54,7 +54,7 @@ void PackInitData(void)
     (void)sprintf(initdata, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                ID, DEVID, DEVNAME, "FR000", DEVTYPENAME, sta_ip, GetMilliTimeNow());
+                "-1", DEVID, DEVNAME, "FR000", DEVTYPENAME, sta_ip, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
