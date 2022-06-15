@@ -252,6 +252,109 @@ int GetMode(uint8_t *mode)
     return 0;
 }
 
+void ServerParseOpCode(int op)
+{
+     switch (op) {
+        case INIT: {
+            if (atoll(comdata.timeStamp) > 0) {
+                // TO DO
+            }
+            break;
+        }
+        case BREAK: {
+            xEventGroupSetBits(xEventGroup1, BIT_0);
+            break;
+        }
+        case HMISTATUS: {
+            xEventGroupSetBits(xEventGroup1, BIT_1);
+            break;
+        }
+        case MODE: {
+            xEventGroupSetBits(xEventGroup1, BIT_2);
+            break;
+        }
+        case COUNT: {
+            xEventGroupSetBits(xEventGroup1, BIT_3);
+            break;
+        }
+        case SCHEDULE: {
+            xEventGroupSetBits(xEventGroup1, BIT_4);
+            break;
+        }
+        case PATTERN: {
+            xEventGroupSetBits(xEventGroup1, BIT_5);
+            break;
+        }
+        case PITCH: {
+            xEventGroupSetBits(xEventGroup1, BIT_6);
+            break;
+        }
+        case PITCHCOUNT: {
+            xEventGroupSetBits(xEventGroup1, BIT_7);
+            break;
+        }
+        case SPINDLERATE: {
+            xEventGroupSetBits(xEventGroup1, BIT_8);
+            break;
+        }
+        case BOOTTIME: {
+            xEventGroupSetBits(xEventGroup1, BIT_9);
+            break;
+        }
+        case APPVERSION: {
+            xEventGroupSetBits(xEventGroup1, BIT_10);
+            break;
+        }
+        case CONTROLVERSION: {
+            xEventGroupSetBits(xEventGroup1, BIT_11);
+            break;
+        }
+        case MECHANICCALL: {
+            xEventGroupSetBits(xEventGroup1, BIT_12);
+            break;
+        }
+        case MATERIALCALL: {
+            xEventGroupSetBits(xEventGroup1, BIT_13);
+            break;
+        }
+        case OTHERCALL: {
+            xEventGroupSetBits(xEventGroup1, BIT_14);
+            break;
+        }
+        case SWITCHCOUNT: {
+            xEventGroupSetBits(xEventGroup1, BIT_15);
+            break;
+        }
+        case TASKNUMBER: {
+            xEventGroupSetBits(xEventGroup2, BIT_6);
+            break;
+        }
+        case TASKPITCH: {
+            xEventGroupSetBits(xEventGroup2, BIT_7);
+            break;
+        }
+        case TASKSPEED: {
+            xEventGroupSetBits(xEventGroup2, BIT_8);
+            break;
+        }
+        case TASKCOUNT: {
+            xEventGroupSetBits(xEventGroup2, BIT_9);
+            break;
+        }
+        case TASKTIME: {
+            xEventGroupSetBits(xEventGroup2, BIT_10);
+            break;
+        }
+        case SETMODE: {
+            xEventGroupSetBits(xEventGroup2, BIT_11);
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+}
+
 int ParseFile(char *buffer, int length)
 {
     char *delim = "::!!@@$$**";
@@ -328,105 +431,7 @@ static void do_retransmit(const int sock)
                 }
                 orderId = atoi(&((comdata.orderId)[2]));
                 ESP_LOGI(TAG, "OrderId: %d\n", orderId);
-                switch (orderId) {
-                    case INIT: {
-                        if (atoll(comdata.timeStamp) > 0) {
-                            // TO DO
-                        }
-                        break;
-                    }
-                    case BREAK: {
-                        xEventGroupSetBits(xEventGroup1, BIT_0);
-                        break;
-                    }
-                    case HMISTATUS: {
-                        xEventGroupSetBits(xEventGroup1, BIT_1);
-                        break;
-                    }
-                    case MODE: {
-                        xEventGroupSetBits(xEventGroup1, BIT_2);
-                        break;
-                    }
-                    case COUNT: {
-                        xEventGroupSetBits(xEventGroup1, BIT_3);
-                        break;
-                    }
-                    case SCHEDULE: {
-                        xEventGroupSetBits(xEventGroup1, BIT_4);
-                        break;
-                    }
-                    case PATTERN: {
-                        xEventGroupSetBits(xEventGroup1, BIT_5);
-                        break;
-                    }
-                    case PITCH: {
-                        xEventGroupSetBits(xEventGroup1, BIT_6);
-                        break;
-                    }
-                    case PITCHCOUNT: {
-                        xEventGroupSetBits(xEventGroup1, BIT_7);
-                        break;
-                    }
-                    case SPINDLERATE: {
-                        xEventGroupSetBits(xEventGroup1, BIT_8);
-                        break;
-                    }
-                    case BOOTTIME: {
-                        xEventGroupSetBits(xEventGroup1, BIT_9);
-                        break;
-                    }
-                    case APPVERSION: {
-                        xEventGroupSetBits(xEventGroup1, BIT_10);
-                        break;
-                    }
-                    case CONTROLVERSION: {
-                        xEventGroupSetBits(xEventGroup1, BIT_11);
-                        break;
-                    }
-                    case MECHANICCALL: {
-                        xEventGroupSetBits(xEventGroup1, BIT_12);
-                        break;
-                    }
-                    case MATERIALCALL: {
-                        xEventGroupSetBits(xEventGroup1, BIT_13);
-                        break;
-                    }
-                    case OTHERCALL: {
-                        xEventGroupSetBits(xEventGroup1, BIT_14);
-                        break;
-                    }
-                    case SWITCHCOUNT: {
-                        xEventGroupSetBits(xEventGroup1, BIT_15);
-                        break;
-                    }
-                    case TASKNUMBER: {
-                        xEventGroupSetBits(xEventGroup2, BIT_6);
-                        break;
-                    }
-                    case TASKPITCH: {
-                        xEventGroupSetBits(xEventGroup2, BIT_7);
-                        break;
-                    }
-                    case TASKSPEED: {
-                        xEventGroupSetBits(xEventGroup2, BIT_8);
-                        break;
-                    }
-                    case TASKCOUNT: {
-                        xEventGroupSetBits(xEventGroup2, BIT_9);
-                        break;
-                    }
-                    case TASKTIME: {
-                        xEventGroupSetBits(xEventGroup2, BIT_10);
-                        break;
-                    }
-                    case SETMODE: {
-                        xEventGroupSetBits(xEventGroup2, BIT_11);
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
+                ServerParseOpCode(orderId);
             }
         }
     } while (len > 0);
@@ -646,4 +651,23 @@ void tcp_server1_task(void *pvParameters)
 CLEAN_UP:
     close(listen_sock);
     vTaskDelete(NULL);
+}
+
+void send_data_task(void *pvParameters)
+{
+    const char *SEND_DATA_TASK_TAG = "SEND_DATA_TASK";
+    int i;
+
+    TickType_t xLastWakeTime;
+ 	const TickType_t xFrequency = 500;
+    
+    xLastWakeTime = xTaskGetTickCount();
+    esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        for (i = 1; i <= 15; i++) {
+            ServerParseOpCode(i);
+            vTaskDelay(10);
+        }
+    }
 }

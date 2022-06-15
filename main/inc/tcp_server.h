@@ -5,6 +5,7 @@
 
 void tcp_server_task(void *pvParameters);
 void tcp_server1_task(void *pvParameters);
+void send_data_task(void *pvParameters);
 int GetFileData(uint8_t *data, int size);
 int GetTaskNum(uint16_t *tasknum);
 int GetTaskPitch(uint16_t *taskpitch);
