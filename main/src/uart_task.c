@@ -231,7 +231,14 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                 "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                 "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-                ID, DEVID, DEVNAME, "FR015", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), GetSwitchCount());
+                ID, DEVID, DEVNAME, "FR030", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), GetSwitchCount());
+            break;    
+        }
+        case SWITCHSTATUS: {
+            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+                ID, DEVID, DEVNAME, "FR031", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), GetSwitchLevel());
             break;    
         }
         default: {
@@ -330,7 +337,7 @@ void tx_task(void *arg)
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
-            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15, pdTRUE, pdFALSE, (TickType_t)10);
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15 | BIT_16, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
@@ -393,6 +400,11 @@ void tx_task(void *arg)
             uart_write_bytes(UART_NUM_2, (uint8_t *)sendDataBuffer[14], 8);
         } else if ((uxBits & BIT_15) != 0) {
             ParseOpCode(controlerStr, SWITCHCOUNT);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                //TO DO
+            }
+        } else if ((uxBits & BIT_16) != 0) {
+            ParseOpCode(controlerStr, SWITCHSTATUS);
             if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                 //TO DO
             }

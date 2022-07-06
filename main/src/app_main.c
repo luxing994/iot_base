@@ -32,6 +32,7 @@ void app_main(void)
 
     uart_init();
     InitSwitchSensor();
+    InitSwitch();
 
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
@@ -41,8 +42,8 @@ void app_main(void)
     xTaskCreate(tx1_task, "uart_tx1_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
-    // xTaskCreate(tcp_client1_task, "tcp_client1", 1024*8, NULL, 5, NULL);
+    xTaskCreate(tcp_client1_task, "tcp_client1", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
-    xTaskCreate(send_data_task, "send_data_task", 1024, (void*)AF_INET, 5, NULL);
+    // xTaskCreate(send_data_task, "send_data_task", 1024, (void*)AF_INET, 5, NULL);
 }
