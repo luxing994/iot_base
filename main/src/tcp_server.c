@@ -659,7 +659,7 @@ void send_data_task(void *pvParameters)
     int i;
 
     TickType_t xLastWakeTime;
- 	const TickType_t xFrequency = 500;
+ 	const TickType_t xFrequency = 100;
     
     xLastWakeTime = xTaskGetTickCount();
     esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
