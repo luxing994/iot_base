@@ -286,23 +286,17 @@ void uart_init(void) {
     static const char *TAG = "uart_init";
     
     const uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_7_BITS,
+        .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
     
-<<<<<<< HEAD
     uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-=======
-    uart_driver_install(UART_NUM_2, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
-    uart_param_config(UART_NUM_2, &uart_config);
-    uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
->>>>>>> dev
     ret = UART_InitBuffer();
     if (ret != 0) {
         ESP_LOGE(TAG, "uart buffer init failed\n");
@@ -527,26 +521,16 @@ void uart_event_task(void *pvParameters)
                     // If fifo overflow happened, you should consider adding flow control for your application.
                     // The ISR has already reset the rx FIFO,
                     // As an example, we directly flush the rx buffer here in order to read more data.
-<<<<<<< HEAD
                     uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
-=======
-                    uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart1_queue);
->>>>>>> dev
                     break;
                 //Event of UART ring buffer full
                 case UART_BUFFER_FULL:
                     ESP_LOGI(TAG, "ring buffer full");
                     // If buffer full happened, you should consider encreasing your buffer size
                     // As an example, we directly flush the rx buffer here in order to read more data.
-<<<<<<< HEAD
                     uart_flush_input(UART_NUM_1);
                     xQueueReset(uart1_queue);
-=======
-                    uart_flush_input(UART_NUM_2);
-                    xQueueReset(uart1_queue);
->>>>>>> dev
                     break;
                 //Event of UART RX break detected
                 case UART_BREAK:
