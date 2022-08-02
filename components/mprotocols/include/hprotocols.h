@@ -31,6 +31,7 @@ typedef enum {
     MECHANICCALL,
     MATERIALCALL,
     OTHERCALL,
+    SYSTEMID,
     APPUPDATE,     // file
     CONTROLUPDATE,
     SPINDDIVERUPDATE,

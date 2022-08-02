@@ -48,6 +48,7 @@ struct FileData file = {0};
 struct ConfigData config = {0};
 uint16_t configdata[10] = {0};
 CommandJsonData comdata = {0};
+extern uint32_t g_devStartStatus;
 
 /*
 {
@@ -321,8 +322,16 @@ void ServerParseOpCode(int op)
             xEventGroupSetBits(xEventGroup1, BIT_14);
             break;
         }
-        case SWITCHCOUNT: {
+        case SYSTEMID: {
             xEventGroupSetBits(xEventGroup1, BIT_15);
+            break;
+        }
+        case SWITCHCOUNT: {
+            xEventGroupSetBits(xEventGroup1, BIT_16);
+            break;
+        }
+        case SWITCHSTATUS: {
+            xEventGroupSetBits(xEventGroup1, BIT_17);
             break;
         }
         case TASKNUMBER: {
@@ -665,9 +674,13 @@ void send_data_task(void *pvParameters)
     esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        for (i = 1; i <= 15; i++) {
-            ServerParseOpCode(i);
-            vTaskDelay(10);
+        if (g_devStartStatus == 0) {
+            ServerParseOpCode(SYSTEMID);
+        } else {
+            break;
         }
+        // vTaskDelay(10);
+        
     }
+    vTaskDelete(NULL);
 }

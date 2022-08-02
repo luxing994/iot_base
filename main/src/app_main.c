@@ -31,8 +31,7 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     uart_init();
-    InitSwitchSensor();
-    InitSwitch();
+    InitSensorGpio();
 
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
