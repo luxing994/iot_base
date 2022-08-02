@@ -27,8 +27,8 @@
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
 #define RX_BUF_SIZE  (UART_BUFF_SIZE * 2)
-#define TXD_PIN (GPIO_NUM_19)
-#define RXD_PIN (GPIO_NUM_20)
+#define TXD_PIN (GPIO_NUM_17)
+#define RXD_PIN (GPIO_NUM_18)
 #define DEVIDLENGTH 12
 
 static QueueHandle_t uart2_queue;

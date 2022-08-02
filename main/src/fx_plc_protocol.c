@@ -3,13 +3,15 @@
 #include <string.h>  
 #include <ctype.h>  
 #include <string.h>
+#include "driver/uart.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "fx_plc_protocol.h"
 #include "iot_common.h"
 
-FxPlcReadFrameFormat readDataFrame = {0};
 RingBuffer dataRegisterBuffer;
+FxPlcReadFrameFormat readDataFrame = {0};
+FxPlcReadFrameFormat mptr = {0};
 
 static int CharToInt(char ch)  
 {  
@@ -132,7 +134,7 @@ static uint16_t CalReadDataRegister(uint8_t *data)
 {
 	uint16_t rdata;
 
-	rdata = CharToInt(data[2]) * 1000 + CharToInt(data[3]) * 100 + CharToInt(data[0]) * 10 + CharToInt(data[1]);
+	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
 	return rdata;
 }
 
@@ -161,7 +163,7 @@ int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
 	return 0;
 }
 
-FxPlcReadFrameFormat* PackReadDataRegisterFrame(uint16_t address, uint16_t length)
+void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)
 {
 	uint32_t addr;
 	uint16_t len, sumcheck;
@@ -184,7 +186,7 @@ FxPlcReadFrameFormat* PackReadDataRegisterFrame(uint16_t address, uint16_t lengt
 	readDataFrame.sum[0] = sumcheck & 0xff;
 	readDataFrame.sum[1] = (sumcheck >> 8) & 0xff;
 
-    return &readDataFrame;
+    memcpy(rdata, &readDataFrame, sizeof(FxPlcReadFrameFormat));
 }
 
 int GetDataFromFxPlc(int *length)
@@ -225,4 +227,20 @@ int GetDataFromFxPlc(int *length)
 
 	*length = len;
 	return 0;
+}
+
+void ReadSingleDataRegister(uint16_t address)
+{
+	PackReadDataRegisterFrame(address, 2, &mptr);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&mptr, sizeof(FxPlcReadFrameFormat));
+}
+
+void ReadMulDataRegister(uint16_t startaddr, uint16_t length)
+{
+	int i;
+
+	for (i = 0; i < length; i++) {
+		ReadSingleDataRegister(startaddr + i);
+		vTaskDelay(10);
+	}
 }

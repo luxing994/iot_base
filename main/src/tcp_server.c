@@ -668,7 +668,6 @@ CLEAN_UP:
 void send_data_task(void *pvParameters)
 {
     const char *SEND_DATA_TASK_TAG = "SEND_DATA_TASK";
-    FxPlcReadFrameFormat *ptr;
     
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 100;
@@ -677,8 +676,7 @@ void send_data_task(void *pvParameters)
     esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ptr = PackReadDataRegisterFrame(8000, 2);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)ptr, sizeof(FxPlcReadFrameFormat));
+        ReadMulDataRegister(8000, 4);
     }
     vTaskDelete(NULL);
 }

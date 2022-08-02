@@ -56,7 +56,9 @@ typedef struct {
 } FxPlcReadFrameFormat;
 #pragma pack()
 
-FxPlcReadFrameFormat* PackReadDataRegisterFrame(uint16_t address, uint16_t length);
+void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata);
+void ReadSingleDataRegister(uint16_t address);
+void ReadMulDataRegister(uint16_t startaddr, uint16_t length);
 int GetDataFromFxPlc(int *length);
 int FXPLC_InitBuffer(void);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);

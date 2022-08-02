@@ -46,5 +46,5 @@ void app_main(void)
     // xTaskCreate(tcp_client1_task, "tcp_client1", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
-    xTaskCreate(send_data_task, "send_data_task", 1024, (void*)AF_INET, 5, NULL);
+    xTaskCreate(send_data_task, "send_data_task", 4096, (void*)AF_INET, 5, NULL);
 }
