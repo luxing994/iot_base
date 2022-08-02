@@ -8,6 +8,7 @@
 
 #define SWITCHCOUNT    30
 #define SWITCHSTATUS   31
+#define FXPLCDEMODATA  32
 
 typedef enum {
     READ = 0x01,

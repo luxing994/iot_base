@@ -1,9 +1,18 @@
 #ifndef IOT_COMMON_H
 #define IOT_COMMON_H
 
+#include "ringbuffer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/event_groups.h"
+
 extern QueueHandle_t xQueue1;
 extern EventGroupHandle_t xEventGroup1;
 extern EventGroupHandle_t xEventGroup2;
+
+#define UART_BUFF_SIZE 1024
+#define FXPLC_BUFF_SIZE 1024
 
 #define BIT_0	( 1 << 0 )
 #define BIT_1	( 1 << 1 )
@@ -98,5 +107,13 @@ typedef struct {
     char *responseType;
     char *timeStamp;
 } CommandJsonData;
+
+uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
+int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
+uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
+int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
+int UART_InitBuffer(void);
+int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
+int UART_ReadBufferBytes(uint8_t *data, uint32_t size);
 
 #endif

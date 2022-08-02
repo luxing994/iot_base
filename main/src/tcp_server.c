@@ -17,9 +17,12 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "driver/uart.h"
 #include "protocol_examples_common.h"
 #include "tcp_server.h"
 #include "hprotocols.h"
+#include "iot_common.h"
+#include "fx_plc_protocol.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -665,8 +668,8 @@ CLEAN_UP:
 void send_data_task(void *pvParameters)
 {
     const char *SEND_DATA_TASK_TAG = "SEND_DATA_TASK";
-    int i;
-
+    FxPlcReadFrameFormat *ptr;
+    
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 100;
     
@@ -674,13 +677,8 @@ void send_data_task(void *pvParameters)
     esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        if (g_devStartStatus == 0) {
-            ServerParseOpCode(SYSTEMID);
-        } else {
-            break;
-        }
-        // vTaskDelay(10);
-        
+        ptr = PackReadDataRegisterFrame(8000, 2);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)ptr, sizeof(FxPlcReadFrameFormat));
     }
     vTaskDelete(NULL);
 }
