@@ -189,6 +189,11 @@ void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrame
     memcpy(rdata, &readDataFrame, sizeof(FxPlcReadFrameFormat));
 }
 
+void PackInputRelayFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)
+{
+	
+}
+
 int GetDataFromFxPlc(int *length)
 {
 	uint8_t curData = 0;
