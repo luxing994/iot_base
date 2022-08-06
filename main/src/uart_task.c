@@ -490,7 +490,7 @@ void uart_event_task(void *pvParameters)
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
-        if(xQueueReceive(uart2_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
+        if(xQueueReceive(uart2_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
