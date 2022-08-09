@@ -49,9 +49,10 @@ extern EventGroupHandle_t xEventGroup2;
 
 #define ID           "123"
 #define DEVID        "Hello"
-#define DEVNAME      "1111"
-#define DEVTYPEID    "222"
-#define DEVTYPENAME  "Hello"
+#define DEVNAME      ""
+#define DEVTYPEID    ""
+#define DEVTYPENAME  ""
+#define ORDERNAME    ""
 #define INITORDERID  "FR000"
 
 #define FILETRANSSIZE 240

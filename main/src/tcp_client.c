@@ -55,7 +55,7 @@ void PackInitData(void)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, sta_ip, "FR000", "init", GetMilliTimeNow());
+                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, sta_ip, "FR000", ORDERNAME, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)

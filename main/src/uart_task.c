@@ -35,7 +35,7 @@ static QueueHandle_t uart2_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 // HproOpReadCode opCode;
-char controlerStr[256] = {0};
+char controlerStr[1024] = {0};
 char sendDataBuffer[22][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x03 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x04 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x05 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x06 },
@@ -68,7 +68,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
@@ -77,7 +77,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR002", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR002", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
@@ -86,7 +86,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR003", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR003", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0]);
             break;
         }
@@ -95,7 +95,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR004", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR004", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
@@ -104,7 +104,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR005", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR005", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break; 
         }
@@ -113,7 +113,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR006", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR006", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;  
         }
@@ -122,7 +122,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR007", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR007", ORDERNAME, GetMilliTimeNow(), 
                 (dataFrame.data[0] << 8 | dataFrame.data[1]) / 10.0);
             break;  
         }
@@ -131,7 +131,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR008", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR008", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
@@ -140,7 +140,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR009", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR009", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0] << 8 | dataFrame.data[1]);
             break;
         }
@@ -149,7 +149,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d;%d;%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR010", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR010", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0], dataFrame.data[1], dataFrame.data[2]);
             break;
         }
@@ -158,7 +158,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR011", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR011", ORDERNAME, GetMilliTimeNow(), 
                 (char *)(&(dataFrame.data[0])));
             break; 
         }
@@ -167,7 +167,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR012", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR012", ORDERNAME, GetMilliTimeNow(), 
                 (char *)(&(dataFrame.data[0])));
             break;   
         }
@@ -176,7 +176,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR013", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR013", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0]);
             break;
         }
@@ -185,7 +185,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR014", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR014", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0]);
             break;
         }
@@ -194,7 +194,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR015", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR015", ORDERNAME, GetMilliTimeNow(), 
                 dataFrame.data[0]);
             break;
         }
@@ -205,7 +205,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR016", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR016", ORDERNAME, GetMilliTimeNow(), 
                 g_devId);
             break;
         }
@@ -214,7 +214,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR030", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR030", ORDERNAME, GetMilliTimeNow(), 
                 GetSwitchCount());
             break;
         }
@@ -223,7 +223,7 @@ void ParseOpCode(char *str, uint8_t op)
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR031", "read", GetMilliTimeNow(), 
+            g_devId, g_devId, DEVNAME, DEVTYPEID, DEVTYPENAME, GetStaIp(), "FR031", ORDERNAME, GetMilliTimeNow(), 
                 GetSwitchLevel());
             break;
         }
