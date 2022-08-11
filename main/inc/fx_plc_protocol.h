@@ -45,6 +45,12 @@ UART传输格式
 #define PLC_READ_DATA_FRAME_LEAGTH  11
 #define PLC_READ_DATA_FRAME_CAL_LEAGTH  8
 
+#define FX_PLC_MAX_X  32
+#define FX_PLC_MAX_X_LEN  (FX_PLC_MAX_X / 8)
+
+#define FX_PLC_MAX_Y  32
+#define FX_PLC_MAX_Y_LEN  (FX_PLC_MAX_Y / 8)
+
 #pragma pack(1)
 typedef struct {
     uint8_t stx;
@@ -56,9 +62,10 @@ typedef struct {
 } FxPlcReadFrameFormat;
 #pragma pack()
 
-void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata);
 void ReadSingleDataRegister(uint16_t address);
 void ReadMulDataRegister(uint16_t startaddr, uint16_t length);
+int ReadInputRelayData();
+int ReadOutputRelayData();
 int GetDataFromFxPlc(int *length);
 int FXPLC_InitBuffer(void);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);

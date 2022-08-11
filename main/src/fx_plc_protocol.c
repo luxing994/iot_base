@@ -163,7 +163,7 @@ int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
 	return 0;
 }
 
-void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)
+static void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)
 {
 	uint32_t addr;
 	uint16_t len, sumcheck;
@@ -189,9 +189,66 @@ void PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrame
     memcpy(rdata, &readDataFrame, sizeof(FxPlcReadFrameFormat));
 }
 
-void PackInputRelayFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)
+static int PackInputRelayFrame(uint16_t length, FxPlcReadFrameFormat* rdata)
 {
-	
+	const uint8_t iraddr[4] = { 0x30, 0x30, 0x38, 0x30 };    // address: 0x80 = 0 + PLC_X_GROUP_BASE_ADDRESS
+	uint16_t len, sumcheck;
+
+	if (length > FX_PLC_MAX_X_LEN || rdata == NULL) {
+		return -1;
+	}
+
+	readDataFrame.stx = PLC_STX;
+	readDataFrame.etx = PLC_ETX;
+	readDataFrame.cmd = PLC_READ;
+
+	readDataFrame.address[0] = iraddr[0];
+	readDataFrame.address[1] = iraddr[1];
+	readDataFrame.address[0] = iraddr[2];
+	readDataFrame.address[1] = iraddr[3];
+
+	len = CalLength(length);
+	readDataFrame.length[0] = len & 0xff;
+	readDataFrame.length[1] = (len >> 8) & 0xff;
+
+	sumcheck = CalSumCheckData((uint8_t *)(&(readDataFrame.cmd)), PLC_READ_DATA_FRAME_CAL_LEAGTH);
+	readDataFrame.sum[0] = sumcheck & 0xff;
+	readDataFrame.sum[1] = (sumcheck >> 8) & 0xff;
+
+	memcpy(rdata, &readDataFrame, sizeof(FxPlcReadFrameFormat));
+
+	return 0;
+}
+
+static int PackOutputRelayFrame(uint16_t length, FxPlcReadFrameFormat* rdata)
+{
+	const uint8_t iraddr[4] = { 0x30, 0x30, 0x41, 0x30 };    // address: 0x80 = 0 + PLC_Y_GROUP_BASE_ADDRESS
+	uint16_t len, sumcheck;
+
+	if (length > FX_PLC_MAX_Y_LEN || rdata == NULL) {
+		return -1;
+	}
+
+	readDataFrame.stx = PLC_STX;
+	readDataFrame.etx = PLC_ETX;
+	readDataFrame.cmd = PLC_READ;
+
+	readDataFrame.address[0] = iraddr[0];
+	readDataFrame.address[1] = iraddr[1];
+	readDataFrame.address[0] = iraddr[2];
+	readDataFrame.address[1] = iraddr[3];
+
+	len = CalLength(length);
+	readDataFrame.length[0] = len & 0xff;
+	readDataFrame.length[1] = (len >> 8) & 0xff;
+
+	sumcheck = CalSumCheckData((uint8_t *)(&(readDataFrame.cmd)), PLC_READ_DATA_FRAME_CAL_LEAGTH);
+	readDataFrame.sum[0] = sumcheck & 0xff;
+	readDataFrame.sum[1] = (sumcheck >> 8) & 0xff;
+
+	memcpy(rdata, &readDataFrame, sizeof(FxPlcReadFrameFormat));
+
+	return 0;
 }
 
 int GetDataFromFxPlc(int *length)
@@ -248,4 +305,30 @@ void ReadMulDataRegister(uint16_t startaddr, uint16_t length)
 		ReadSingleDataRegister(startaddr + i);
 		vTaskDelay(10);
 	}
+}
+
+int ReadInputRelayData()
+{
+	int ret;
+
+	ret = PackInputRelayFrame(FX_PLC_MAX_X_LEN, &mptr);
+	if (ret != 0) {
+		return ret;
+	}
+
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&mptr, sizeof(FxPlcReadFrameFormat));
+	return 0;
+}
+
+int ReadOutputRelayData()
+{
+	int ret;
+
+	ret = PackOutputRelayFrame(FX_PLC_MAX_Y_LEN, &mptr);
+	if (ret != 0) {
+		return ret;
+	}
+
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&mptr, sizeof(FxPlcReadFrameFormat));
+	return 0;
 }
