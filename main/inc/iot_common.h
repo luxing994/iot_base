@@ -88,6 +88,14 @@ typedef struct {
     char *devId;
     char *devName;
     char *devTypeId;
+    char *orderId;
+    char *orderName;
+} ReturnJsonData;
+
+typedef struct {
+    char *devId;
+    char *devName;
+    char *devTypeId;
     char *deviceOrderFile;
     char *deviceOrderMode;
     char *deviceOrderWay;

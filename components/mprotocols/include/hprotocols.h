@@ -15,7 +15,6 @@ typedef enum {
 } HproFuncCode;
 
 typedef enum {
-    INIT = 0x0,
     BREAK = 0x01,
     HMISTATUS,
     MODE,

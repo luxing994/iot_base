@@ -51,11 +51,11 @@ void PackInitData(void)
     esp_netif_get_ip_info(netif, &ip_info);
 
     (void)sprintf(sta_ip, "" IPSTR, IP2STR(&ip_info.ip));
-    (void)sprintf(initdata, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+    (void)sprintf(initdata, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, sta_ip, "FR000", ORDERNAME, GetMilliTimeNow());
+                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, sta_ip, "initDev", ORDERNAME, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
