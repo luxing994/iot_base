@@ -51,6 +51,7 @@ struct FileData file = {0};
 struct ConfigData config = {0};
 uint16_t configdata[10] = {0};
 CommandJsonData comdata = {0};
+uint32_t g_devStartFlushFlag = 0;
 extern uint32_t g_devStartStatus;
 
 /*
@@ -259,81 +260,93 @@ int GetMode(uint8_t *mode)
 void ServerParseOpCode(int op)
 {
      switch (op) {
-        case INIT: {
-            if (atoll(comdata.timeStamp) > 0) {
-                // TO DO
-            }
-            break;
-        }
         case BREAK: {
+            strcpy(comdata.orderId, "FR001");
             xEventGroupSetBits(xEventGroup1, BIT_0);
             break;
         }
         case HMISTATUS: {
+            strcpy(comdata.orderId, "FR002");
             xEventGroupSetBits(xEventGroup1, BIT_1);
             break;
         }
         case MODE: {
+            strcpy(comdata.orderId, "FR003");
             xEventGroupSetBits(xEventGroup1, BIT_2);
             break;
         }
         case COUNT: {
+            strcpy(comdata.orderId, "FR004");
             xEventGroupSetBits(xEventGroup1, BIT_3);
             break;
         }
         case SCHEDULE: {
+            strcpy(comdata.orderId, "FR005");
             xEventGroupSetBits(xEventGroup1, BIT_4);
             break;
         }
         case PATTERN: {
+            strcpy(comdata.orderId, "FR006");
             xEventGroupSetBits(xEventGroup1, BIT_5);
             break;
         }
         case PITCH: {
+            strcpy(comdata.orderId, "FR007");
             xEventGroupSetBits(xEventGroup1, BIT_6);
             break;
         }
         case PITCHCOUNT: {
+            strcpy(comdata.orderId, "FR008");
             xEventGroupSetBits(xEventGroup1, BIT_7);
             break;
         }
         case SPINDLERATE: {
+            strcpy(comdata.orderId, "FR009");
             xEventGroupSetBits(xEventGroup1, BIT_8);
             break;
         }
         case BOOTTIME: {
+            strcpy(comdata.orderId, "FR010");
             xEventGroupSetBits(xEventGroup1, BIT_9);
             break;
         }
         case APPVERSION: {
+            strcpy(comdata.orderId, "FR011");
             xEventGroupSetBits(xEventGroup1, BIT_10);
             break;
         }
         case CONTROLVERSION: {
+            strcpy(comdata.orderId, "FR012");
             xEventGroupSetBits(xEventGroup1, BIT_11);
             break;
         }
         case MECHANICCALL: {
+            strcpy(comdata.orderId, "FR013");
             xEventGroupSetBits(xEventGroup1, BIT_12);
             break;
         }
         case MATERIALCALL: {
+            strcpy(comdata.orderId, "FR014");
             xEventGroupSetBits(xEventGroup1, BIT_13);
             break;
         }
         case OTHERCALL: {
+            strcpy(comdata.orderId, "FR015");
             xEventGroupSetBits(xEventGroup1, BIT_14);
             break;
         }
         case SYSTEMID: {
+            strcpy(comdata.orderId, "FR016");
             xEventGroupSetBits(xEventGroup1, BIT_15);
             break;
         }
         case SWITCHCOUNT: {
+            strcpy(comdata.orderId, "FR030");
             xEventGroupSetBits(xEventGroup1, BIT_16);
             break;
         }
         case SWITCHSTATUS: {
+            strcpy(comdata.orderId, "FR031");
             xEventGroupSetBits(xEventGroup1, BIT_17);
             break;
         }
@@ -441,9 +454,15 @@ static void do_retransmit(const int sock)
                 if (atoll(comdata.timeStamp) > 0) {
                     CalBaseTime(atoll(comdata.timeStamp));
                 }
-                orderId = atoi(&((comdata.orderId)[2]));
-                ESP_LOGI(TAG, "OrderId: %d\n", orderId);
-                ServerParseOpCode(orderId);
+                if (strcmp(comdata.orderId, "StartFlush") == 0) {
+                    g_devStartFlushFlag = 1;
+                } else if (strcmp(comdata.orderId, "EndFlush") == 0) {
+                    g_devStartFlushFlag = 0;
+                } else {
+                    orderId = atoi(&((comdata.orderId)[2]));
+                    ESP_LOGI(TAG, "OrderId: %d\n", orderId);
+                    ServerParseOpCode(orderId);
+                }
             }
         }
     } while (len > 0);
@@ -668,15 +687,31 @@ CLEAN_UP:
 void send_data_task(void *pvParameters)
 {
     const char *SEND_DATA_TASK_TAG = "SEND_DATA_TASK";
+    int i;
     
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 100;
+    
     
     xLastWakeTime = xTaskGetTickCount();
     esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ReadMulDataRegister(8000, 4);
+        if (g_devStartStatus == 0 && g_devStartFlushFlag == 0) {
+            // ServerParseOpCode(SYSTEMID);
+        } else if (g_devStartStatus == 0 && g_devStartFlushFlag == 1) {
+            // ServerParseOpCode(SYSTEMID);
+            vTaskDelay(10);
+            for (i = 1; i < SYSTEMID; i++) {
+                ServerParseOpCode(i);
+                vTaskDelay(10);
+            }
+        } else if (g_devStartStatus == 1 && g_devStartFlushFlag == 1) {
+            for (i = 1; i < SYSTEMID; i++) {
+                ServerParseOpCode(i);
+                vTaskDelay(10);
+            }
+        }
     }
     vTaskDelete(NULL);
 }
