@@ -3,6 +3,7 @@
 
 void tcp_client_task(void *pvParameters);
 void tcp_client1_task(void *pvParameters);
+void heart_beat_task(void *pvParameters);
 char* GetStaIp(void);
 
 #endif

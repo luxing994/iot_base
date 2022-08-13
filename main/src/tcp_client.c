@@ -36,6 +36,9 @@
 #define PORT CONFIG_EXAMPLE_PORT     // read data com
 #define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
 
+#define CLIENT_RECONNECT_INTERVAL  5 // second
+#define HEART_BEAT_INTERVAL        1 // second
+
 static char initdata[1024] = {0};
 char sta_ip[32] = {0};
 
@@ -67,8 +70,11 @@ void tcp_client_task(void *pvParameters)
     uint32_t recvp;
     char host_ip[] = HOST_IP_ADDR;
     const char *TAG = "tcp client";
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = CLIENT_RECONNECT_INTERVAL * 100;
 
     while (1) {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
 #if defined(CONFIG_EXAMPLE_IPV4)
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
@@ -138,8 +144,13 @@ void tcp_client1_task(void *pvParameters)
     uint32_t recvp;
     char host_ip[] = HOST_IP_ADDR;
     const char *TAG = "tcp client1";
+    TickType_t xLastWakeTime1, xLastWakeTime2;
+ 	const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
+    const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
+    
 
     while (1) {
+        vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
 #if defined(CONFIG_EXAMPLE_IPV4)
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
@@ -179,7 +190,16 @@ void tcp_client1_task(void *pvParameters)
         if (err < 0) {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
         }
-        break;
+        memset(initdata, 0, sizeof(initdata));
+        strcpy(initdata, "Hello;;**##");
+        while (1) {
+            vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
+            err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
+            if (err < 0) {
+                ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                break;
+            }
+        }
 
         end:
         if (sock != -1) {
@@ -190,4 +210,3 @@ void tcp_client1_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
-
