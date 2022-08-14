@@ -1,7 +1,6 @@
 README.md
 *.py
 build/
-sdkconfig
 sdkconfig.old
 .vscode/
 openocd.log
