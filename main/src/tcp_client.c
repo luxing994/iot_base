@@ -16,6 +16,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_eth.h"
 #include "esp_netif.h"
 #include "addr_from_stdin.h"
 #include "lwip/err.h"
@@ -40,25 +41,57 @@
 #define HEART_BEAT_INTERVAL        1 // second
 
 static char initdata[1024] = {0};
-char sta_ip[32] = {0};
+char mcu_ip[32] = {0};
+
+static bool is_our_netif(const char *prefix, esp_netif_t *netif)
+{
+    return strncmp(prefix, esp_netif_get_desc(netif), strlen(prefix) - 1) == 0;
+}
 
 char* GetStaIp(void)
 {
-    return sta_ip;
+    return mcu_ip;
 }
 
-void PackInitData(void)
+static void GetIpArry(char *ip, int *data, uint16_t len)
 {
-    esp_netif_ip_info_t ip_info;
-    esp_netif_t *netif = get_example_netif();
-    esp_netif_get_ip_info(netif, &ip_info);
+    char *token = NULL;
+    int i = 0;
 
-    (void)sprintf(sta_ip, "" IPSTR, IP2STR(&ip_info.ip));
+    token = strtok(ip, ".");mcu_ip
+    for (i = 0; i < len && token != NULL; i++) {
+        data[i] = atoi(token);
+        token = strtok(NULL, ".");
+    }
+}
+
+void PackInitData(char *strip)
+{
+    const char *TAG = "example_connect";
+    esp_netif_ip_info_t ip_info;
+    esp_netif_t *netif = NULL;
+    char *token = NULL;
+    int flag;
+    int addr[4] = {0};
+
+    GetIpArry(strip, addr, sizeof(addr) / sizeof(int));
+    for (int i = 0; i < esp_netif_get_nr_of_ifs(); ++i) {
+        netif = esp_netif_next(netif);
+        if (is_our_netif(TAG, netif)) {
+            esp_netif_get_ip_info(netif, &ip_info);
+            if ((esp_ip4_addr1(&ip_info.ip) == addr[0]) && (esp_ip4_addr2(&ip_info.ip) == addr[1]) && \
+                (esp_ip4_addr3(&ip_info.ip) == addr[2])) {
+                sprintf(mcu_ip, "" IPSTR, IP2STR(&ip_info.ip));
+                break;
+            }
+        }
+    }
+
     (void)sprintf(initdata, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, sta_ip, "initDev", ORDERNAME, GetMilliTimeNow());
+                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, mcu_ip, "initDev", ORDERNAME, GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
@@ -108,7 +141,6 @@ void tcp_client_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Successfully connected");
 
-        PackInitData();
         err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
         if (err < 0) {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -185,7 +217,7 @@ void tcp_client1_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Successfully connected");
 
-        PackInitData();
+        PackInitData(host_ip);
         err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
         if (err < 0) {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
