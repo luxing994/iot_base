@@ -58,7 +58,7 @@ static void GetIpArry(char *ip, int *data, uint16_t len)
     char *token = NULL;
     int i = 0;
 
-    token = strtok(ip, ".");mcu_ip
+    token = strtok(ip, ".");
     for (i = 0; i < len && token != NULL; i++) {
         data[i] = atoi(token);
         token = strtok(NULL, ".");
