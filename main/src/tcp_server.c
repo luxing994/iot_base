@@ -23,6 +23,7 @@
 #include "hprotocols.h"
 #include "iot_common.h"
 #include "fx_plc_protocol.h"
+#include "master.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -686,7 +687,7 @@ CLEAN_UP:
 
 void send_data_task(void *pvParameters)
 {
-    const char *SEND_DATA_TASK_TAG = "SEND_DATA_TASK";
+    const char *TAG = "SEND_DATA_TASK";
     int i;
     
     TickType_t xLastWakeTime;
@@ -694,23 +695,23 @@ void send_data_task(void *pvParameters)
     
     
     xLastWakeTime = xTaskGetTickCount();
-    esp_log_level_set(SEND_DATA_TASK_TAG, ESP_LOG_INFO);
+    esp_log_level_set(TAG, ESP_LOG_INFO);
     while (1) {
+#ifdef CONFIG_PLC_FX
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        if (g_devStartStatus == 0 && g_devStartFlushFlag == 0) {
-            // ServerParseOpCode(SYSTEMID);
-        } else if (g_devStartStatus == 0 && g_devStartFlushFlag == 1) {
-            // ServerParseOpCode(SYSTEMID);
-            vTaskDelay(10);
-            for (i = 1; i < SYSTEMID; i++) {
-                ServerParseOpCode(i);
-                vTaskDelay(10);
-            }
-        } else if (g_devStartStatus == 1 && g_devStartFlushFlag == 1) {
-            for (i = 1; i < SYSTEMID; i++) {
-                ServerParseOpCode(i);
-                vTaskDelay(10);
-            }
+#endif
+        if (g_devStartFlushFlag == 0) {
+#ifdef CONFIG_PLC_MUDBUS
+            vTaskDelayUntil(&xLastWakeTime, xFrequency);
+#endif
+        } else {
+#ifdef CONFIG_PLC_FX
+            ReadSingleDataRegister(8000);   // test address
+#endif
+
+#ifdef CONFIG_PLC_MUDBUS
+            master_operation_func(NULL);
+#endif
         }
     }
     vTaskDelete(NULL);

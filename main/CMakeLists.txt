@@ -7,4 +7,6 @@ idf_component_register(SRCS "./src/tcp_client.c"
                        SRCS "./src/sensor.c"
                        SRCS "./src/fx_plc_protocol.c"
                        SRCS "./src/iot_common.c"
+                       SRCS "./src/master.c"
+                       SRCS "./src/modbus_params.c"
                     INCLUDE_DIRS "./inc")

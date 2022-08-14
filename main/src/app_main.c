@@ -14,6 +14,7 @@
 #include "uart_task.h"
 #include "sensor.h"
 #include "fx_plc_protocol.h"
+#include "master.h"
 
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;
@@ -31,17 +32,26 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
+#ifdef CONFIG_PLC_MUDBUS
+    master_init();
+#endif
+
+#ifdef CONFIG_PLC_FX
     uart_init();
+#endif
     InitSensorGpio();
     FXPLC_InitBuffer();
 
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
     xEventGroup2 = xEventGroupCreate();
+
+#if CONFIG_PLC_FX
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
     xTaskCreate(tx1_task, "uart_tx1_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
+#endif
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_client1_task, "tcp_client1", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
