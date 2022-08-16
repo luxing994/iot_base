@@ -114,7 +114,7 @@ menu "Modbus Configuration"
 
     config MB_UART_BAUD_RATE
         int "UART communication speed"
-        range 1200 115200
+        range 1200 256000
         default 115200
         help
             UART communication speed for Modbus example.

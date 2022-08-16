@@ -75,10 +75,10 @@ const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
             HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
-            HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
+    //         HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
+    //         HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     // { CID_HOLD_TEST_REG, STR("Test_regs"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 10, 58,
     //         HOLD_OFFSET(test_regs), PARAM_TYPE_ASCII, 116, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
