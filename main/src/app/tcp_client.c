@@ -70,11 +70,12 @@ void PackInitData(char *strip)
     const char *TAG = "example_connect";
     esp_netif_ip_info_t ip_info;
     esp_netif_t *netif = NULL;
-    char *token = NULL;
-    int flag;
     int addr[4] = {0};
+    char ptr[32] = {0};
+    int i;
 
-    GetIpArry(strip, addr, sizeof(addr) / sizeof(int));
+    strcpy(ptr, strip);
+    GetIpArry(ptr, addr, sizeof(addr) / sizeof(int));
     for (int i = 0; i < esp_netif_get_nr_of_ifs(); ++i) {
         netif = esp_netif_next(netif);
         if (is_our_netif(TAG, netif)) {
@@ -94,9 +95,17 @@ void PackInitData(char *strip)
                 "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, mcu_ip, "initDev", ORDERNAME, GetMilliTimeNow());
 }
 
+void PackHeartBeatData()
+{
+    (void)sprintf(initdata, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
+                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, mcu_ip, "heartBeat", ORDERNAME, GetMilliTimeNow());
+}
+
 void tcp_client_task(void *pvParameters)
 {
-    char rx_buffer[128];
     int addr_family = 0;
     int ip_protocol = 0;
     int sock;
@@ -141,11 +150,6 @@ void tcp_client_task(void *pvParameters)
         }
         ESP_LOGI(TAG, "Successfully connected");
 
-        err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
-        if (err < 0) {
-            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-        }
-
         while (1) {
             if(xQueueReceive(xQueue1, &recvp, (TickType_t)10) == pdPASS) {
                 ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
@@ -169,7 +173,6 @@ void tcp_client_task(void *pvParameters)
 
 void tcp_client1_task(void *pvParameters)
 {
-    char rx_buffer[128];
     int addr_family = 0;
     int ip_protocol = 0;
     int sock;
@@ -223,7 +226,7 @@ void tcp_client1_task(void *pvParameters)
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
         }
         memset(initdata, 0, sizeof(initdata));
-        strcpy(initdata, "Hello;;**##");
+        PackHeartBeatData();
         while (1) {
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
             err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);

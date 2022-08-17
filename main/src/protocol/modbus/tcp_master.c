@@ -75,15 +75,12 @@ enum {
 
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
-    CID_INP_DATA_0 = 0,
-    CID_HOLD_DATA_0,
-    CID_INP_DATA_1,
-    CID_HOLD_DATA_1,
-    CID_INP_DATA_2,
-    CID_HOLD_DATA_2,
+    CID_HOLD_DATA_0 = 0,
+    // CID_HOLD_DATA_1,
+    // CID_HOLD_DATA_2,
+    // CID_HOLD_DATA_3,
+    // CID_HOLD_DATA_4,
     CID_HOLD_TEST_REG,
-    CID_RELAY_P1,
-    CID_RELAY_P2,
     CID_COUNT
 };
 
@@ -98,24 +95,19 @@ enum {
 // Access Mode - can be used to implement custom options for processing of characteristic (Read/Write restrictions, factory mode values and etc).
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_INP_DATA_0, STR("Data_channel_0"), STR("Volts"), MB_DEVICE_ADDR1, MB_PARAM_INPUT, 0, 2,
-                    INPUT_OFFSET(input_data0), PARAM_TYPE_FLOAT, 4, OPTS( -10, 10, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_0, STR("Humidity_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 4, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_INP_DATA_1, STR("Temperature_1"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_INPUT, 2, 2,
-            INPUT_OFFSET(input_data1), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_1, STR("Humidity_2"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 4, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_INP_DATA_2, STR("Temperature_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_INPUT, 4, 2,
-            INPUT_OFFSET(input_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_2, STR("Humidity_3"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
-            HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_TEST_REG, STR("Test_regs"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 8, 100,
-            HOLD_OFFSET(test_regs), PARAM_TYPE_ASCII, 200, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_RELAY_P1, STR("RelayP1"), STR("on/off"), MB_DEVICE_ADDR1, MB_PARAM_COIL, 0, 8,
-            COIL_OFFSET(coils_port0), PARAM_TYPE_U16, 1, OPTS( BIT1, 0, 0 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_RELAY_P2, STR("RelayP2"), STR("on/off"), MB_DEVICE_ADDR1, MB_PARAM_COIL, 8, 8,
-            COIL_OFFSET(coils_port1), PARAM_TYPE_U16, 1, OPTS( BIT0, 0, 0 ), PAR_PERMS_READ_WRITE_TRIGGER }
+    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
+    //         HOLD_OFFSET(holding_data1), PARAM_TYPE_U16, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
+    //         HOLD_OFFSET(holding_data2), PARAM_TYPE_U16, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_3, STR("Data_channel_3"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 6, 2,
+    //         HOLD_OFFSET(holding_data3), PARAM_TYPE_U16, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_4, STR("Data_channel_4"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 8, 2,
+    //         HOLD_OFFSET(holding_data4), PARAM_TYPE_U16, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    //         HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_TEST_REG, STR("Test_regs"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 10, 58,
+    //         HOLD_OFFSET(test_regs), PARAM_TYPE_ASCII, 116, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 
 // Calculate number of parameters in the table
@@ -125,7 +117,7 @@ const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_
 // Modbus TCP stack shall use these addresses to be able to connect and read parameters from slave
 char* slave_ip_address_table[MB_DEVICE_COUNT] = {
 #if CONFIG_MB_SLAVE_IP_FROM_STDIN
-    "192.168.101.64",     // Address corresponds to MB_DEVICE_ADDR1 and set to predefined value by user
+    CONFIG_MB_SLAVE_IP,     // Address corresponds to MB_DEVICE_ADDR1 and set to predefined value by user
     NULL
 #elif CONFIG_MB_MDNS_IP_RESOLVER
     NULL,
@@ -419,14 +411,12 @@ static void* master_get_param_data(const mb_parameter_descriptor_t* param_descri
 }
 
 // User operation function to read slave values and check alarm
-static void master_operation_func(void *arg)
+void tcp_master_operation_func(void *arg)
 {
     esp_err_t err = ESP_OK;
     float value = 0;
     bool alarm_state = false;
     const mb_parameter_descriptor_t* param_descriptor = NULL;
-
-    ESP_LOGI(MASTER_TAG, "Start modbus test...");
 
     for(uint16_t retry = 0; retry <= MASTER_MAX_RETRY && (!alarm_state); retry++) {
         // Read all found characteristics from slave(s)
@@ -531,8 +521,7 @@ static void master_operation_func(void *arg)
         ESP_LOGE(MASTER_TAG, "Alarm is not triggered after %d retries.",
                                         MASTER_MAX_RETRY);
     }
-    ESP_LOGI(MASTER_TAG, "Destroy master...");
-    vTaskDelay(100);
+    // vTaskDelay(100);
 }
 
 static esp_err_t init_services(mb_tcp_addr_type_t ip_addr_type)
@@ -674,7 +663,7 @@ static esp_err_t master_destroy(void)
     return err;
 }
 
-void app_main(void)
+void tcp_master_init(void)
 {
     mb_tcp_addr_type_t ip_addr_type;
 #if !CONFIG_EXAMPLE_CONNECT_IPV6
@@ -689,12 +678,20 @@ void app_main(void)
     comm_info.ip_addr_type = ip_addr_type;
     comm_info.ip_mode = MB_MODE_TCP;
     comm_info.ip_addr = (void*)slave_ip_address_table;
-    comm_info.ip_netif_ptr = (void*)get_example_netif();
-
+    
+    esp_netif_ip_info_t ip_info;
+    esp_netif_t *netif = NULL;
+    int i;
+    for (int i = 0; i < esp_netif_get_nr_of_ifs(); ++i) {
+        netif = esp_netif_next(netif);
+        esp_netif_get_ip_info(netif, &ip_info);
+        if ((esp_ip4_addr1(&ip_info.ip) != 0) || (esp_ip4_addr2(&ip_info.ip) != 0) || 
+            (esp_ip4_addr3(&ip_info.ip) != 0) || (esp_ip4_addr4(&ip_info.ip) != 0)) {
+            comm_info.ip_netif_ptr = netif;
+            break;
+        }
+    }
     ESP_ERROR_CHECK(master_init(&comm_info));
     vTaskDelay(50);
-
-    master_operation_func(NULL);
-    ESP_ERROR_CHECK(master_destroy());
-    ESP_ERROR_CHECK(destroy_services());
 }
+

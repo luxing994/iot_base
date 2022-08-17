@@ -60,6 +60,7 @@ enum {
     CID_HOLD_DATA_1,
     CID_HOLD_DATA_2,
     CID_HOLD_TEST_REG,
+    CID_COUNT
 };
 
 // Example Data (Object) Dictionary for Modbus parameters:

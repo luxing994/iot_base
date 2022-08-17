@@ -8,5 +8,6 @@ idf_component_register(SRCS "./src/app/tcp_client.c"
                        SRCS "./src/protocol/fx/fx_plc_protocol.c"
                        SRCS "./src/common/iot_common.c"
                        SRCS "./src/protocol/modbus/master.c"
+                       SRCS "./src/protocol/modbus/tcp_master.c"
                        SRCS "./src/protocol/modbus/modbus_params.c"
                     INCLUDE_DIRS "./inc")

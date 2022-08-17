@@ -24,6 +24,7 @@
 #include "iot_common.h"
 #include "fx_plc_protocol.h"
 #include "master.h"
+#include "tcp_master.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -697,20 +698,19 @@ void send_data_task(void *pvParameters)
     xLastWakeTime = xTaskGetTickCount();
     esp_log_level_set(TAG, ESP_LOG_INFO);
     while (1) {
-#ifdef CONFIG_PLC_FX
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-#endif
         if (g_devStartFlushFlag == 0) {
-#ifdef CONFIG_PLC_MUDBUS
-            vTaskDelayUntil(&xLastWakeTime, xFrequency);
-#endif
         } else {
 #ifdef CONFIG_PLC_FX
             ReadSingleDataRegister(8000);   // test address
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS
+    #ifdef CONFIG_MB_COMM_MODE_TCP
+            tcp_master_operation_func(NULL);
+    #else
             master_operation_func(NULL);
+    #endif
 #endif
         }
     }

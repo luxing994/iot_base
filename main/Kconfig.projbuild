@@ -171,6 +171,37 @@ menu "Modbus Configuration"
             bool "ASCII mode"
             depends on FMB_COMM_MODE_ASCII_EN
 
+        config MB_COMM_MODE_TCP
+            bool "TCP mode"
+            depends on FMB_COMM_MODE_TCP_EN
+
+        if MB_COMM_MODE_TCP
+        
+            choice MB_SLAVE_IP_RESOLVER
+                prompt "Select method to resolve slave IP addresses"
+                help
+                        Select method which is used to resolve slave IP addresses
+                        and configure Master TCP IP stack.
+        
+                    config MB_MDNS_IP_RESOLVER
+                        bool "Resolve Modbus slave addresses using mDNS service."
+        
+                    config MB_SLAVE_IP_FROM_STDIN
+                        bool "Configure Modbus slave addresses from stdin"
+            endchoice
+        
+            config MB_SLAVE_IP
+                string "Slave IP4 address"
+                default "192.168.137.1"
+                depends on MB_SLAVE_IP_FROM_STDIN
+
+            config ETH_STATIC_IP
+                string "Eth static IP4 address"
+                default "192.168.137.2"
+                depends on MB_SLAVE_IP_FROM_STDIN
+
+        endif
+
     endchoice
 
 endmenu

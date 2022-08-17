@@ -15,6 +15,7 @@
 #include "sensor.h"
 #include "fx_plc_protocol.h"
 #include "master.h"
+#include "tcp_master.h"
 
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;
@@ -22,6 +23,7 @@ EventGroupHandle_t xEventGroup2;
 
 void app_main(void)
 {    
+#if defined(CONFIG_MB_COMM_MODE_RTU) || defined(CONFIG_PLC_FX)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -31,9 +33,14 @@ void app_main(void)
      * examples/protocols/README.md for more information about this function.
      */
     ESP_ERROR_CHECK(example_connect());
+#endif
 
 #ifdef CONFIG_PLC_MUDBUS
+    #ifdef CONFIG_MB_COMM_MODE_TCP
+    tcp_master_init();
+    #else
     master_init();
+    #endif
 #endif
 
 #ifdef CONFIG_PLC_FX
