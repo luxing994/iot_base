@@ -194,12 +194,6 @@ menu "Modbus Configuration"
                 string "Slave IP4 address"
                 default "192.168.137.1"
                 depends on MB_SLAVE_IP_FROM_STDIN
-
-            config ETH_STATIC_IP
-                string "Eth static IP4 address"
-                default "192.168.137.2"
-                depends on MB_SLAVE_IP_FROM_STDIN
-
         endif
 
     endchoice
