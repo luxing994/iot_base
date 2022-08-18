@@ -54,8 +54,9 @@ char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x
                                
 int sendflag = 0;
 HproComFrame dataFrame;
-HproComFrame sendDataFrame;
 char g_devId[32] = {"FX_PLC_001"};
+RingBuffer uart2Buffer;
+HproComFrame dataFrame = {0};
 uint32_t g_devStartStatus = 0;
 int g_rdatalen = 0;
 
@@ -63,6 +64,7 @@ void ParseOpCode(char *str, uint8_t op)
 {
     uint16_t rdata;
     jsondata = GetCommandJsonData();
+    char version[5] = {0};
     switch (op) {
         case BREAK: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -155,21 +157,23 @@ void ParseOpCode(char *str, uint8_t op)
             break;
         }
         case APPVERSION: {
+            memcpy(version, (char *)(&(dataFrame.data[0])), VERSION_SIZE);
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
-                (char *)(&(dataFrame.data[0])));
+               version);
             break; 
         }
         case CONTROLVERSION: {
+            memcpy(version, (char *)(&(dataFrame.data[0])), VERSION_SIZE);
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
-                (char *)(&(dataFrame.data[0])));
+                version);
             break;   
         }
         case MECHANICCALL: {

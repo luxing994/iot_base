@@ -10,6 +10,8 @@
 #define SWITCHSTATUS   31
 #define FXPLCDEMODATA  32
 
+#define VERSION_SIZE   4
+
 typedef enum {
     READ = 0x01,
     WRITE
