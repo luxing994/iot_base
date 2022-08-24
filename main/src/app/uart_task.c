@@ -29,9 +29,10 @@
 #define RX_BUF_SIZE  (UART_BUFF_SIZE * 2)
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_18)
+#define RTS_PIN (GPIO_NUM_8)
 #define DEVIDLENGTH 12
 
-static QueueHandle_t uart2_queue;
+static QueueHandle_t uart1_queue;
 static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 CommandJsonData jsondata;
@@ -307,9 +308,16 @@ void uart_init(void) {
         .source_clk = UART_SCLK_APB,
     };
     
-    uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart2_queue, 0);
+    uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
+#ifdef CONFIG_FX_PLC_RS232
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+#endif
+
+#ifdef CONFIG_FX_PLC_RS485
+    uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, RTS_PIN, UART_PIN_NO_CHANGE);
+    uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
+#endif
     ret = UART_InitBuffer();
     if (ret != 0) {
         ESP_LOGE(TAG, "uart buffer init failed\n");
@@ -502,7 +510,7 @@ void rx_task(void *arg)
     uint32_t sendaddr = (uint32_t)&controlerStr;
     uint16_t parameter = 0;
     uint8_t data;
-    int ret;
+    int ret, i;
 
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 10;
@@ -512,16 +520,28 @@ void rx_task(void *arg)
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         // ret = GetDataFromControler();
+#ifdef CONFIG_FX_PLC_RS232
         ret = GetDataFromFxPlc(&g_rdatalen);
-		if (ret == 0) {
+#endif
+
+#ifdef CONFIG_FX_PLC_RS485
+        ret = GetSerialDataFromFxPlc(&g_rdatalen);
+#endif
+		if (ret == 0 && g_rdatalen != 0) {
+            SendAckToPlc();
             ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
-            ParseOpCode(controlerStr, FXPLCDEMODATA);
-            // ParseOpCode(controlerStr, dataFrame.operate);
-            ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
-			if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
-                //TO DO
+            for (i = 0; i < g_rdatalen; i++) {
+                ParseOpCode(controlerStr, FXPLCDEMODATA);
+                // ParseOpCode(controlerStr, dataFrame.operate);
+                ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
+                if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                    //TO DO
+                }
+                vTaskDelay(10);
             }
-		}
+		} else if (ret == 0 && g_rdatalen == 0) {
+            SendAckToPlc();
+        }
     }
 }
 
@@ -534,7 +554,7 @@ void uart_event_task(void *pvParameters)
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
-        if(xQueueReceive(uart2_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
+        if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
@@ -556,7 +576,7 @@ void uart_event_task(void *pvParameters)
                     // The ISR has already reset the rx FIFO,
                     // As an example, we directly flush the rx buffer here in order to read more data.
                     uart_flush_input(UART_NUM_1);
-                    xQueueReset(uart2_queue);
+                    xQueueReset(uart1_queue);
                     break;
                 //Event of UART ring buffer full
                 case UART_BUFFER_FULL:
@@ -564,7 +584,7 @@ void uart_event_task(void *pvParameters)
                     // If buffer full happened, you should consider encreasing your buffer size
                     // As an example, we directly flush the rx buffer here in order to read more data.
                     uart_flush_input(UART_NUM_1);
-                    xQueueReset(uart2_queue);
+                    xQueueReset(uart1_queue);
                     break;
                 //Event of UART RX break detected
                 case UART_BREAK:

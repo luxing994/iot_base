@@ -53,7 +53,7 @@ struct FileData file = {0};
 struct ConfigData config = {0};
 uint16_t configdata[10] = {0};
 CommandJsonData comdata = {0};
-uint32_t g_devStartFlushFlag = 0;
+uint32_t g_devStartFlushFlag = 1;
 extern uint32_t g_devStartStatus;
 
 /*
@@ -692,7 +692,7 @@ void send_data_task(void *pvParameters)
     int i;
     
     TickType_t xLastWakeTime;
- 	const TickType_t xFrequency = pdMS_TO_TICKS(100);
+ 	const TickType_t xFrequency = pdMS_TO_TICKS(500);
     
     
     xLastWakeTime = xTaskGetTickCount();
@@ -702,7 +702,13 @@ void send_data_task(void *pvParameters)
         if (g_devStartFlushFlag == 0) {
         } else {
 #ifdef CONFIG_PLC_FX
-            ReadSingleDataRegister(8000);   // test address
+    #ifdef CONFIG_FX_PLC_RS232
+            ReadSingleDataRegister(8000);
+    #endif
+
+    #ifdef CONFIG_FX_PLC_RS485
+            SerialReadSingleDataRegister(0, 255, 100, 8000);
+    #endif
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS

@@ -215,4 +215,16 @@ choice PLC_PRO_MODE
 
 endchoice
 
+choice FX_PLC_CONNECT_MODE
+    prompt "FX PLC connect mode"
+    depends on PLC_FX
+
+    config FX_PLC_RS232
+        bool "fx rs232(program port)"
+
+    config FX_PLC_RS485
+        bool "fx rs485(serial port)"
+
+endchoice
+
 endmenu
