@@ -151,12 +151,43 @@ void ParseCommandJsonData(cJSON *root)
             ESP_LOGI(TAG, "paradata[%d]: %d", i, atoi(comdata.paradata[i].value));
             item = item->next;
         }
-        config.tasknum = atoi(comdata.paradata[0].value);
-        config.taskpitch = atoi(comdata.paradata[1].value);
-        config.taskspeed = atoi(comdata.paradata[2].value);
-        config.taskcount = atoi(comdata.paradata[3].value);
-        config.tasktime = atoi(comdata.paradata[4].value);
-        config.mode = (uint8_t)atoi(comdata.paradata[5].value);
+
+        switch (arraysize) {
+            case 1: {
+                config.tasknum = atoi(comdata.paradata[0].value);
+                break;
+            }
+            case 2: {
+                config.tasknum = atoi(comdata.paradata[0].value);
+                config.taskpitch = atoi(comdata.paradata[1].value);
+                break;
+            }
+            case 3: {
+                config.tasknum = atoi(comdata.paradata[0].value);
+                config.taskpitch = atoi(comdata.paradata[1].value);
+                config.taskspeed = atoi(comdata.paradata[2].value);
+                break;
+            }
+            case 4: {
+                config.tasknum = atoi(comdata.paradata[0].value);
+                config.taskpitch = atoi(comdata.paradata[1].value);
+                config.taskspeed = atoi(comdata.paradata[2].value);
+                config.taskcount = atoi(comdata.paradata[3].value);
+                break;
+            }
+            case 5: {
+                config.tasknum = atoi(comdata.paradata[0].value);
+                config.taskpitch = atoi(comdata.paradata[1].value);
+                config.taskspeed = atoi(comdata.paradata[2].value);
+                config.taskcount = atoi(comdata.paradata[3].value);
+                config.tasktime = atoi(comdata.paradata[4].value);
+                config.mode = (uint8_t)atoi(comdata.paradata[5].value);
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
 
     token = cJSON_GetObjectItem(root, "responseType");
