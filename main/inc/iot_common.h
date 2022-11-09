@@ -49,12 +49,12 @@ extern EventGroupHandle_t xEventGroup2;
 
 #define ID           "123"
 #define DEVID        "Hello"
-#define DEVNAME      ""
-#define DEVTYPEID    ""
-#define DEVTYPENAME  ""
-#define ORDERNAME    ""
+#define DEVNAME      "Hello"
+#define DEVTYPEID    "Hello"
+#define DEVTYPENAME  "Hello"
+#define ORDERID      "Hello"
+#define ORDERNAME    "Hello"
 #define INITORDERID  "FR000"
-
 #define FILETRANSSIZE 240
 
 // 命令接收JSON格式

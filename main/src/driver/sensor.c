@@ -22,12 +22,12 @@ int GetSwitchCount(void)
 void switch_sensor_gpio_isr_callback(void *arg)
 {
     g_count++;
-    xEventGroupSetBitsFromISR(xEventGroup1, BIT_15, NULL);
+    xEventGroupSetBitsFromISR(xEventGroup1, BIT_16, NULL);
 }
 
 void switch_gpio_isr_callback(void *arg)
 {
-    xEventGroupSetBitsFromISR(xEventGroup1, BIT_16, NULL);
+    xEventGroupSetBitsFromISR(xEventGroup1, BIT_17, NULL);
 }
 
 void InitSensorGpio(void)

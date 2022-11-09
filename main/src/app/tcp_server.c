@@ -52,7 +52,13 @@ struct FileData {
 struct FileData file = {0};
 struct ConfigData config = {0};
 uint16_t configdata[10] = {0};
-CommandJsonData comdata = {0};
+CommandJsonData comdata = {
+    .devId = DEVID,
+    .devName = DEVNAME,
+    .devTypeId = DEVTYPEID,
+    .orderId = ORDERID,
+    .orderName = ORDERNAME,
+};
 uint32_t g_devStartFlushFlag = 1;
 extern uint32_t g_devStartStatus;
 
@@ -723,7 +729,7 @@ void send_data_task(void *pvParameters)
     int i;
     
     TickType_t xLastWakeTime;
- 	const TickType_t xFrequency = pdMS_TO_TICKS(500);
+ 	const TickType_t xFrequency = pdMS_TO_TICKS(1000);
     
     
     xLastWakeTime = xTaskGetTickCount();
@@ -738,7 +744,7 @@ void send_data_task(void *pvParameters)
     #endif
 
     #ifdef CONFIG_FX_PLC_RS485
-            SerialReadSingleDataRegister(0, 255, 100, 8000);
+            SerialReadSingleDataRegister(0, 255, 10, 232);
     #endif
 #endif
 
