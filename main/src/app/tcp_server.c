@@ -60,6 +60,7 @@ CommandJsonData comdata = {
     .orderName = ORDERNAME,
 };
 uint32_t g_devStartFlushFlag = 1;
+uint32_t g_switchPowerOn = 0;
 extern uint32_t g_devStartStatus;
 
 /*
@@ -490,18 +491,24 @@ static void do_retransmit(const int sock)
             root = cJSON_Parse(&rx_buffer);
             if (root != NULL) {
                 ParseCommandJsonData(root);
-                if (atoll(comdata.timeStamp) > 0) {
-                    CalBaseTime(atoll(comdata.timeStamp));
-                }
-                if (strcmp(comdata.orderId, "StartFlush") == 0) {
-                    g_devStartFlushFlag = 1;
-                } else if (strcmp(comdata.orderId, "EndFlush") == 0) {
-                    g_devStartFlushFlag = 0;
-                } else {
-                    orderId = atoi(&((comdata.orderId)[2]));
-                    ESP_LOGI(TAG, "OrderId: %d\n", orderId);
-                    ServerParseOpCode(orderId);
-                }
+                // if (strcmp(comdata.devId, DEVID) == 0) {
+                    if (atoll(comdata.timeStamp) > 0) {
+                        CalBaseTime(atoll(comdata.timeStamp));
+                    }
+                    if (strcmp(comdata.orderId, "StartFlush") == 0) {
+                        g_devStartFlushFlag = 1;
+                    } else if (strcmp(comdata.orderId, "EndFlush") == 0) {
+                        g_devStartFlushFlag = 0;
+                    } else if (strcmp(comdata.orderId, "PowerOn") == 0) {
+                        xEventGroupSetBits(xEventGroup3, BIT_0);
+                    } else if (strcmp(comdata.orderId, "PowerOff") == 0) {
+                        xEventGroupSetBits(xEventGroup3, BIT_1);
+                    } else {
+                        orderId = atoi(&((comdata.orderId)[2]));
+                        ESP_LOGI(TAG, "OrderId: %d\n", orderId);
+                        ServerParseOpCode(orderId);
+                    }
+                // }
             }
         }
     } while (len > 0);
@@ -685,7 +692,6 @@ void tcp_server1_task(void *pvParameters)
     }
 
     while (1) {
-
         ESP_LOGI(TAG, "Socket listening");
 
         struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
@@ -726,7 +732,7 @@ CLEAN_UP:
 void send_data_task(void *pvParameters)
 {
     const char *TAG = "SEND_DATA_TASK";
-    int i;
+    int i, rem = 0;
     
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = pdMS_TO_TICKS(1000);
@@ -751,11 +757,32 @@ void send_data_task(void *pvParameters)
 #ifdef CONFIG_PLC_MUDBUS
     #ifdef CONFIG_MB_COMM_MODE_TCP
             tcp_master_operation_func(NULL);
-    #else
-            master_operation_func(NULL);
+    #else   
+            // master_operation_func(NULL);
+            master_send_switch_func(1);     //  TEXT
     #endif
 #endif
         }
     }
     vTaskDelete(NULL);
+}
+
+void send_command_task(void *pvParameters)
+{
+    const char *TAG = "SEND_COMMAND_TASK";
+    EventBits_t uxBits;
+
+    while (1) {
+#ifdef CONFIG_PLC_MUDBUS
+    #ifdef CONFIG_MB_COMM_MODE_TCP  
+    #else   
+            uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, (TickType_t)10);
+            if ((uxBits & BIT_0) != 0) {
+                master_send_switch_func(1);     // 1:ON   0:OFF
+            } else if ((uxBits & BIT_1) != 0) {
+                master_send_switch_func(0);
+            }      
+    #endif
+#endif
+    }
 }

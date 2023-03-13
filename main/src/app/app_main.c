@@ -20,6 +20,7 @@
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;
 EventGroupHandle_t xEventGroup2;
+EventGroupHandle_t xEventGroup3;
 
 void app_main(void)
 {    
@@ -52,6 +53,7 @@ void app_main(void)
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
     xEventGroup2 = xEventGroupCreate();
+    xEventGroup3 = xEventGroupCreate();
 
 #if CONFIG_PLC_FX
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
@@ -64,4 +66,5 @@ void app_main(void)
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(send_data_task, "send_data_task", 4096, (void*)AF_INET, 5, NULL);
+    xTaskCreate(send_command_task, "send_command_task", 4096, (void*)AF_INET, 5, NULL);
 }

@@ -235,10 +235,12 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case FXPLCDEMODATA: {
             FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
-            (void)sprintf(str, "{\n    \"id\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
-            g_devId, g_devId, DEVNAME, "FR032", DEVTYPENAME, GetStaIp(), GetMilliTimeNow(), rdata);
+            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+            g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
+                rdata);
         }
         default: {
             break;
@@ -510,7 +512,7 @@ void rx_task(void *arg)
     uint32_t sendaddr = (uint32_t)&controlerStr;
     uint16_t parameter = 0;
     uint8_t data;
-    int ret, i;
+    int ret = 0, i;
 
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 10;

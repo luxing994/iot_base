@@ -56,10 +56,10 @@ enum {
 
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
-    CID_HOLD_DATA_0 = 0,
-    CID_HOLD_DATA_1,
-    CID_HOLD_DATA_2,
-    CID_HOLD_TEST_REG,
+    // CID_HOLD_DATA_0 = 0,
+    // CID_HOLD_DATA_1,
+    // CID_HOLD_DATA_2,
+    CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
 
@@ -74,14 +74,14 @@ enum {
 // Access Mode - can be used to implement custom options for processing of characteristic (Read/Write restrictions, factory mode values and etc).
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    // { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
+    //         HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     // { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
     //         HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     // { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
     //         HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    // { CID_HOLD_TEST_REG, STR("Test_regs"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 10, 58,
-    //         HOLD_OFFSET(test_regs), PARAM_TYPE_ASCII, 116, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
+             HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 
 // Calculate number of parameters in the table
@@ -141,20 +141,22 @@ void master_operation_func(void *arg)
                 assert(temp_data_ptr);
                 uint8_t type = 0;
                 if ((param_descriptor->param_type == PARAM_TYPE_ASCII) &&
-                        (param_descriptor->cid == CID_HOLD_TEST_REG)) {
+                        (param_descriptor->cid == CID_HOLD_WRITE_REG_1)) {
                    // Check for long array of registers of type PARAM_TYPE_ASCII
-                    err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
-                                                                            (uint8_t*)temp_data_ptr, &type);
-                    if (err == ESP_OK) {
-                        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x) read successful.",
-                                                 param_descriptor->cid,
-                                                 (char*)param_descriptor->param_key,
-                                                 (char*)param_descriptor->param_units,
-                                                 *(uint32_t*)temp_data_ptr);
+                    // err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
+                    //                                                         (uint8_t*)temp_data_ptr, &type);
+                    // if (err == ESP_OK) {
+                        // ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x) read successful.",
+                        //                          param_descriptor->cid,
+                        //                          (char*)param_descriptor->param_key,
+                        //                          (char*)param_descriptor->param_units,
+                        //                          *(uint32_t*)temp_data_ptr);
                         // Initialize data of test array and write to slave
-                        if (*(uint32_t*)temp_data_ptr != 0xAAAAAAAA) {
-                            memset((void*)temp_data_ptr, 0xAA, param_descriptor->param_size);
-                            *(uint32_t*)temp_data_ptr = 0xAAAAAAAA;
+                        // if (*(uint32_t*)temp_data_ptr != 0xAAAAAAAA) {
+                            // memset((void*)temp_data_ptr, 0xAA, param_descriptor->param_size);
+                            ((uint8_t* )temp_data_ptr)[0] = 0x00;
+                            ((uint8_t* )temp_data_ptr)[1] = 0xFF;
+                            // *(uint32_t*)temp_data_ptr = 0xAAAAAAAA;
                             err = mbc_master_set_parameter(cid, (char*)param_descriptor->param_key,
                                                               (uint8_t*)temp_data_ptr, &type);
                             if (err == ESP_OK) {
@@ -170,14 +172,14 @@ void master_operation_func(void *arg)
                                                         (int)err,
                                                         (char*)esp_err_to_name(err));
                             }
-                        }
-                    } else {
-                        ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
-                                                param_descriptor->cid,
-                                                (char*)param_descriptor->param_key,
-                                                (int)err,
-                                                (char*)esp_err_to_name(err));
-                    }
+                        // }
+                    // } else {
+                    //     ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
+                    //                             param_descriptor->cid,
+                    //                             (char*)param_descriptor->param_key,
+                    //                             (int)err,
+                    //                             (char*)esp_err_to_name(err));
+                    // }
                 } else {
                     err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
                                                         (uint8_t*)&value, &type);
@@ -229,6 +231,47 @@ void master_operation_func(void *arg)
     if (!alarm_state) {
         ESP_LOGE(MASTER_TAG, "Alarm is not triggered after %d retries.",
                                         MASTER_MAX_RETRY);
+    }
+}
+
+void master_send_switch_func(int status)
+{
+    esp_err_t err = ESP_OK;
+    float value = 0;
+    bool alarm_state = false;
+    const mb_parameter_descriptor_t* param_descriptor = NULL;
+
+    err = mbc_master_get_cid_info(CID_HOLD_WRITE_REG_1, &param_descriptor);
+    if ((err != ESP_ERR_NOT_FOUND) && (param_descriptor != NULL)) {
+        void* temp_data_ptr = master_get_param_data(param_descriptor);
+        assert(temp_data_ptr);
+        uint8_t type = 0;
+        if ((param_descriptor->param_type == PARAM_TYPE_ASCII) &&
+            (param_descriptor->cid == CID_HOLD_WRITE_REG_1)) {
+            if (status == 1) {
+                ((uint8_t* )temp_data_ptr)[0] = 0x00;
+                ((uint8_t* )temp_data_ptr)[1] = 0xFF;
+            } else {
+                ((uint8_t* )temp_data_ptr)[0] = 0x00;
+                ((uint8_t* )temp_data_ptr)[1] = 0x00;
+            }
+            
+            err = mbc_master_set_parameter(CID_HOLD_WRITE_REG_1, (char*)param_descriptor->param_key,
+                                                (uint8_t*)temp_data_ptr, &type);
+            if (err == ESP_OK) {
+                ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x), write successful.",
+                                            param_descriptor->cid,
+                                            (char*)param_descriptor->param_key,
+                                            (char*)param_descriptor->param_units,
+                                            *(uint32_t*)temp_data_ptr);
+            } else {
+                ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) write fail, err = 0x%x (%s).",
+                                        param_descriptor->cid,
+                                        (char*)param_descriptor->param_key,
+                                        (int)err,
+                                        (char*)esp_err_to_name(err));
+            }
+        }
     }
 }
 

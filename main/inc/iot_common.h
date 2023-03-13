@@ -10,6 +10,7 @@
 extern QueueHandle_t xQueue1;
 extern EventGroupHandle_t xEventGroup1;
 extern EventGroupHandle_t xEventGroup2;
+extern EventGroupHandle_t xEventGroup3;
 
 #define UART_BUFF_SIZE 1024
 #define FXPLC_BUFF_SIZE 1024
@@ -48,7 +49,7 @@ extern EventGroupHandle_t xEventGroup2;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "Hello"
+#define DEVID        "Ls001"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
