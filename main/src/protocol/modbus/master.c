@@ -56,7 +56,7 @@ enum {
 
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
-    // CID_HOLD_DATA_0 = 0,
+    CID_HOLD_DATA_0 = 0,
     // CID_HOLD_DATA_1,
     // CID_HOLD_DATA_2,
     CID_HOLD_WRITE_REG_1,
@@ -74,14 +74,14 @@ enum {
 // Access Mode - can be used to implement custom options for processing of characteristic (Read/Write restrictions, factory mode values and etc).
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    // { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 2,
-    //         HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     // { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("%rH"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 2, 2,
     //         HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     // { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
     //         HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
-             HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 
 // Calculate number of parameters in the table
@@ -142,6 +142,7 @@ void master_operation_func(void *arg)
                 uint8_t type = 0;
                 if ((param_descriptor->param_type == PARAM_TYPE_ASCII) &&
                         (param_descriptor->cid == CID_HOLD_WRITE_REG_1)) {
+                    continue;
                    // Check for long array of registers of type PARAM_TYPE_ASCII
                     // err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
                     //                                                         (uint8_t*)temp_data_ptr, &type);
@@ -278,6 +279,15 @@ void master_send_switch_func(int status)
 // Modbus master initialization
 esp_err_t master_init(void)
 {
+    const uart_config_t uart_config = {
+        .baud_rate = MB_DEV_SPEED,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+    
     // Initialize and start Modbus controller
     mb_communication_info_t comm = {
             .port = MB_PORT_NUM,
@@ -313,6 +323,7 @@ esp_err_t master_init(void)
 
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
             "mb serial set pin failure, uart_set_pin() returned (0x%x).", (uint32_t)err);
+    uart_param_config(MB_PORT_NUM, &uart_config);
     // Set driver mode to Half Duplex
     err = uart_set_mode(MB_PORT_NUM, UART_MODE_RS485_HALF_DUPLEX);
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
