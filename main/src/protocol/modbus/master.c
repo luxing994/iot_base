@@ -58,7 +58,7 @@ enum {
 enum {
     CID_HOLD_DATA_0 = 0,
     CID_HOLD_DATA_1,
-    // CID_HOLD_DATA_2,
+    CID_HOLD_DATA_2,
     CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
@@ -78,8 +78,8 @@ const mb_parameter_descriptor_t device_parameters[] = {
             HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 75, 1,
             HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    // { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 4, 2,
-    //         HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 4, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 12, 1,
+            HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
             HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
@@ -123,6 +123,7 @@ void master_operation_func(void *arg)
 {
     esp_err_t err = ESP_OK;
     float value = 0;
+    int dvalue = 0;
     bool alarm_state = false;
     const mb_parameter_descriptor_t* param_descriptor = NULL;
 
@@ -183,23 +184,23 @@ void master_operation_func(void *arg)
                     // }
                 } else {
                     err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
-                                                        (uint8_t*)&value, &type);
+                                                        (uint8_t*)&dvalue, &type);
                     if (err == ESP_OK) {
-                        *(float*)temp_data_ptr = value;
+                        *(uint16_t* )temp_data_ptr = dvalue;
                         if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
                             (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %f (0x%x) read successful.",
+                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
                                             param_descriptor->cid,
                                             (char*)param_descriptor->param_key,
                                             (char*)param_descriptor->param_units,
-                                            value,
+                                            dvalue,
                                             *(uint32_t*)temp_data_ptr);
-                            if (((value > param_descriptor->param_opts.max) ||
-                                (value < param_descriptor->param_opts.min))) {
-                                    alarm_state = true;
-                                    ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
-                                        param_descriptor->cid);
-                            }
+                            // if (((dvalue > param_descriptor->param_opts.max) ||
+                            //     (dvalue < param_descriptor->param_opts.min))) {
+                            //         alarm_state = true;
+                            //         ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
+                            //             param_descriptor->cid);
+                            // }
                         } else {
                             uint16_t state = *(uint16_t*)temp_data_ptr;
                             const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
