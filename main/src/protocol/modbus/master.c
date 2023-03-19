@@ -284,7 +284,7 @@ esp_err_t master_init(void)
         .baud_rate = MB_DEV_SPEED,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_2,
+        .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };

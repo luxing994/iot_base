@@ -424,6 +424,7 @@ void tx_task(void *arg)
             }
         }
     }
+    vTaskDelete(NULL);
 }
 
 // write command
@@ -504,6 +505,7 @@ void tx1_task(void *arg)
             uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[21], 1 + 8);
         }
     }
+    vTaskDelete(NULL);
 }
 
 void rx_task(void *arg)
@@ -545,6 +547,7 @@ void rx_task(void *arg)
             SendAckToPlc();
         }
     }
+    vTaskDelete(NULL);
 }
 
 void uart_event_task(void *pvParameters)

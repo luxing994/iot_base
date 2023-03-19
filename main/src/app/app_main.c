@@ -55,10 +55,10 @@ void app_main(void)
     xEventGroup2 = xEventGroupCreate();
     xEventGroup3 = xEventGroupCreate();
 
-#if CONFIG_PLC_FX
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
     xTaskCreate(tx1_task, "uart_tx1_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
+#if CONFIG_PLC_FX
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
 #endif
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
