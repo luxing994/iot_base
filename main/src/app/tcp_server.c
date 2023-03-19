@@ -758,7 +758,7 @@ void send_data_task(void *pvParameters)
     #ifdef CONFIG_MB_COMM_MODE_TCP
             tcp_master_operation_func(NULL);
     #else   
-            // master_operation_func(NULL);
+            master_operation_func(NULL);
     #endif
 #endif
         }

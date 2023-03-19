@@ -10,6 +10,18 @@
 #include "mbcontroller.h"
 #include "sdkconfig.h"
 
+#define AIR_SWITCH        0
+#define TEMP_CONTROLER    1
+#define MOTOR             2
+#define FREEZER           3
+
+#define AIR_SWITCH_SPEED      9600
+#define TEMP_CONTROLER_SPEED  9600
+#define MOTOR_SPEED           19200
+#define FREEZER_SPEED         19200
+
+#define DEVICE_VERSION    TEMP_CONTROLER
+
 #define MB_PORT_NUM     (CONFIG_MB_UART_PORT_NUM)   // Number of UART port used for Modbus connection
 #define MB_DEV_SPEED    (CONFIG_MB_UART_BAUD_RATE)  // The communication speed of the UART
 
@@ -23,7 +35,7 @@
 #define MASTER_MAX_RETRY 30
 
 // Timeout to update cid over Modbus
-#define UPDATE_CIDS_TIMEOUT_MS          (500)
+#define UPDATE_CIDS_TIMEOUT_MS          (1000)
 #define UPDATE_CIDS_TIMEOUT_TICS        (UPDATE_CIDS_TIMEOUT_MS / portTICK_RATE_MS)
 
 // Timeout between polls
@@ -53,7 +65,13 @@
 enum {
     MB_DEVICE_ADDR1 = 1 // Only one slave device used for the test (add other slave addresses here)
 };
-
+#if DEVICE_VERSION == AIR_SWITCH
+// Enumeration of all supported CIDs for device (used in parameter definition table)
+enum {
+    CID_HOLD_WRITE_REG_1,
+    CID_COUNT
+};
+#elif DEVICE_VERSION == TEMP_CONTROLER
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
     CID_HOLD_DATA_0 = 0,
@@ -62,6 +80,22 @@ enum {
     CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
+#elif DEVICE_VERSION == MOTOR
+// Enumeration of all supported CIDs for device (used in parameter definition table)
+enum {
+    CID_HOLD_DATA_0 = 0,
+    CID_HOLD_DATA_1,
+    CID_HOLD_WRITE_REG_1,
+    CID_COUNT
+};
+#else
+// Enumeration of all supported CIDs for device (used in parameter definition table)
+enum {
+    CID_HOLD_DATA_0 = 0,
+    CID_HOLD_WRITE_REG_1,
+    CID_COUNT
+};
+#endif
 
 // Example Data (Object) Dictionary for Modbus parameters:
 // The CID field in the table must be unique.
@@ -72,6 +106,13 @@ enum {
 // Data Type, Data Size specify type of the characteristic and its data size.
 // Parameter Options field specifies the options that can be used to process parameter value (limits or masks).
 // Access Mode - can be used to implement custom options for processing of characteristic (Read/Write restrictions, factory mode values and etc).
+#if DEVICE_VERSION == AIR_SWITCH
+const mb_parameter_descriptor_t device_parameters[] = {
+    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
+    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+};
+#elif DEVICE_VERSION == TEMP_CONTROLER
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 74, 1,
@@ -83,6 +124,25 @@ const mb_parameter_descriptor_t device_parameters[] = {
     { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
             HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
+#elif DEVICE_VERSION == MOTOR
+const mb_parameter_descriptor_t device_parameters[] = {
+    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
+    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 1, 1,
+            HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+};
+#else
+const mb_parameter_descriptor_t device_parameters[] = {
+    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
+    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 7, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+};
+#endif
 
 // Calculate number of parameters in the table
 const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_parameters[0]));
@@ -128,8 +188,9 @@ void master_operation_func(void *arg)
     const mb_parameter_descriptor_t* param_descriptor = NULL;
 
     ESP_LOGI(MASTER_TAG, "Start modbus test...");
-
-    for(uint16_t retry = 0; retry <= MASTER_MAX_RETRY && (!alarm_state); retry++) {
+    
+    for (;;) {
+    // for(uint16_t retry = 0; retry <= MASTER_MAX_RETRY && (!alarm_state); retry++) {
         // Read all found characteristics from slave(s)
         for (uint16_t cid = 0; (err != ESP_ERR_NOT_FOUND) && cid < MASTER_MAX_CIDS; cid++)
         {
@@ -229,11 +290,6 @@ void master_operation_func(void *arg)
         }
         vTaskDelay(UPDATE_CIDS_TIMEOUT_TICS); //
     }
-
-    if (!alarm_state) {
-        ESP_LOGE(MASTER_TAG, "Alarm is not triggered after %d retries.",
-                                        MASTER_MAX_RETRY);
-    }
 }
 
 void master_send_switch_func(int status)
@@ -280,14 +336,43 @@ void master_send_switch_func(int status)
 // Modbus master initialization
 esp_err_t master_init(void)
 {
+#if DEVICE_VERSION == AIR_SWITCH
     const uart_config_t uart_config = {
-        .baud_rate = MB_DEV_SPEED,
+        .baud_rate = AIR_SWITCH_SPEED,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
+#elif DEVICE_VERSION == TEMP_CONTROLER
+    const uart_config_t uart_config = {
+        .baud_rate = TEMP_CONTROLER_SPEED,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#elif DEVICE_VERSION == MOTOR
+    const uart_config_t uart_config = {
+        .baud_rate = MOTOR_SPEED,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_EVEN,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#else 
+    const uart_config_t uart_config = {
+        .baud_rate = FREEZER_SPEED,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_EVEN,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
     
     // Initialize and start Modbus controller
     mb_communication_info_t comm = {
