@@ -254,7 +254,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.0f %.0f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f %.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
                 electroData.tempControl.setData, electroData.tempControl.realData);
             break;
@@ -263,7 +263,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.0f %.0f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f %.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
                 electroData.motorData.voltage, electroData.motorData.current);
             break;
