@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "Ls001"
+#define DEVID        "CRY-QZD-006"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -117,6 +117,36 @@ typedef struct {
     char *responseType;
     char *timeStamp;
 } CommandJsonData;
+
+// 电镀厂温控仪表、整流机和冷冻机数据
+
+typedef struct {
+    int dPt;      // 小数点位置
+    int PV;       // 测量值
+    int SV;       // 设定值
+} TempControlTransData;
+
+typedef struct {
+    float setData;
+    float realData;
+} TempControlData;
+
+typedef struct {
+    float current;
+    float voltage;
+} MotorData;
+
+typedef struct {
+    float temperature;
+} FreezerData;
+
+typedef struct {
+    TempControlData tempControl;
+    MotorData motorData;
+    FreezerData freezerData;
+} ElectroFactoryData;
+
+extern ElectroFactoryData electroData;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);

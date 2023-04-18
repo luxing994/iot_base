@@ -9,6 +9,9 @@
 #define SWITCHCOUNT    30
 #define SWITCHSTATUS   31
 #define FXPLCDEMODATA  32
+#define TEMPCONTROLDATA  33
+#define MOTORDATA  34
+#define FREEZERDATA  35
 
 #define VERSION_SIZE   4
 

@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <math.h>
 #include "string.h"
 #include "esp_log.h"
 #include "modbus_params.h"  // for modbus parameters structures
 #include "mbcontroller.h"
 #include "sdkconfig.h"
+#include "iot_common.h"
 
 #define AIR_SWITCH        0
 #define TEMP_CONTROLER    1
@@ -18,7 +20,7 @@
 #define AIR_SWITCH_SPEED      9600
 #define TEMP_CONTROLER_SPEED  9600
 #define MOTOR_SPEED           19200
-#define FREEZER_SPEED         19200
+#define FREEZER_SPEED         4800
 
 #define DEVICE_VERSION    TEMP_CONTROLER
 
@@ -77,7 +79,6 @@ enum {
     CID_HOLD_DATA_0 = 0,
     CID_HOLD_DATA_1,
     CID_HOLD_DATA_2,
-    CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
 #elif DEVICE_VERSION == MOTOR
@@ -85,14 +86,12 @@ enum {
 enum {
     CID_HOLD_DATA_0 = 0,
     CID_HOLD_DATA_1,
-    CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
 #else
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
     CID_HOLD_DATA_0 = 0,
-    CID_HOLD_WRITE_REG_1,
     CID_COUNT
 };
 #endif
@@ -121,8 +120,6 @@ const mb_parameter_descriptor_t device_parameters[] = {
             HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 12, 1,
             HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 #elif DEVICE_VERSION == MOTOR
 const mb_parameter_descriptor_t device_parameters[] = {
@@ -131,18 +128,17 @@ const mb_parameter_descriptor_t device_parameters[] = {
             HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 1, 1,
             HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 #else
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 7, 1,
             HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 #endif
+
+TempControlTransData tempTransData = {0, 0, -1};
+ElectroFactoryData electroData = {0};
 
 // Calculate number of parameters in the table
 const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_parameters[0]));
@@ -178,6 +174,72 @@ static void* master_get_param_data(const mb_parameter_descriptor_t* param_descri
     return instance_ptr;
 }
 
+
+#if DEVICE_VERSION == TEMP_CONTROLER
+void ParseTemperatureData(uint16_t cid, int data)
+{
+    switch (cid) {
+    case CID_HOLD_DATA_0:
+        tempTransData.PV = data;
+        break;
+    case CID_HOLD_DATA_1:
+        tempTransData.SV = data;
+        break;
+    case CID_HOLD_DATA_2:
+        tempTransData.dPt = data;
+        break;
+    default:
+        break;
+    }
+    if (tempTransData.PV != 0 && tempTransData.SV != 0 && tempTransData.dPt != -1) {
+        if (tempTransData.dPt >= 128) {
+            tempTransData.dPt -= 128;
+            electroData.tempControl.realData = (float)tempTransData.PV / pow(10, (tempTransData.dPt) + 1);
+            electroData.tempControl.setData = (float)tempTransData.SV / pow(10, (tempTransData.dPt) + 1);
+        } else {
+            electroData.tempControl.realData = (float)tempTransData.PV / pow(10, tempTransData.dPt);
+            electroData.tempControl.setData = (float)tempTransData.SV / pow(10, tempTransData.dPt);
+        }
+        tempTransData.PV = 0;
+        tempTransData.SV = 0;
+        tempTransData.dPt = -1;
+        if (electroData.tempControl.realData != 0 && electroData.tempControl.setData != 0) {
+            xEventGroupSetBits(xEventGroup1, BIT_18);
+        }
+    }
+}
+#elif DEVICE_VERSION == MOTOR
+void ParseMotorData(uint16_t cid, int data)
+{
+    switch (cid) {
+    case CID_HOLD_DATA_0:
+        electroData.motorData.voltage = (float)data;
+        break;
+    case CID_HOLD_DATA_1:
+        electroData.motorData.current = (float)data;
+        break;
+    default:
+        break;
+    }
+    if (electroData.motorData.voltage != 0 && electroData.motorData.current != 0) {
+        xEventGroupSetBits(xEventGroup1, BIT_19);
+    }
+}
+#else
+void ParseFreezerData(uint16_t cid, int data)
+{
+    switch (cid) {
+    case CID_HOLD_DATA_0:
+        electroData.freezerData.temperature = (float)data / 10;
+        break;
+    default:
+        break;
+    }
+    if (electroData.freezerData.temperature != 0) {
+        xEventGroupSetBits(xEventGroup1, BIT_20);
+    }
+}
+#endif
 // User operation function to read slave values and check alarm
 void master_operation_func(void *arg)
 {
@@ -198,92 +260,52 @@ void master_operation_func(void *arg)
             // and use this information to fill the characteristics description table
             // and having all required fields in just one table
             err = mbc_master_get_cid_info(cid, &param_descriptor);
+            
             if ((err != ESP_ERR_NOT_FOUND) && (param_descriptor != NULL)) {
                 void* temp_data_ptr = master_get_param_data(param_descriptor);
                 assert(temp_data_ptr);
                 uint8_t type = 0;
-                if ((param_descriptor->param_type == PARAM_TYPE_ASCII) &&
-                        (param_descriptor->cid == CID_HOLD_WRITE_REG_1)) {
-                    continue;
-                   // Check for long array of registers of type PARAM_TYPE_ASCII
-                    // err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
-                    //                                                         (uint8_t*)temp_data_ptr, &type);
-                    // if (err == ESP_OK) {
-                        // ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x) read successful.",
-                        //                          param_descriptor->cid,
-                        //                          (char*)param_descriptor->param_key,
-                        //                          (char*)param_descriptor->param_units,
-                        //                          *(uint32_t*)temp_data_ptr);
-                        // Initialize data of test array and write to slave
-                        // if (*(uint32_t*)temp_data_ptr != 0xAAAAAAAA) {
-                            // memset((void*)temp_data_ptr, 0xAA, param_descriptor->param_size);
-                            ((uint8_t* )temp_data_ptr)[0] = 0x00;
-                            ((uint8_t* )temp_data_ptr)[1] = 0xFF;
-                            // *(uint32_t*)temp_data_ptr = 0xAAAAAAAA;
-                            err = mbc_master_set_parameter(cid, (char*)param_descriptor->param_key,
-                                                              (uint8_t*)temp_data_ptr, &type);
-                            if (err == ESP_OK) {
-                                ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x), write successful.",
-                                                            param_descriptor->cid,
-                                                            (char*)param_descriptor->param_key,
-                                                            (char*)param_descriptor->param_units,
-                                                            *(uint32_t*)temp_data_ptr);
-                            } else {
-                                ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) write fail, err = 0x%x (%s).",
-                                                        param_descriptor->cid,
-                                                        (char*)param_descriptor->param_key,
-                                                        (int)err,
-                                                        (char*)esp_err_to_name(err));
-                            }
-                        // }
-                    // } else {
-                    //     ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
-                    //                             param_descriptor->cid,
-                    //                             (char*)param_descriptor->param_key,
-                    //                             (int)err,
-                    //                             (char*)esp_err_to_name(err));
-                    // }
-                } else {
-                    err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
-                                                        (uint8_t*)&dvalue, &type);
-                    if (err == ESP_OK) {
-                        *(uint16_t* )temp_data_ptr = dvalue;
-                        if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
-                            (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            dvalue,
-                                            *(uint32_t*)temp_data_ptr);
-                            // if (((dvalue > param_descriptor->param_opts.max) ||
-                            //     (dvalue < param_descriptor->param_opts.min))) {
-                            //         alarm_state = true;
-                            //         ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
-                            //             param_descriptor->cid);
-                            // }
-                        } else {
-                            uint16_t state = *(uint16_t*)temp_data_ptr;
-                            const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %s (0x%x) read successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            (const char*)rw_str,
-                                            *(uint16_t*)temp_data_ptr);
-                            if (state & param_descriptor->param_opts.opt1) {
-                                alarm_state = true;
-                                ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
-                                        param_descriptor->cid);
-                            }
-                        }
+    
+                err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
+                                                    (uint8_t*)&dvalue, &type);
+                if (err == ESP_OK) {
+                    *(uint16_t* )temp_data_ptr = dvalue;
+                    if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
+                        (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
+                        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
+                                        param_descriptor->cid,
+                                        (char*)param_descriptor->param_key,
+                                        (char*)param_descriptor->param_units,
+                                        dvalue,
+                                        *(uint32_t*)temp_data_ptr);
+#if DEVICE_VERSION == TEMP_CONTROLER
+                        ParseTemperatureData(param_descriptor->cid, dvalue);
+#elif DEVICE_VERSION == MOTOR
+                        ParseMotorData(param_descriptor->cid, dvalue);
+#else
+                        ParseFreezerData(param_descriptor->cid, dvalue);
+#endif
                     } else {
-                        ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (int)err,
-                                            (char*)esp_err_to_name(err));
+                        uint16_t state = *(uint16_t*)temp_data_ptr;
+                        const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
+                        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %s (0x%x) read successful.",
+                                        param_descriptor->cid,
+                                        (char*)param_descriptor->param_key,
+                                        (char*)param_descriptor->param_units,
+                                        (const char*)rw_str,
+                                        *(uint16_t*)temp_data_ptr);
+                        if (state & param_descriptor->param_opts.opt1) {
+                            alarm_state = true;
+                            ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
+                                    param_descriptor->cid);
+                        }
                     }
+                } else {
+                    ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
+                                        param_descriptor->cid,
+                                        (char*)param_descriptor->param_key,
+                                        (int)err,
+                                        (char*)esp_err_to_name(err));
                 }
                 vTaskDelay(POLL_TIMEOUT_TICS); // timeout between polls
             }
@@ -294,6 +316,7 @@ void master_operation_func(void *arg)
 
 void master_send_switch_func(int status)
 {
+#if DEVICE_VERSION == AIR_SWITCH
     esp_err_t err = ESP_OK;
     float value = 0;
     bool alarm_state = false;
@@ -331,6 +354,7 @@ void master_send_switch_func(int status)
             }
         }
     }
+#endif
 }
 
 // Modbus master initialization
@@ -367,7 +391,7 @@ esp_err_t master_init(void)
     const uart_config_t uart_config = {
         .baud_rate = FREEZER_SPEED,
         .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_EVEN,
+        .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,

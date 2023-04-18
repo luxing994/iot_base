@@ -60,6 +60,8 @@ RingBuffer uart2Buffer;
 HproComFrame dataFrame = {0};
 uint32_t g_devStartStatus = 0;
 int g_rdatalen = 0;
+int g_senddata = 0;
+uint16_t g_lastdata = 0;
 
 void ParseOpCode(char *str, uint8_t op)
 {
@@ -235,12 +237,45 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case FXPLCDEMODATA: {
             FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
+            if (rdata != g_lastdata) {
+                g_senddata = 1;
+            } else {
+                g_senddata = 0;
+            }
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
                 rdata);
+            g_lastdata = rdata;
+        }
+        case TEMPCONTROLDATA: {
+            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.0f %.0f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+            g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
+                electroData.tempControl.setData, electroData.tempControl.realData);
+            break;
+        }
+        case MOTORDATA: {
+            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.0f %.0f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+            g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
+                electroData.motorData.voltage, electroData.motorData.current);
+            break;
+        }
+        case FREEZERDATA: {
+            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+            g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
+                electroData.freezerData.temperature);
+            break;
         }
         default: {
             break;
@@ -347,7 +382,7 @@ void tx_task(void *arg)
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_0 | BIT_1 | BIT_2 | BIT_3 | BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 \
-            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15 | BIT_16 | BIT_17, pdTRUE, pdFALSE, (TickType_t)10);
+            | BIT_9 | BIT_10 | BIT_11 | BIT_12 | BIT_13 | BIT_14 | BIT_15 | BIT_16 | BIT_17 | BIT_18 | BIT_19 | BIT_20, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             crc = crc16bitbybit((uint8_t *)sendDataBuffer[0], 6);
             memcpy(&sendDataBuffer[0][6], &crc, 2);
@@ -419,6 +454,21 @@ void tx_task(void *arg)
             }
         } else if ((uxBits & BIT_17) != 0) {
             ParseOpCode(controlerStr, SWITCHSTATUS);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                //TO DO
+            }
+        } else if ((uxBits & BIT_18) != 0) {
+            ParseOpCode(controlerStr, TEMPCONTROLDATA);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                //TO DO
+            }
+        } else if ((uxBits & BIT_19) != 0) {
+            ParseOpCode(controlerStr, MOTORDATA);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                //TO DO
+            }
+        } else if ((uxBits & BIT_20) != 0) {
+            ParseOpCode(controlerStr, FREEZERDATA);
             if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                 //TO DO
             }
@@ -537,9 +587,11 @@ void rx_task(void *arg)
             for (i = 0; i < g_rdatalen; i++) {
                 ParseOpCode(controlerStr, FXPLCDEMODATA);
                 // ParseOpCode(controlerStr, dataFrame.operate);
-                ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
-                if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
-                    //TO DO
+                if (g_senddata == 1) {
+                    ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
+                    if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                        //TO DO
+                    }
                 }
                 vTaskDelay(10);
             }
