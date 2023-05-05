@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "CRY-QZD-006"
+#define DEVID        "XF-ZL-007"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -57,6 +57,10 @@ extern EventGroupHandle_t xEventGroup3;
 #define ORDERNAME    "Hello"
 #define INITORDERID  "FR000"
 #define FILETRANSSIZE 240
+
+#define MOTORDEVTYPEID    "ZL"
+#define TEMPDEVTYPEID     "WK"
+#define FREEZERDEVTYPEID  "LD"
 
 // 命令接收JSON格式
 /*
