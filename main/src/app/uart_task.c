@@ -23,6 +23,7 @@
 #include "time.h"
 #include "sensor.h"
 #include "fx_plc_protocol.h"
+#include "hl_plc_protocol.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -362,8 +363,8 @@ void uart_init(void) {
         .baud_rate = 9600,
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_RTS,
         .source_clk = UART_SCLK_APB,
     };
     
@@ -601,10 +602,11 @@ void rx_task(void *arg)
 #endif
 
 #ifdef CONFIG_FX_PLC_RS485
-        ret = GetSerialDataFromFxPlc(&g_rdatalen);
+        // ret = GetSerialDataFromFxPlc(&g_rdatalen);
+        ret = GetSerialWordDataFromHlPlc(&g_rdatalen);
 #endif
 		if (ret == 0 && g_rdatalen != 0) {
-            SendAckToPlc();
+            // SendAckToPlc();
             ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
             for (i = 0; i < g_rdatalen; i++) {
                 ParseOpCode(controlerStr, FXPLCDEMODATA);

@@ -16,6 +16,7 @@
 #include "fx_plc_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
+#include "iot_common.h"
 
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;

@@ -747,11 +747,12 @@ void send_data_task(void *pvParameters)
         } else {
 #ifdef CONFIG_PLC_FX
     #ifdef CONFIG_FX_PLC_RS232
-            ReadSingleDataRegister(8000);
+            //ReadSingleDataRegister(8000);
+            HLReadSingleDataRegister(0);
     #endif
 
     #ifdef CONFIG_FX_PLC_RS485
-            HLReadSingleDataRegister(0, 1);
+            HLReadSingleDataRegister(0);
             // SerialReadSingleDataRegister(0, 255, 10, 232); // 日跃PLC产量累加值寄存器
 
             // SerialReadSingleDataRegister(0, 255, 10, 180);    //  行车总时间

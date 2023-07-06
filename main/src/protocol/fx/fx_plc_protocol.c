@@ -2,41 +2,18 @@
 #include <stdlib.h>  
 #include <string.h>  
 #include <ctype.h>  
-#include <string.h>
 #include "driver/uart.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "fx_plc_protocol.h"
 #include "iot_common.h"
 
-RingBuffer dataRegisterBuffer;
 FxPlcReadFrameFormat rdatabuff = {0};
 FxPlcSerialAskReadFrameFormat srdatabuff = {0};
 FxPlcSerialAskReadBackFrameFormat srbdatabuff = {0};
 FxPlcSerialAnsNackFrameFormat srbedatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mackdatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mnackdatabuff = {0};
-
-static int CharToInt(char ch)  
-{  
-        // 如果是数字，则用数字的ASCII码减去48, 如果ch = '2' ,则 '2' - 48 = 2  
-        if(isdigit(ch)) {
-			return ch - 48;  
-		}
-  
-        // 如果是字母，但不是A~F,a~f则返回  
-        if( ch < 'A' || (ch > 'F' && ch < 'a') || ch > 'z' ) {
-			return -1; 
-		}
-  
-        // 如果是大写字母，则用数字的ASCII码减去55, 如果ch = 'A' ,则 'A' - 55 = 10  
-        // 如果是小写字母，则用数字的ASCII码减去87, 如果ch = 'a' ,则 'a' - 87 = 10  
-        if(isalpha(ch))  {
-			return isupper(ch) ? ch - 55 : ch - 87;  
-		}
-  
-        return -1;  
-} 
 
 static int MoveLeftArry(uint8_t *data, uint16_t length, uint16_t num)
 {
@@ -161,47 +138,6 @@ static uint8_t CalTimeout(uint8_t timeout)      // 0 - 150ms
 		ret += '0';
 	}
 	return ret;
-}
-
-static uint16_t CalReadDataRegister(uint8_t *data)
-{
-	uint16_t rdata;
-
-	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
-	return rdata;
-}
-
-static uint16_t CalSerialReadDataRegister(uint8_t *data)
-{
-	uint16_t rdata;
-
-	rdata = CharToInt(data[0]) * 4096 + CharToInt(data[1]) * 256 + CharToInt(data[2]) * 16 + CharToInt(data[3]);
-	return rdata;
-}
-
-int FXPLC_InitBuffer(void)
-{
-    if (RING_InitBuffer(&dataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_WriteBufferBytes(&dataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_ReadBufferBytes(&dataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
 }
 
 static int PackReadDataRegisterFrame(uint16_t address, uint16_t length, FxPlcReadFrameFormat* rdata)

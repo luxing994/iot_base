@@ -1,10 +1,33 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "iot_common.h"
 
 const uint16_t polynom = 0xA001;
 RingBuffer uart2Buffer;
+RingBuffer dataRegisterBuffer;
+
+static int CharToInt(char ch)  
+{  
+        // 如果是数字，则用数字的ASCII码减去48, 如果ch = '2' ,则 '2' - 48 = 2  
+        if(isdigit(ch)) {
+			return ch - 48;  
+		}
+  
+        // 如果是字母，但不是A~F,a~f则返回  
+        if( ch < 'A' || (ch > 'F' && ch < 'a') || ch > 'z' ) {
+			return -1; 
+		}
+  
+        // 如果是大写字母，则用数字的ASCII码减去55, 如果ch = 'A' ,则 'A' - 55 = 10  
+        // 如果是小写字母，则用数字的ASCII码减去87, 如果ch = 'a' ,则 'a' - 87 = 10  
+        if(isalpha(ch))  {
+			return isupper(ch) ? ch - 55 : ch - 87;  
+		}
+  
+        return -1;  
+} 
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len)
 {
@@ -79,6 +102,22 @@ int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum)
     return 0;
 }
 
+uint16_t CalReadDataRegister(uint8_t *data)
+{
+	uint16_t rdata;
+
+	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
+	return rdata;
+}
+
+uint16_t CalSerialReadDataRegister(uint8_t *data)
+{
+	uint16_t rdata;
+
+	rdata = CharToInt(data[0]) * 4096 + CharToInt(data[1]) * 256 + CharToInt(data[2]) * 16 + CharToInt(data[3]);
+	return rdata;
+}
+
 int UART_InitBuffer(void)
 {
     if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {
@@ -99,6 +138,31 @@ int UART_WriteBufferBytes(uint8_t *data, uint32_t size)
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 {
     if (RING_ReadBufferBytes(&uart2Buffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int FXPLC_InitBuffer(void)
+{
+    if (RING_InitBuffer(&dataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_WriteBufferBytes(&dataRegisterBuffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_ReadBufferBytes(&dataRegisterBuffer, data, size) != 0) {
         return -1;
     }
 	return 0;

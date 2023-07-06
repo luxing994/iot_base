@@ -22,7 +22,7 @@ UART传输格式
 #define FINS_SA2_CPU       "00"                // FINS SA2源单元为CPU
 #define FINS_SA2_OTHER     HOSTLINK_PLC_NUM    // FINS SA2源单元为其他
 #define FINS_SID           "00"                // FINS SID常用为"00"
-#define HOSTLINK_END       "*\n"               // HostLink 帧尾
+#define HOSTLINK_END       "*\x0D"               // HostLink 帧尾
 
 typedef enum {
     READIO  = 0x0101,
@@ -31,7 +31,7 @@ typedef enum {
     READDISCONIO = 0x0104,
     READDATA = 0x0201,
     WRITEDATA = 0x0202,
-    DELETEDATA = 0x0203,
+    DELETEDATA = 0x0203
 } HosklinkComCode;
 
 typedef enum {
@@ -42,8 +42,15 @@ typedef enum {
     WRWORD = 0xB1,
     HRWORD = 0xB2,
     DMBIT = 0x2,
-    DMWORD = 0x82,
+    DMWORD = 0x82
 } HosklinkMemCode;
+
+typedef enum {
+    NORMAL = 0000,
+    SENDDATATOOLONG = 0104,
+    NUMOUTOFRANGE = 0105,
+    ADDRESSERROR = 0501
+} HosklinkErrorCode;
 
 #pragma pack(1)
 typedef struct {
@@ -59,7 +66,7 @@ typedef struct {
     uint8_t text_num[4];
 } FinsCommandFrameFormat;
 
-// Fins 响应帧格式
+// Fins 响应帧格式  最多支持读10个word
 typedef struct {
     uint8_t head[2];
     uint8_t resdata[2];
@@ -69,7 +76,7 @@ typedef struct {
     uint8_t sid[2];   
     uint8_t code[4];
     uint8_t respcode[4];
-    uint8_t* text;
+    uint8_t *text;
 } FinsResponseFrameFormat;
 
 // HostLink 命令帧格式
@@ -91,6 +98,7 @@ typedef struct {
 } HostLinkResponseFrameFormat;
 #pragma pack()
 
-void HLReadSingleDataRegister(uint32_t address, uint16_t length);
+void HLReadSingleDataRegister(uint32_t address);
+int GetSerialWordDataFromHlPlc(int *length);
 
 #endif

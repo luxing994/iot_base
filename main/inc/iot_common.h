@@ -157,8 +157,13 @@ uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
 int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
+uint16_t CalReadDataRegister(uint8_t *data);
+uint16_t CalSerialReadDataRegister(uint8_t *data);
 int UART_InitBuffer(void);
 int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size);
+int FXPLC_InitBuffer(void);
+int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
+int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 
 #endif
