@@ -23,6 +23,7 @@
 #include "hprotocols.h"
 #include "iot_common.h"
 #include "fx_plc_protocol.h"
+#include "hl_plc_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
 
@@ -750,7 +751,19 @@ void send_data_task(void *pvParameters)
     #endif
 
     #ifdef CONFIG_FX_PLC_RS485
-            SerialReadSingleDataRegister(0, 255, 10, 232);
+            HLReadSingleDataRegister(0, 1);
+            // SerialReadSingleDataRegister(0, 255, 10, 232); // 日跃PLC产量累加值寄存器
+
+            // SerialReadSingleDataRegister(0, 255, 10, 180);    //  行车总时间
+            // SerialReadSingleDataRegister(0, 255, 10, 181);    //  行车设定时间
+            // SerialReadSingleDataRegister(0, 255, 10, 171);    //  一车运行时间
+            // SerialReadSingleDataRegister(0, 255, 10, 172);    //  二车运行时间
+            // SerialReadSingleDataRegister(0, 255, 10, 173);    //  三车运行时间
+            // SerialReadSingleDataRegister(0, 255, 10, 174);    //  四车运行时间
+            // SerialReadSingleDataRegister(0, 255, 10, 500);    //  一车工位数值
+            // SerialReadSingleDataRegister(0, 255, 10, 550);    //  二车工位数值
+            // SerialReadSingleDataRegister(0, 255, 10, 600);    //  三车工位数值
+            // SerialReadSingleDataRegister(0, 255, 10, 650);    //  四车工位数值
     #endif
 #endif
 
@@ -770,9 +783,8 @@ void send_command_task(void *pvParameters)
 {
     const char *TAG = "SEND_COMMAND_TASK";
     EventBits_t uxBits;
-
-    while (1) {
 #ifdef CONFIG_PLC_MUDBUS
+    while (1) {
     #ifdef CONFIG_MB_COMM_MODE_TCP  
     #else   
             uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, (TickType_t)10);
@@ -782,7 +794,7 @@ void send_command_task(void *pvParameters)
                 master_send_switch_func(0);
             }      
     #endif
-#endif
     }
+#endif
     vTaskDelete(NULL);
 }

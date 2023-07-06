@@ -61,6 +61,7 @@ HproComFrame dataFrame = {0};
 uint32_t g_devStartStatus = 0;
 int g_rdatalen = 0;
 int g_senddata = 0;
+int g_fxplccount = 0;
 uint16_t g_lastdata = 0;
 
 void ParseOpCode(char *str, uint8_t op)
@@ -68,6 +69,7 @@ void ParseOpCode(char *str, uint8_t op)
     uint16_t rdata;
     jsondata = GetCommandJsonData();
     char version[5] = {0};
+    char frstr[10] = {0};
     switch (op) {
         case BREAK: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -237,18 +239,24 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case FXPLCDEMODATA: {
             FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
-            if (rdata != g_lastdata) {
-                g_senddata = 1;
-            } else {
-                g_senddata = 0;
+            g_fxplccount++;
+            if (g_fxplccount > 10) {
+                g_fxplccount = 0;
             }
+            // if (rdata != g_lastdata) {
+                g_senddata = 1;
+            // } else {
+            //     g_senddata = 0;
+            // }
+            (void)sprintf(frstr, "FR0%02d", g_fxplccount);
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
-            g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, GetMilliTimeNow(), 
+            g_devId, jsondata.devId, jsondata.devName, PLCDEVTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                 rdata);
             g_lastdata = rdata;
+            break;
         }
         case TEMPCONTROLDATA: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
