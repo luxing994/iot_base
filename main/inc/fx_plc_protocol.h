@@ -140,7 +140,7 @@ typedef struct {
 
 void ReadSingleDataRegister(uint16_t address);
 void ReadMulDataRegister(uint16_t startaddr, uint16_t length);
-void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address);
+void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
 int ReadInputRelayData();

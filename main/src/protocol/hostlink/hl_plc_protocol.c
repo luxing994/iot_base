@@ -56,7 +56,7 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	memcpy(rdata->finscomdata.text_num, str, 4);
 
 
-	sprintf(str, "%02x", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
+	sprintf(str, "%02X", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
 	memcpy(rdata->fcs, str, 2);
 	memcpy(rdata->end, HOSTLINK_END, 2);
 	return 0;

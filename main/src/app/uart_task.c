@@ -240,10 +240,6 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case FXPLCDEMODATA: {
             FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
-            g_fxplccount++;
-            if (g_fxplccount > 10) {
-                g_fxplccount = 0;
-            }
             // if (rdata != g_lastdata) {
                 g_senddata = 1;
             // } else {
@@ -358,23 +354,36 @@ int GetDataFromControler(void)
 void uart_init(void) {
     int ret;
     static const char *TAG = "uart_init";
-    
+
+#ifdef CONFIG_PLC_FX
+    const uart_config_t uart_config = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_7_BITS,
+        .parity = UART_PARITY_EVEN,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
+
+#ifdef CONFIG_PLC_HOSTLINK
     const uart_config_t uart_config = {
         .baud_rate = 9600,
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_2,
-        .flow_ctrl = UART_HW_FLOWCTRL_RTS,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
+#endif
     
     uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
-#ifdef CONFIG_FX_PLC_RS232
+#ifdef CONFIG_PLC_RS232
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 #endif
 
-#ifdef CONFIG_FX_PLC_RS485
+#ifdef CONFIG_PLC_RS485
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, RTS_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
 #endif
@@ -597,12 +606,17 @@ void rx_task(void *arg)
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         // ret = GetDataFromControler();
-#ifdef CONFIG_FX_PLC_RS232
+#ifdef CONFIG_PLC_FX
+    #ifdef CONFIG_PLC_RS232
         ret = GetDataFromFxPlc(&g_rdatalen);
+    #endif
+
+    #ifdef CONFIG_PLC_RS485
+        ret = GetSerialDataFromFxPlc(&g_rdatalen);
+    #endif
 #endif
 
-#ifdef CONFIG_FX_PLC_RS485
-        // ret = GetSerialDataFromFxPlc(&g_rdatalen);
+#ifdef CONFIG_PLC_HOSTLINK
         ret = GetSerialWordDataFromHlPlc(&g_rdatalen);
 #endif
 		if (ret == 0 && g_rdatalen != 0) {
@@ -646,7 +660,7 @@ void uart_event_task(void *pvParameters)
                 case UART_DATA:
                     ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
                     uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
-                    ESP_LOGI(TAG, "[DATA EVT]:");
+                    ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
                     UART_WriteBufferBytes(dtmp, event.size);
                     // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
                     break;

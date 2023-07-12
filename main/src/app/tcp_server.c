@@ -746,26 +746,28 @@ void send_data_task(void *pvParameters)
         if (g_devStartFlushFlag == 0) {
         } else {
 #ifdef CONFIG_PLC_FX
-    #ifdef CONFIG_FX_PLC_RS232
-            //ReadSingleDataRegister(8000);
-            HLReadSingleDataRegister(0);
+    #ifdef CONFIG_PLC_RS232
+            ReadSingleDataRegister(8000);
     #endif
 
-    #ifdef CONFIG_FX_PLC_RS485
-            HLReadSingleDataRegister(0);
-            // SerialReadSingleDataRegister(0, 255, 10, 232); // 日跃PLC产量累加值寄存器
+    #ifdef CONFIG_PLC_RS485
+            //SerialReadSingleDataRegister(0, 255, 10, 232); // 日跃PLC产量累加值寄存器
 
-            // SerialReadSingleDataRegister(0, 255, 10, 180);    //  行车总时间
-            // SerialReadSingleDataRegister(0, 255, 10, 181);    //  行车设定时间
-            // SerialReadSingleDataRegister(0, 255, 10, 171);    //  一车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 172);    //  二车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 173);    //  三车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 174);    //  四车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 500);    //  一车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 550);    //  二车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 600);    //  三车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 650);    //  四车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 180, 1);    //  行车总时间
+            SerialReadSingleDataRegister(0, 255, 10, 181, 2);    //  行车设定时间
+            SerialReadSingleDataRegister(0, 255, 10, 171, 3);    //  一车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 172, 4);    //  二车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 173, 5);    //  三车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 174, 6);    //  四车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 500, 7);    //  一车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 550, 8);    //  二车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 600, 9);    //  三车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 650, 10);    //  四车工位数值
     #endif
+#endif
+
+#ifdef CONFIG_PLC_HOSTLINK
+            HLReadSingleDataRegister(0);
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS

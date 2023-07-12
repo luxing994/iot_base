@@ -408,10 +408,12 @@ void ReadSingleDataRegister(uint16_t address)   // RS232
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&rdatabuff, sizeof(FxPlcReadFrameFormat));
 }
 
-void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address)    // RS485
+void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
 {
 	PackSerialReadDataRegisterFrame(plcnum, pcnum, timeout, address, 1, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
+	g_fxplccount = frnum;
+    vTaskDelay(20);
 }
 
 void ReadMulDataRegister(uint16_t startaddr, uint16_t length)
@@ -420,7 +422,7 @@ void ReadMulDataRegister(uint16_t startaddr, uint16_t length)
 
 	for (i = 0; i < length; i++) {
 		ReadSingleDataRegister(startaddr + i);
-		vTaskDelay(10);
+		vTaskDelay(100);
 	}
 }
 

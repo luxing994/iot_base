@@ -210,20 +210,22 @@ choice PLC_PRO_MODE
     config PLC_FX
         bool "fx protocol"
 
+    config PLC_HOSTLINK
+        bool "hostlink protocol"
+
     config PLC_MUDBUS
         bool "modbus protocol"
 
 endchoice
 
-choice FX_PLC_CONNECT_MODE
-    prompt "FX PLC connect mode"
-    depends on PLC_FX
+choice PLC_CONNECT_MODE
+    prompt "PLC connect mode"
 
-    config FX_PLC_RS232
-        bool "fx rs232(program port)"
+    config PLC_RS232
+        bool "rs232(program port)"
 
-    config FX_PLC_RS485
-        bool "fx rs485(serial port)"
+    config PLC_RS485
+        bool "rs485(serial port)"
 
 endchoice
 

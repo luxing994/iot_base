@@ -22,7 +22,7 @@
 #define MOTOR_SPEED           19200
 #define FREEZER_SPEED         4800
 
-#define DEVICE_VERSION    TEMP_CONTROLER_SPEED
+#define DEVICE_VERSION    MOTOR
 
 #define MB_PORT_NUM     (CONFIG_MB_UART_PORT_NUM)   // Number of UART port used for Modbus connection
 #define MB_DEV_SPEED    (CONFIG_MB_UART_BAUD_RATE)  // The communication speed of the UART
@@ -65,7 +65,7 @@
 
 // Enumeration of modbus device addresses accessed by master device
 enum {
-    MB_DEVICE_ADDR1 = 1 // Only one slave device used for the test (add other slave addresses here)
+    MB_DEVICE_ADDR1 = 8 // Only one slave device used for the test (add other slave addresses here)
 };
 #if DEVICE_VERSION == AIR_SWITCH
 // Enumeration of all supported CIDs for device (used in parameter definition table)

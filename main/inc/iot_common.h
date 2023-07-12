@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "XF-PLC-002"
+#define DEVID        "XF-ZL-004"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -152,6 +152,7 @@ typedef struct {
 } ElectroFactoryData;
 
 extern ElectroFactoryData electroData;
+extern int g_fxplccount;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
