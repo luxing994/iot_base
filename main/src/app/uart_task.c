@@ -24,6 +24,7 @@
 #include "sensor.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
+#include "ls_plc_load_protocol.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -63,7 +64,7 @@ uint32_t g_devStartStatus = 0;
 int g_rdatalen = 0;
 int g_senddata = 0;
 int g_fxplccount = 0;
-uint16_t g_lastdata = 0;
+uint16_t g_lastdata[11] = {0};
 
 void ParseOpCode(char *str, uint8_t op)
 {
@@ -240,19 +241,21 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case FXPLCDEMODATA: {
             FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
-            // if (rdata != g_lastdata) {
+            // if (rdata != g_lastdata[g_fxplccount]) {
                 g_senddata = 1;
             // } else {
             //     g_senddata = 0;
             // }
-            (void)sprintf(frstr, "FR0%02d", g_fxplccount);
+            (void)sprintf(frstr, "FR%03d", g_fxplccount);
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
 		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
             g_devId, jsondata.devId, jsondata.devName, PLCDEVTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                 rdata);
-            g_lastdata = rdata;
+            if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
+                  g_lastdata[g_fxplccount] = rdata;
+            }
             break;
         }
         case TEMPCONTROLDATA: {
@@ -351,6 +354,7 @@ int GetDataFromControler(void)
 	return 0;
 }
 
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD)
 void uart_init(void) {
     int ret;
     static const char *TAG = "uart_init";
@@ -360,6 +364,17 @@ void uart_init(void) {
         .baud_rate = 9600,
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
+
+#ifdef CONFIG_PLC_LS_LOAD
+    const uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
@@ -392,6 +407,7 @@ void uart_init(void) {
         ESP_LOGE(TAG, "uart buffer init failed\n");
     }
 }
+#endif
 
 int sendData(const char* logName, const char* data)
 {
@@ -616,12 +632,18 @@ void rx_task(void *arg)
     #endif
 #endif
 
+#ifdef CONFIG_PLC_LS_LOAD
+    #ifdef CONFIG_PLC_RS232
+        ret = LSLoadGetSerialWordDataFromFxPlc(&g_rdatalen);
+    #endif
+#endif
+
 #ifdef CONFIG_PLC_HOSTLINK
         ret = GetSerialWordDataFromHlPlc(&g_rdatalen);
 #endif
 		if (ret == 0 && g_rdatalen != 0) {
             // SendAckToPlc();
-            ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
+            // ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
             for (i = 0; i < g_rdatalen; i++) {
                 ParseOpCode(controlerStr, FXPLCDEMODATA);
                 // ParseOpCode(controlerStr, dataFrame.operate);
@@ -651,16 +673,16 @@ void uart_event_task(void *pvParameters)
         //Waiting for UART event.
         if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
-            ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
+            // ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
                 //Event of UART receving data
                 /*We'd better handler data event fast, there would be much more data events than
                 other types of events. If we take too much time on data event, the queue might
                 be full.*/
                 case UART_DATA:
-                    ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
+                    // ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
                     uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
-                    ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
+                    // ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
                     UART_WriteBufferBytes(dtmp, event.size);
                     // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
                     break;

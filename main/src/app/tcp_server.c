@@ -24,6 +24,7 @@
 #include "iot_common.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
+#include "ls_plc_load_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
 
@@ -766,8 +767,17 @@ void send_data_task(void *pvParameters)
     #endif
 #endif
 
+#ifdef CONFIG_PLC_LS_LOAD
+    #ifdef CONFIG_PLC_RS232
+            for (i = 0; i < 5120; i++) {
+                LSLoadReadSingleDataRegister(i, i);
+            }
+    #endif
+#endif
+
 #ifdef CONFIG_PLC_HOSTLINK
             HLReadSingleDataRegister(0);
+            vTaskDelay(20);
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS
@@ -790,12 +800,12 @@ void send_command_task(void *pvParameters)
     while (1) {
     #ifdef CONFIG_MB_COMM_MODE_TCP  
     #else   
-            uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, (TickType_t)10);
-            if ((uxBits & BIT_0) != 0) {
-                master_send_switch_func(1);     // 1:ON   0:OFF
-            } else if ((uxBits & BIT_1) != 0) {
-                master_send_switch_func(0);
-            }      
+        uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, (TickType_t)10);
+        if ((uxBits & BIT_0) != 0) {
+            master_send_switch_func(1);     // 1:ON   0:OFF
+        } else if ((uxBits & BIT_1) != 0) {
+            master_send_switch_func(0);
+        }      
     #endif
     }
 #endif

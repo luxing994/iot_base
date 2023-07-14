@@ -210,6 +210,9 @@ choice PLC_PRO_MODE
     config PLC_FX
         bool "fx protocol"
 
+    config PLC_LS_LOAD
+        bool "ls load protocol"
+
     config PLC_HOSTLINK
         bool "hostlink protocol"
 

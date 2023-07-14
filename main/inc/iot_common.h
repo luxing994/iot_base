@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "XF-ZL-004"
+#define DEVID        "XF-PLC-002"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -156,10 +156,12 @@ extern int g_fxplccount;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
+uint8_t CalFCS(uint8_t* pbuff, uint16_t len);
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
 int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
 uint16_t CalReadDataRegister(uint8_t *data);
 uint16_t CalSerialReadDataRegister(uint8_t *data);
+uint16_t LSCalSerialReadDataRegister(uint8_t *data);
 int UART_InitBuffer(void);
 int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size);

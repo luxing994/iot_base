@@ -66,6 +66,17 @@ int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
     return 0;
 }
 
+uint8_t CalFCS(uint8_t* pbuff, uint16_t len)
+{
+	uint8_t ret = 0;
+
+	while (len--) {
+		ret ^= *pbuff++;
+	}
+
+	return ret;
+}
+
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len)
 {
     int i, num, sum = 0;
@@ -115,6 +126,14 @@ uint16_t CalSerialReadDataRegister(uint8_t *data)
 	uint16_t rdata;
 
 	rdata = CharToInt(data[0]) * 4096 + CharToInt(data[1]) * 256 + CharToInt(data[2]) * 16 + CharToInt(data[3]);
+	return rdata;
+}
+
+uint16_t LSCalSerialReadDataRegister(uint8_t *data)
+{
+	uint16_t rdata;
+
+	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
 	return rdata;
 }
 

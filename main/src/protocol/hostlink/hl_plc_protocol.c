@@ -12,21 +12,8 @@
 HostLinkCommandFrameFormat hlsdatabuff = {0};
 HostLinkResponseFrameFormat hlrdatabuff = {0};
 
-static uint8_t CalFCS(uint8_t* pbuff, uint16_t len)
-{
-	uint8_t ret = 0;
-
-	while (len--) {
-		ret ^= *pbuff++;
-	}
-
-	return ret;
-}
-
 static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
 {
-	uint32_t addr;
-	uint16_t len, sumcheck;
 	char str[10] = {0};
 
 	if (rdata == NULL) {
