@@ -98,7 +98,7 @@ typedef struct {
 } HostLinkResponseFrameFormat;
 #pragma pack()
 
-void HLReadSingleDataRegister(uint32_t address);
+void HLReadSingleDataRegister(uint32_t address, uint16_t frnum);
 int GetSerialWordDataFromHlPlc(int *length);
 
 #endif

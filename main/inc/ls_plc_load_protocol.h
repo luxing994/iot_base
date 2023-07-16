@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 /*
+LS PLC LOAD协议
 UART传输格式
 通讯方式：RS-232
 数据位：8位
@@ -11,7 +12,6 @@ UART传输格式
 波特率: 115200bps
 奇偶: 无
 */
-
 #define LS_START_OF_TX           0x02    // 命令帧帧头
 #define LS_END_OF_TX             0x03    // 命令帧帧尾
 #define LS_START_OF_ACK          0x06    // 正常响应帧帧头
@@ -56,6 +56,39 @@ typedef struct {
     uint8_t code[4];
     uint8_t end;
 } LsLoadNackFrameFormat;
+#pragma pack()
+
+/*
+54DBS热偶真空计
+UART传输格式
+通讯方式：RS-232
+数据位：8位
+停止位：1位
+波特率: 9600bps
+奇偶: 无
+*/
+#define DBS_START_OF_TR      0xFF    // 响应帧帧头
+#define DBS_STATUS_LOW       0x4C    // 小于设定值
+#define DBS_STATUS_HIGH      0x48    // 大于设定值     
+
+#pragma pack(1)
+// typedef struct {
+//     uint8_t head;
+//     uint8_t rw;
+//     uint8_t area;
+//     uint8_t addr[6];
+//     uint8_t num[2];
+//     uint8_t sum[2];
+//     uint8_t end;
+// } DbsCommandFrameFormat;
+
+typedef struct {
+    uint8_t head;
+    uint8_t addr;
+    uint8_t data[4];
+    uint8_t status;
+    uint8_t sum[2];
+} DbsResponseFrameFormat;
 #pragma pack()
 
 void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum);

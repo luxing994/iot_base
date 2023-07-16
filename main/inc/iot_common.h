@@ -158,6 +158,7 @@ uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
 uint8_t CalFCS(uint8_t* pbuff, uint16_t len);
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
+uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len);
 int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
 uint16_t CalReadDataRegister(uint8_t *data);
 uint16_t CalSerialReadDataRegister(uint8_t *data);

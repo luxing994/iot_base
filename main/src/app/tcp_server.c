@@ -25,6 +25,7 @@
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
+#include "t_tester_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
 
@@ -769,15 +770,26 @@ void send_data_task(void *pvParameters)
 
 #ifdef CONFIG_PLC_LS_LOAD
     #ifdef CONFIG_PLC_RS232
-            for (i = 0; i < 5120; i++) {
-                LSLoadReadSingleDataRegister(i, i);
-            }
+            // for (i = 0; i < 5120; i++) {
+            //     LSLoadReadSingleDataRegister(i, i);
+            // }
+            TTestSelectGroup(3);
+            vTaskDelay(20);
+            TTestInquiryStatus();
+            vTaskDelay(20);
+            TTestReadCurrentItem();
+            vTaskDelay(20);
+            TTestReadCurrentGroup();
+            vTaskDelay(20);
+            TTestReadHistoryGroup(3);
+            vTaskDelay(20);
     #endif
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-            HLReadSingleDataRegister(0);
-            vTaskDelay(20);
+            for (i = 0; i <= 32760; i++) {
+                HLReadSingleDataRegister(i, i);
+            }
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS

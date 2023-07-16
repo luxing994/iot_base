@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include "esp_log.h"
 #include "iot_common.h"
 
 const uint16_t polynom = 0xA001;
@@ -75,6 +76,20 @@ uint8_t CalFCS(uint8_t* pbuff, uint16_t len)
 	}
 
 	return ret;
+}
+
+uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len)
+{
+    int i;
+    uint16_t sum = 0;
+    uint8_t checksum = 0;
+    
+    for (i = 0; i < len; i++) {
+        sum += data[i]; 
+    }
+    checksum = sum & 0xff;
+    
+    return checksum;
 }
 
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len)

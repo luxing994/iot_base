@@ -30,16 +30,17 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
 	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
 
-	sprintf(str, "%04x", READIO);
+	sprintf(str, "%04X", READIO);
 	memcpy(rdata->finscomdata.code, str, 4);
 
-	sprintf(str, "%02x", DMWORD);
+	sprintf(str, "%02X", DMWORD);
 	memcpy(rdata->finscomdata.mem, str, 2);
 
-	sprintf(str, "%06d", address);
+	address *= 256;
+	sprintf(str, "%06X", address);
 	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
 
-	sprintf(str, "%04d", length);
+	sprintf(str, "%04X", length);
 	memcpy(rdata->finscomdata.text_num, str, 4);
 
 
@@ -49,10 +50,12 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	return 0;
 }
 
-void HLReadSingleDataRegister(uint32_t address)
+void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 {
 	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
+	g_fxplccount = frnum;
+    vTaskDelay(30);
 }
 
 int GetSerialWordDataFromHlPlc(int *length)
