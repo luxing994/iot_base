@@ -218,6 +218,9 @@ choice PLC_PRO_MODE
 
     config PLC_MUDBUS
         bool "modbus protocol"
+    
+    config TESTER_76T
+        bool "tester 76t protocol"
 
 endchoice
 

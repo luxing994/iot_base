@@ -128,7 +128,102 @@ typedef struct {
     uint8_t end;
     uint8_t sum;
 } TTesterTwoCommandDataFrameFormat;
+
+typedef struct {
+    uint8_t group;
+    uint8_t term;
+    uint8_t item;
+    uint8_t result;
+    uint8_t data[10];
+} TTesterTestItemDataFormat;
 #pragma pack()
+
+typedef struct {
+    float voltage;
+    float current;
+    float testtime;
+    float uptime;
+    float downtime;
+} TTesterPressurizationPara;
+
+typedef struct {
+    float current;
+    float resistance;
+    float testtime;
+    float reserve1;
+    float reserve2;
+} TTesterGroundingPara;
+
+typedef struct {
+    float voltage;
+    float resistance;
+    float testtime;
+    float reserve1;
+    float reserve2;
+} TTesterRinsulationPara;
+
+typedef struct {
+    float voltage;
+    float firecurrent;
+    float groundcurrent;
+    float testtime;
+    float reserve;
+} TTesterLeakagePara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float power;
+    float powerf;
+    float testtime;
+} TTesterPowerPara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float testtime;
+    float reserve1;
+    float reserve2;
+} TTesterStartupPara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float testtime;
+    float reserve1;
+    float reserve2;
+} TTesterOpenshortPara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float testtime;
+    float reserve1;
+    float reserve2;
+} TTesterDcvoltagePara;
+
+typedef struct {
+    uint8_t group;
+    uint8_t term;
+    uint8_t item;
+    uint8_t termret;
+    uint8_t para[20];
+} TTestestItemResultPara;
+
+typedef struct {
+    uint8_t group;
+    uint8_t term;
+    uint8_t item;
+    uint8_t termret;
+    uint8_t groupret;
+    uint8_t allret;
+    uint8_t para[20];
+} TTestestLastItemResultPara;
+
+typedef struct {
+    TTestestItemResultPara itemdata[7];
+    TTestestLastItemResultPara lastitemdata;
+} TTestestGroupResultPara;
 
 void TTestSelectGroup(uint16_t group);
 void TTestInquiryStatus(void);

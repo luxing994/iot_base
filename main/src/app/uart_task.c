@@ -25,6 +25,7 @@
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
+#include "t_tester_protocol.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -354,7 +355,7 @@ int GetDataFromControler(void)
 	return 0;
 }
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T)
 void uart_init(void) {
     int ret;
     static const char *TAG = "uart_init";
@@ -387,6 +388,17 @@ void uart_init(void) {
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
+
+#ifdef CONFIG_TESTER_76T
+    const uart_config_t uart_config = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
@@ -640,6 +652,10 @@ void rx_task(void *arg)
 
 #ifdef CONFIG_PLC_HOSTLINK
         ret = GetSerialWordDataFromHlPlc(&g_rdatalen);
+#endif
+
+#ifdef CONFIG_TESTER_76T
+        ret = TTesterResolve();
 #endif
 		if (ret == 0 && g_rdatalen != 0) {
             // SendAckToPlc();
