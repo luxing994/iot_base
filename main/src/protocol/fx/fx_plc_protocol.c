@@ -354,26 +354,34 @@ int GetSerialDataFromFxPlc(int *length)
 		if (ret != 0) {
 			return -1;
 		}
-		do {
+
+		ret = UART_ReadBufferBytes(&curData, 1);
+		if (ret != 0) {
+			return -1;
+		}
+		while (curData != PLC_ETX) {
+			ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
+			if (ret != 0) {
+				return -1;
+			}
 			ret = UART_ReadBufferBytes(&curData, 1);
 			if (ret != 0) {
 				return -1;
 			}
-
-			if (count < 4) {
-				dataArry[count] = curData;
-			}
-			count++;
-			if (count % 4 == 0) {
-				count = 0;
-				len++;
-				rdata = CalSerialReadDataRegister(dataArry);
-				ret = FXPLC_WriteBufferBytes(&rdata, sizeof(rdata));
-				if (ret != 0) {
-					return -1;
-				}
-			}
-		} while (curData != PLC_ETX);
+			// if (count < 4) {
+			// 	dataArry[count] = curData;
+			// }
+			// count++;
+			// if (count % 4 == 0) {
+			// 	count = 0;
+			// 	len++;
+			// 	// rdata = CalSerialReadDataRegister(dataArry);
+			// 	ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
+			// 	if (ret != 0) {
+			// 		return -1;
+			// 	}
+			// }
+		} 
 		*length = len;
 	}
 

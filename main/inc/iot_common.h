@@ -152,6 +152,16 @@ typedef struct {
     FreezerData freezerData;
 } ElectroFactoryData;
 
+// 生能2-4车间冷媒灌注机数据格式
+typedef struct {
+    float sysvacuum;
+    uint16_t atemperature;
+    uint16_t btemperature;
+    uint16_t asyspressure;
+    uint16_t bsyspressure;
+    float perfusionvolume;
+} SNCaclReFillingMachine;
+
 extern ElectroFactoryData electroData;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;

@@ -989,12 +989,12 @@ void send_data_task(void *pvParameters)
             // SerialReadSingleDataRegister(0, 255, 10, 600, 9);    //  三车工位数值
             // SerialReadSingleDataRegister(0, 255, 10, 650, 10);    //  四车工位数值
 
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);    //  系统真空
+            SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
             SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
-            SerialReadSingleDataRegister(0, 255, 10, 200, 4);         //  系统压力（A系统）
-            SerialReadSingleDataRegister(0, 255, 10, 210, 5);         //  系统压力（B系统）
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);    //  灌注量
+            SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
+            SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
+            SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
     #endif
 #endif
 

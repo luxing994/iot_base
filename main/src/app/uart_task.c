@@ -67,16 +67,19 @@ int g_senddata = 1;
 int g_fxplccount = 0;
 int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float)   
 uint16_t g_lastdata[11] = {0};
+SNCaclReFillingMachine g_lastrefilldata = {0};
+int g_datapos = 0;
 
 void ParseOpCode(char *str, uint8_t op)
 {
-    // uint16_t rdata;
-    uint8_t rdata[5] = {0};
-    int idata;
+    char rdata[5] = {0};
+    char rfdata[9] = {0};
+    int idata, i;
     float fdata;
     jsondata = GetCommandJsonData();
     char version[5] = {0};
     char frstr[10] = {0};
+    uint8_t temp;
     switch (op) {
         case BREAK: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -247,7 +250,7 @@ void ParseOpCode(char *str, uint8_t op)
         case FXPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
             if (g_fxplcdataformat == 0) {
-                FXPLC_ReadBufferBytes(rdata, sizeof(rdata));
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
                     // if (rdata != g_lastdata[g_fxplccount]) {
                     //     g_senddata = 1;
                     // } else {
@@ -260,31 +263,56 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
             } else if (g_fxplcdataformat == 1) {
-                FXPLC_ReadBufferBytes(&idata, sizeof(idata));
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                     // if (rdata != g_lastdata[g_fxplccount]) {
                     //     g_senddata = 1;
                     // } else {
                     //     g_senddata = 0;
                     // }
+                (void)sscanf(rdata, "%x", &idata);
+                if (idata != *(uint16_t *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 0;
+                }
+                memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], (uint16_t* )&idata, sizeof(uint16_t));
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     idata);
+                g_datapos += 2;
+                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
+                    g_datapos = 0;
+                }
             } else if (g_fxplcdataformat == 2) {
-                FXPLC_ReadBufferBytes(&fdata, sizeof(fdata));
-                    // if (rdata != g_lastdata[g_fxplccount]) {
-                    //     g_senddata = 1;
-                    // } else {
-                    //     g_senddata = 0;
-                    // }
+                for (i = 0; i < 8; i++) {
+                    FXPLC_ReadBufferBytes((uint8_t *)&rfdata[(i + 4) % 8], 1);
+                }
+                // if (rdata != g_lastdata[g_fxplccount]) {
+                //     g_senddata = 1;
+                // } else {
+                //     g_senddata = 0;
+                // }
+                (void)sscanf(rfdata, "%x", &idata);
+                fdata = *((float *)&idata);
+                if (fdata != *(float *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 0;
+                }
+                memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], &fdata, sizeof(float));
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     fdata);
+                g_datapos += 4;
+                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
+                    g_datapos = 0;
+                }
             }
             // if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
             //       g_lastdata[g_fxplccount] = rdata;
