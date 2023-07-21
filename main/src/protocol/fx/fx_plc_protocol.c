@@ -272,12 +272,10 @@ static int PackSerialReadDataRegisterFrame(uint16_t plcnum, uint16_t pcnum, uint
 	return 0;
 }
 
-int GetDataFromFxPlc(int *length)
+int GetDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
-	uint8_t dataArry[4] = {0};
-	uint16_t rdata;
-	int ret, len = 0, count = 0;
+	int ret;
 	static const char *TAG = "GET_DATA";
 
 	while (curData != PLC_STX) {
@@ -287,37 +285,28 @@ int GetDataFromFxPlc(int *length)
 		}
 	}
 
-	do {
+	ret = UART_ReadBufferBytes(&curData, 1);
+	if (ret != 0) {
+		return -1;
+	}
+	while (curData != PLC_ETX) {
+		ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
+		if (ret != 0) {
+			return -1;
+		}
 		ret = UART_ReadBufferBytes(&curData, 1);
 		if (ret != 0) {
 			return -1;
 		}
+	}
 
-		if (count < 4) {
-			dataArry[count] = curData;
-		}
-		count++;
-		if (count % 4 == 0) {
-			count = 0;
-			len++;
-			rdata = CalReadDataRegister(dataArry);
-			ret = FXPLC_WriteBufferBytes(&rdata, sizeof(rdata));
-			if (ret != 0) {
-				return -1;
-			}
-		}
-	} while (curData != PLC_ETX);
-
-	*length = len;
 	return 0;
 }
 
-int GetSerialDataFromFxPlc(int *length)
+int GetSerialDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
-	uint8_t dataArry[4] = {0};
-	uint16_t rdata;
-	int ret, len = 0, count = 0;
+	int ret;
 	static const char *TAG = "GET_SERIAL_DATA";
 
 	while ((curData != PLC_STX) && (curData != PLC_NAK)) {
@@ -341,7 +330,6 @@ int GetSerialDataFromFxPlc(int *length)
 		if (ret != 0) {
 			return -1;
 		}
-		*length = 0;
 		ESP_LOGE(TAG, "PLC:%c%c, PC:%c%c, errorcode:%c%c", srbedatabuff.plcnum[0], srbedatabuff.plcnum[1], 
 			srbedatabuff.pcnum[0], srbedatabuff.pcnum[1], srbedatabuff.errorcode[0], srbedatabuff.errorcode[1]);
 	} else {
@@ -368,21 +356,7 @@ int GetSerialDataFromFxPlc(int *length)
 			if (ret != 0) {
 				return -1;
 			}
-			// if (count < 4) {
-			// 	dataArry[count] = curData;
-			// }
-			// count++;
-			// if (count % 4 == 0) {
-			// 	count = 0;
-			// 	len++;
-			// 	// rdata = CalSerialReadDataRegister(dataArry);
-			// 	ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
-			// 	if (ret != 0) {
-			// 		return -1;
-			// 	}
-			// }
-		} 
-		*length = len;
+		}
 	}
 
 	return 0;
@@ -410,10 +384,13 @@ void SendNackToPlc(void)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&mackdatabuff, sizeof(FxPlcSerialAnsAckFrameFormat));
 }
 
-void ReadSingleDataRegister(uint16_t address)   // RS232
+void ReadSingleDataRegister(uint16_t address, uint16_t frnum)   // RS232
 {
 	PackReadDataRegisterFrame(address, 2, &rdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&rdatabuff, sizeof(FxPlcReadFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 1;
+    vTaskDelay(20);
 }
 
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -432,16 +409,6 @@ void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t 
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 2;
     vTaskDelay(50);
-}
-
-void ReadMulDataRegister(uint16_t startaddr, uint16_t length)
-{
-	int i;
-
-	for (i = 0; i < length; i++) {
-		ReadSingleDataRegister(startaddr + i);
-		vTaskDelay(100);
-	}
 }
 
 int ReadInputRelayData()

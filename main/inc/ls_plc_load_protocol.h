@@ -83,7 +83,7 @@ typedef struct {
 #pragma pack()
 
 void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum);
-int LSLoadGetSerialWordDataFromFxPlc(int *length);
+int LSLoadGetSerialWordDataFromFxPlc(void);
 void DBSReadData(void);
 int DBSGetData(void);
 

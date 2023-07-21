@@ -55,15 +55,15 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
+	g_fxplcdataformat = 1;
     vTaskDelay(30);
 }
 
-int GetSerialWordDataFromHlPlc(int *length)
+int GetSerialWordDataFromHlPlc(void)
 {
 	uint8_t curData = 0;
 	uint8_t dataArry[4] = {0};
-	uint16_t rdata;
-	int ret, len = 0, count = 0;
+	int ret, count = 0;
 	static const char *TAG = "GET_SERIAL_HLDATA";
 
 	while (curData != HOSTLINK_HEAD) {
@@ -128,10 +128,7 @@ int GetSerialWordDataFromHlPlc(int *length)
 		count++;
 		if (count % 4 == 0) {
 			count = 0;
-			len++;
-			rdata = CalSerialReadDataRegister(dataArry);
-			// ESP_LOGI(TAG, "Read bytes length: '%d'", rdata);
-			ret = FXPLC_WriteBufferBytes(&rdata, sizeof(rdata));
+			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 			if (ret != 0) {
 				return -1;
 			}
@@ -140,8 +137,6 @@ int GetSerialWordDataFromHlPlc(int *length)
 
 	hlrdatabuff.fcs[0] = dataArry[0];
 	hlrdatabuff.fcs[1] = dataArry[1];
-
-	*length = len;
 
 	return 0;
 }

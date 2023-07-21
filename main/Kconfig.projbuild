@@ -209,6 +209,20 @@ choice PLC_PRO_MODE
 
     config PLC_FX
         bool "fx protocol"
+    if PLC_FX   
+        choice DEVICE_TYPE
+            prompt "Select device type"
+
+        config RY_LINE
+            bool "ry line machine"
+
+        config XF_CONTROLER
+            bool "xf controler"
+
+        config SN_CACLREFILMAC
+            bool "sn cacl refilling machine"
+        endchoice
+    endif
 
     config PLC_LS_LOAD
         bool "ls load protocol"
@@ -221,7 +235,6 @@ choice PLC_PRO_MODE
     
     config TESTER_76T
         bool "tester 76t protocol"
-
 endchoice
 
 choice PLC_CONNECT_MODE

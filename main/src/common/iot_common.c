@@ -153,14 +153,6 @@ uint16_t CalSerialReadDataRegister(uint8_t *data)
 	return rdata;
 }
 
-uint16_t LSCalSerialReadDataRegister(uint8_t *data)
-{
-	uint16_t rdata;
-
-	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
-	return rdata;
-}
-
 int UART_InitBuffer(void)
 {
     if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {

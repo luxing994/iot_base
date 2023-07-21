@@ -58,7 +58,7 @@ char sendFileDataBuffer[6][256] = { { 0x5A, 0xA5, 0x00, 0xF2, 0x02, 0x01 }, { 0x
                                
 int sendflag = 0;
 HproComFrame dataFrame;
-char g_devId[32] = {"FX_PLC_001"};
+char g_devId[32] = {"IIIG_1.0"};
 RingBuffer uart2Buffer;
 HproComFrame dataFrame = {0};
 uint32_t g_devStartStatus = 0;
@@ -66,7 +66,7 @@ int g_rdatalen = 1;
 int g_senddata = 1;
 int g_fxplccount = 0;
 int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float)   
-uint16_t g_lastdata[11] = {0};
+uint16_t g_lastdata[32] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
 int g_datapos = 0;
 
@@ -251,73 +251,122 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
             if (g_fxplcdataformat == 0) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
-                    // if (rdata != g_lastdata[g_fxplccount]) {
-                    //     g_senddata = 1;
-                    // } else {
-                    //     g_senddata = 0;
-                    // }
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
             } else if (g_fxplcdataformat == 1) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                    // if (rdata != g_lastdata[g_fxplccount]) {
-                    //     g_senddata = 1;
-                    // } else {
-                    //     g_senddata = 0;
-                    // }
                 (void)sscanf(rdata, "%x", &idata);
+
+#if defined(CONFIG_XF_CONTROLER) || defined(CONFIG_RY_LINE)
+                if (idata != g_lastdata[g_fxplccount]) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 0;
+                }
+
+                if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
+                    g_lastdata[g_fxplccount] = idata;
+                }
+#endif
+
+#ifdef CONFIG_SN_CACLREFILMAC
                 if (idata != *(uint16_t *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
                     g_senddata = 1;
                 } else {
                     g_senddata = 0;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], (uint16_t* )&idata, sizeof(uint16_t));
+#endif
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     idata);
                 g_datapos += 2;
+#ifdef CONFIG_SN_CACLREFILMAC
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
                     g_datapos = 0;
                 }
+#endif
             } else if (g_fxplcdataformat == 2) {
                 for (i = 0; i < 8; i++) {
                     FXPLC_ReadBufferBytes((uint8_t *)&rfdata[(i + 4) % 8], 1);
                 }
-                // if (rdata != g_lastdata[g_fxplccount]) {
-                //     g_senddata = 1;
-                // } else {
-                //     g_senddata = 0;
-                // }
                 (void)sscanf(rfdata, "%x", &idata);
                 fdata = *((float *)&idata);
+#ifdef CONFIG_SN_CACLREFILMAC
                 if (fdata != *(float *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
                     g_senddata = 1;
                 } else {
                     g_senddata = 0;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], &fdata, sizeof(float));
+#endif
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     fdata);
                 g_datapos += 4;
+#ifdef CONFIG_SN_CACLREFILMAC
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
                     g_datapos = 0;
                 }
             }
-            // if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
-            //       g_lastdata[g_fxplccount] = rdata;
-            // }
+#endif
             break;
+        }
+        case HLPLCDEMODATA: {
+            (void)sprintf(frstr, "FR%03d", g_fxplccount);
+            if (g_fxplcdataformat == 0) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    rdata);
+            } else if (g_fxplcdataformat == 1) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                (void)sscanf(rdata, "%x", &idata);
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata);
+                g_datapos += 2;
+            }
+        }
+        case LSPLCDEMODATA: {
+            (void)sprintf(frstr, "FR%03d", g_fxplccount);
+            if (g_fxplcdataformat == 0) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    rdata);
+            } else if (g_fxplcdataformat == 1) {
+                for (i = 0 ; i < 4; i++) {
+                    FXPLC_ReadBufferBytes((uint8_t *)&rdata[(i + 2) % 4], 1);
+                } 
+                (void)sscanf(rdata, "%x", &idata);
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata);
+                g_datapos += 2;
+            }
         }
         case TEMPCONTROLDATA: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -683,9 +732,7 @@ void rx_task(void *arg)
 {
     static const char *RX_TASK_TAG = "RX_TASK";
     uint32_t sendaddr = (uint32_t)&controlerStr;
-    uint16_t parameter = 0;
-    uint8_t data;
-    int ret = 0, i;
+    int ret = 0;
 
     TickType_t xLastWakeTime;
  	const TickType_t xFrequency = 10;
@@ -694,54 +741,65 @@ void rx_task(void *arg)
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
+// Get Uart Data
         // ret = GetDataFromControler();
 #ifdef CONFIG_PLC_FX
     #ifdef CONFIG_PLC_RS232
-        ret = GetDataFromFxPlc(&g_rdatalen);
+        ret = GetDataFromFxPlc();
     #endif
 
     #ifdef CONFIG_PLC_RS485
-        ret = GetSerialDataFromFxPlc(&g_rdatalen);
-    #endif
-#endif
-
-#ifdef CONFIG_PLC_LS_LOAD
-    #ifdef CONFIG_PLC_RS232
-        // ret = LSLoadGetSerialWordDataFromFxPlc(&g_rdatalen);
-        ret = DBSGetData();
+        ret = GetSerialDataFromFxPlc();
     #endif
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-        ret = GetSerialWordDataFromHlPlc(&g_rdatalen);
+        ret = GetSerialWordDataFromHlPlc();
+#endif
+
+#ifdef CONFIG_PLC_LS_LOAD
+    #ifdef CONFIG_PLC_RS232
+        // ret = LSLoadGetSerialWordDataFromFxPlc();
+        ret = DBSGetData();
+    #endif
 #endif
 
 #ifdef CONFIG_TESTER_76T
         ret = TTesterResolve();
 #endif
-		// if (ret == 0 && g_rdatalen != 0) {
+
+// Parse Data
         if (ret == 0) {
-            // SendAckToPlc();
-            // ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
-            // for (i = 0; i < g_rdatalen; i++) {
-                // ParseOpCode(controlerStr, dataFrame.operate);
-#ifdef CONFIG_TESTER_76T
-                TTesterGetJsonData(controlerStr);
-#else
-                ParseOpCode(controlerStr, FXPLCDEMODATA);
-#endif
-                if (g_senddata == 1) {
-                    ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
-                    if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
-                        //TO DO
-                    }
-                // }
-                // vTaskDelay(10);
-            }
-		} else if (ret == 0 && g_rdatalen == 0) {
+            // ParseOpCode(controlerStr, dataFrame.operate);
+#ifdef CONFIG_PLC_FX
             SendAckToPlc();
+            ParseOpCode(controlerStr, FXPLCDEMODATA);
+#endif
+
+#ifdef CONFIG_PLC_HOSTLINK
+            ParseOpCode(controlerStr, HLPLCDEMODATA);
+#endif
+
+#ifdef CONFIG_PLC_LS_LOAD
+            ParseOpCode(controlerStr, LSPLCDEMODATA);
+#endif
+
+#ifdef CONFIG_TESTER_76T
+            TTesterGetJsonData(controlerStr);
+#endif
+            if (g_senddata == 1) {
+                ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
+                if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                    //TO DO
+                }
+            }
+		}
+#ifdef CONFIG_PLC_FX
+        else if (ret != 0) {
+            SendNackToPlc();
         }
     }
+#endif
     vTaskDelete(NULL);
 }
 

@@ -138,16 +138,15 @@ typedef struct {
 } FxPlcSerialAnsNackFrameFormat;
 #pragma pack()
 
-void ReadSingleDataRegister(uint16_t address);
-void ReadMulDataRegister(uint16_t startaddr, uint16_t length);
+void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
 int ReadInputRelayData();
 int ReadOutputRelayData();
-int GetDataFromFxPlc(int *length);
-int GetSerialDataFromFxPlc(int *length);
+int GetDataFromFxPlc(void);
+int GetSerialDataFromFxPlc(void);
 int FXPLC_InitBuffer(void);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 

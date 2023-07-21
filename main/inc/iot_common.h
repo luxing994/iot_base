@@ -58,11 +58,17 @@ extern EventGroupHandle_t xEventGroup3;
 #define INITORDERID  "FR000"
 #define FILETRANSSIZE 240
 
+// device type
 #define MOTORDEVTYPEID    "ZL"
 #define TEMPDEVTYPEID     "WK"
 #define FREEZERDEVTYPEID  "LD"
 #define FRIGEFILLTYPEID   "LM"
-#define PLCDEVTYPEID      "PLC"
+
+
+// device plc type
+#define FXPLCDEVTYPEID    "FXPLC"
+#define LSPLCDEVTYPEID    "LSPLC"
+#define HLPLCDEVTYPEID    "HLPLC"
 
 // 命令接收JSON格式
 /*
@@ -175,7 +181,6 @@ uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len);
 int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
 uint16_t CalReadDataRegister(uint8_t *data);
 uint16_t CalSerialReadDataRegister(uint8_t *data);
-uint16_t LSCalSerialReadDataRegister(uint8_t *data);
 int UART_InitBuffer(void);
 int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size);

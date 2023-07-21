@@ -99,6 +99,6 @@ typedef struct {
 #pragma pack()
 
 void HLReadSingleDataRegister(uint32_t address, uint16_t frnum);
-int GetSerialWordDataFromHlPlc(int *length);
+int GetSerialWordDataFromHlPlc(void);
 
 #endif

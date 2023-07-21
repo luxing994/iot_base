@@ -49,15 +49,15 @@ void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	LSLoadPackReadWordDataRegisterFrame(address, 1, &lsloadsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&lsloadsdatabuff, sizeof(LsLoadCommandFrameFormat));
 	g_fxplccount = frnum;
+	g_fxplcdataformat = 1;
     vTaskDelay(30);
 }
 
-int LSLoadGetSerialWordDataFromFxPlc(int *length)
+int LSLoadGetSerialWordDataFromFxPlc(void)
 {
-	uint8_t curData = 0;
+	uint8_t curData;
 	uint8_t dataArry[4] = {0};
-	uint16_t rdata;
-	int ret, len = 0, count = 0;
+	int ret, count = 0;
 	
 
 	while ((curData != LS_START_OF_ACK) && (curData != LS_START_OF_NACK)) {
@@ -73,7 +73,6 @@ int LSLoadGetSerialWordDataFromFxPlc(int *length)
 		if (ret != 0) {
 			return -1;
 		}
-		*length = 0;
 		ESP_LOGE(TAG, "LS_PLC errorcode:%s", lsloadnackrdatabuff.code);
 	} else {
 		lsloadackrdatabuff.head = LS_START_OF_ACK;
@@ -91,10 +90,7 @@ int LSLoadGetSerialWordDataFromFxPlc(int *length)
 				count++;
 				if (count % 4 == 0) {
 					count = 0;
-					len++;
-					rdata = LSCalSerialReadDataRegister(dataArry);
-					// ESP_LOGI(TAG, "Read bytes length: '%d'", rdata);
-					ret = FXPLC_WriteBufferBytes(&rdata, sizeof(rdata));
+					ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 					if (ret != 0) {
 						return -1;
 					}
@@ -103,7 +99,6 @@ int LSLoadGetSerialWordDataFromFxPlc(int *length)
 
 			lsloadackrdatabuff.sum[0] = dataArry[0];
 			lsloadackrdatabuff.sum[1] = dataArry[1];
-			*length = len;
 		}
 		
 	}

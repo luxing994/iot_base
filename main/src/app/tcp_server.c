@@ -972,29 +972,35 @@ void send_data_task(void *pvParameters)
         } else {
 #ifdef CONFIG_PLC_FX
     #ifdef CONFIG_PLC_RS232
-            ReadSingleDataRegister(8000);
+            ReadSingleDataRegister(8000, 1);
     #endif
 
     #ifdef CONFIG_PLC_RS485
-            //SerialReadSingleDataRegister(0, 255, 10, 232); // 日跃PLC产量累加值寄存器
+        #ifdef CONFIG_RY_LINE
+            SerialReadSingleDataRegister(0, 255, 10, 232, 1); // 日跃PLC产量累加值寄存器
+        #endif
 
-            // SerialReadSingleDataRegister(0, 255, 10, 180, 1);    //  行车总时间
-            // SerialReadSingleDataRegister(0, 255, 10, 181, 2);    //  行车设定时间
-            // SerialReadSingleDataRegister(0, 255, 10, 171, 3);    //  一车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 172, 4);    //  二车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 173, 5);    //  三车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 174, 6);    //  四车运行时间
-            // SerialReadSingleDataRegister(0, 255, 10, 500, 7);    //  一车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 550, 8);    //  二车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 600, 9);    //  三车工位数值
-            // SerialReadSingleDataRegister(0, 255, 10, 650, 10);    //  四车工位数值
+        #ifdef CONFIG_XF_CONTROLER
+            SerialReadSingleDataRegister(0, 255, 10, 180, 1);    //  行车总时间
+            SerialReadSingleDataRegister(0, 255, 10, 181, 2);    //  行车设定时间
+            SerialReadSingleDataRegister(0, 255, 10, 171, 3);    //  一车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 172, 4);    //  二车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 173, 5);    //  三车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 174, 6);    //  四车运行时间
+            SerialReadSingleDataRegister(0, 255, 10, 500, 7);    //  一车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 550, 8);    //  二车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 600, 9);    //  三车工位数值
+            SerialReadSingleDataRegister(0, 255, 10, 650, 10);    //  四车工位数值
+        #endif
 
+        #ifdef CONFIG_SN_CACLREFILMAC
             SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
             SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
             SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
             SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
+        #endif
     #endif
 #endif
 
