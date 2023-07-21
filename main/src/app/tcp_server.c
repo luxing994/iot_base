@@ -1011,7 +1011,10 @@ void send_data_task(void *pvParameters)
             // }
             // DBSReadData();
     #endif
-    //  LS PLC 485 use modbus RTU protocol
+
+    #ifdef CONFIG_PLC_RS485
+            //  LS PLC 485 use modbus RTU protocol
+    #endif
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK

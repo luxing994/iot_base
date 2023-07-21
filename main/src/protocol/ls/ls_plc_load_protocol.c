@@ -110,6 +110,7 @@ void DBSReadData(void)
 {
 	uint8_t addr = DBS_ADDRESS;
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&addr, sizeof(uint8_t));
+	g_fxplcdataformat = 0;
 }
 
 int DBSGetData(void)
