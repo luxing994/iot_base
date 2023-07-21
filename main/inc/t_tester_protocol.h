@@ -21,6 +21,7 @@ UART传输格式
 #define T_TESTER_READ_CURRENT_TEST_DATA           130    // 04 or 07 82
 #define T_TESTER_READ_CURRENT_GROUP_TEST_DATA     199    // 04 or 07 C7
 #define T_TESTER_READ_HISTORY_GROUP_TEST_DATA     150    // 04 or 07 96 xx:组号
+#define T_TESTER_SET_PARA_SECOND_BYTE             0x63   // 03 63
 
 
 #define T_TESTER_GROUP_TEST_QUALIFY               0x10
@@ -28,6 +29,31 @@ UART传输格式
 
 #define T_TESTER_ALL_GROUP_TEST_QUALIFY           0x40
 #define T_TESTER_ALL_GROUP_TEST_UNQUALIFY         0x80
+
+#define T_TESTER_SET_PRESSURIZATION_PARA_NUM      11
+#define T_TESTER_SET_GROUNDING_PARA_NUM           7
+#define T_TESTER_SET_INSULATION_PARA_NUM          10
+#define T_TESTER_SET_LEAKAGE_PARA_NUM             11
+#define T_TESTER_SET_POWER_PARA_NUM               10
+#define T_TESTER_SET_STARTUP_PARA_NUM             10
+#define T_TESTER_SET_OPENSHORT_PARA_NUM           5
+#define T_TESTER_SET_DCVOLTAGE_PARA_NUM           0
+
+#define T_TESTER_FLOAT_POINT_MAX                  3
+
+#define T_TESTER_DEVID                           "TTester"
+#define T_TESTER_DEVNUMBER                       "TTester"
+#define T_TESTER_DEVNAME                         "TTester"
+#define T_TESTER_DEVSTATUS                       "TTester"
+#define T_TESTER_DEVTYPEID                       "TTester"
+#define T_TESTER_DEVTYPENAME                     "TTester"
+#define T_TESTER_ORDERNAME                       ""
+#define T_TESTER_ORDERID                         "FR001"
+#define T_TESTER_ORDERMODE                       "group"
+
+#define T_TESTER_ISANSWER_YES                    "yes"
+#define T_TESTER_ISANSWER_NO                     "no"
+
 
 // 安全测试仪主命令编号
 typedef enum {
@@ -71,7 +97,8 @@ typedef enum {
 
 // 安全测试仪测试项
 typedef enum {
-    TTESTERPRESSURIZATION = 1,
+    TTESTEREMPTY,
+    TTESTERPRESSURIZATION,
     TTESTERGROUNDING,
     TTESTERINSULATION,
     TTESTERLEAKAGE,
@@ -80,6 +107,26 @@ typedef enum {
     TTESTEROPENSHORT,
     TTESTERDCVOLTAGE
 } TTesterTestItem;
+
+// 测试状态
+typedef enum {
+    coldtestortrendstest,
+    hottestorstatictest
+} TTesterTestStatus;
+
+// 测试模式
+typedef enum {
+    continuetest,
+    steptest,
+    stoptest,
+    suspendtest
+} TTesterMode;
+
+// 电压类型
+typedef enum {
+    phasevoltage,
+    linevoltage
+} TTesterVoltageType;
 
 #pragma pack(1)
 typedef struct {
@@ -136,7 +183,6 @@ typedef struct {
     uint8_t result;
     uint8_t data[10];
 } TTesterTestItemDataFormat;
-#pragma pack()
 
 typedef struct {
     float voltage;
@@ -160,7 +206,7 @@ typedef struct {
     float testtime;
     float reserve1;
     float reserve2;
-} TTesterRinsulationPara;
+} TTesterInsulationPara;
 
 typedef struct {
     float voltage;
@@ -225,11 +271,102 @@ typedef struct {
     TTestestLastItemResultPara lastitemdata;
 } TTestestGroupResultPara;
 
-void TTestSelectGroup(uint16_t group);
-void TTestInquiryStatus(void);
-void TTestReadCurrentItem(void);
-void TTestReadCurrentGroup(void);
-void TTestReadHistoryGroup(uint16_t group);
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t uptime[2];
+    uint8_t downtime[2];
+    uint8_t testtime[2];
+    uint8_t curtozero[2];
+    uint8_t teststatus;
+    uint8_t testmode;
+    uint8_t curset[2];
+    uint8_t suspendtime[2];
+} TTesterSetPressurizationPara;
+
+typedef struct {
+    uint8_t curset[2];
+    uint8_t resupperlim[2];
+    uint8_t reslowerlim[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+} TTesterSetGroundingPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t resupperlim[2];
+    uint8_t reslowerlim[2];
+    uint8_t testtime[2];
+    uint8_t delaytime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+    uint8_t res1tozero[2];
+    uint8_t res2tozero[2];
+} TTesterSetInsulationPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t testtime[2];
+    uint8_t teststatus;
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+    uint8_t res1tozero[2];
+    uint8_t res2tozero[2];
+    uint8_t curtozero[2];
+} TTesterSetLeakagePara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t powerupperlim[2];
+    uint8_t powerlowerlim[2];
+    uint8_t delaytime[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t voltype;
+} TTesterSetPowerPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t volupperlim[2];
+    uint8_t vollowerlim[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t delaytime[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t voltype;
+} TTesterSetStartupPara;
+
+typedef struct {
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+} TTesterSetOpenshortPara;
+#pragma pack()
+
+void TTesterGetSetParaByteNum(uint16_t num);
+void TTesterSelectGroup(uint16_t group);
+void TTesterInquiryStatus(void);
+void TTesterReadCurrentItem(void);
+void TTesterReadCurrentGroup(void);
+void TTesterReadHistoryGroup(uint16_t group);
+void TTesterSetGroupPara(uint16_t group);
+void TTesterGetJsonData(char *str);
+uint16_t TTesterStrChangeToUint(char *str);
+int TTesterGetSetParaStatus(char *str);
 int TTesterResolve(void);
 
 #endif

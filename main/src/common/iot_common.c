@@ -28,7 +28,16 @@ static int CharToInt(char ch)
 		}
   
         return -1;  
-} 
+}
+
+int CalFloatStrPointPos(char *str)
+{
+    if (strstr(str, ".") != NULL) {
+        return (strlen(strstr(str, ".")) - 1);
+    } else {
+        return 0;
+    }
+}
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len)
 {

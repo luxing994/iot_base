@@ -12,6 +12,7 @@
 LsLoadCommandFrameFormat lsloadsdatabuff = {0};
 LsLoadAckFrameFormat lsloadackrdatabuff = {0};
 LsLoadNackFrameFormat lsloadnackrdatabuff = {0};
+static const char *TAG = "LS_LOAD_GET_SERIAL_DATA";
 
 static int LSLoadPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, LsLoadCommandFrameFormat* rdata)
 {
@@ -57,7 +58,7 @@ int LSLoadGetSerialWordDataFromFxPlc(int *length)
 	uint8_t dataArry[4] = {0};
 	uint16_t rdata;
 	int ret, len = 0, count = 0;
-	static const char *TAG = "LS_LOAD_GET_SERIAL_DATA";
+	
 
 	while ((curData != LS_START_OF_ACK) && (curData != LS_START_OF_NACK)) {
 		ret = UART_ReadBufferBytes(&curData, 1);
@@ -106,6 +107,58 @@ int LSLoadGetSerialWordDataFromFxPlc(int *length)
 		}
 		
 	}
+
+	return 0;
+}
+
+void DBSReadData(void)
+{
+	uint8_t addr = DBS_ADDRESS;
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&addr, sizeof(uint8_t));
+}
+
+int DBSGetData(void)
+{
+	uint8_t curData = 0;
+	uint16_t rdata;
+	int ret, len = 0, count = 0;
+	char str[5] = {0};
+
+	while (curData != DBS_START_OF_TR) {
+		ret = UART_ReadBufferBytes(&curData, 1);
+		if (ret != 0) {
+			return -1;
+		}
+	}
+
+	ret = UART_ReadBufferBytes(&curData, 1);
+	if (ret != 0) {
+		return -1;
+	}
+	if (curData != DBS_ADDRESS) {
+		return -1;
+	}
+
+	ret = UART_ReadBufferBytes((uint8_t *)str, 4);
+	if (ret != 0) {
+		return -1;
+	}
+	ESP_LOGI(TAG, "DBS read data: %s", str);
+	ret = FXPLC_WriteBufferBytes((uint8_t *)str, sizeof(str));
+	if (ret != 0) {
+		return -1;
+	}
+
+	ret = UART_ReadBufferBytes(&curData, 1);
+	if (ret != 0) {
+		return -1;
+	}
+
+	ret = UART_ReadBufferBytes((uint8_t *)str, 2);
+	if (ret != 0) {
+		return -1;
+	}
+
 
 	return 0;
 }

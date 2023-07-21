@@ -67,21 +67,12 @@ UART传输格式
 波特率: 9600bps
 奇偶: 无
 */
+#define DBS_ADDRESS          0x01    // 设备地址
 #define DBS_START_OF_TR      0xFF    // 响应帧帧头
 #define DBS_STATUS_LOW       0x4C    // 小于设定值
 #define DBS_STATUS_HIGH      0x48    // 大于设定值     
 
 #pragma pack(1)
-// typedef struct {
-//     uint8_t head;
-//     uint8_t rw;
-//     uint8_t area;
-//     uint8_t addr[6];
-//     uint8_t num[2];
-//     uint8_t sum[2];
-//     uint8_t end;
-// } DbsCommandFrameFormat;
-
 typedef struct {
     uint8_t head;
     uint8_t addr;
@@ -93,5 +84,7 @@ typedef struct {
 
 void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum);
 int LSLoadGetSerialWordDataFromFxPlc(int *length);
+void DBSReadData(void);
+int DBSGetData(void);
 
 #endif

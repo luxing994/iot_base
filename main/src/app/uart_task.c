@@ -62,14 +62,18 @@ char g_devId[32] = {"FX_PLC_001"};
 RingBuffer uart2Buffer;
 HproComFrame dataFrame = {0};
 uint32_t g_devStartStatus = 0;
-int g_rdatalen = 0;
-int g_senddata = 0;
+int g_rdatalen = 1;
+int g_senddata = 1;
 int g_fxplccount = 0;
+int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float)   
 uint16_t g_lastdata[11] = {0};
 
 void ParseOpCode(char *str, uint8_t op)
 {
-    uint16_t rdata;
+    // uint16_t rdata;
+    uint8_t rdata[5] = {0};
+    int idata;
+    float fdata;
     jsondata = GetCommandJsonData();
     char version[5] = {0};
     char frstr[10] = {0};
@@ -241,22 +245,50 @@ void ParseOpCode(char *str, uint8_t op)
             break;
         }
         case FXPLCDEMODATA: {
-            FXPLC_ReadBufferBytes(&rdata, sizeof(rdata));
-            // if (rdata != g_lastdata[g_fxplccount]) {
-                g_senddata = 1;
-            // } else {
-            //     g_senddata = 0;
-            // }
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
-            g_devId, jsondata.devId, jsondata.devName, PLCDEVTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
-                rdata);
-            if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
-                  g_lastdata[g_fxplccount] = rdata;
+            if (g_fxplcdataformat == 0) {
+                FXPLC_ReadBufferBytes(rdata, sizeof(rdata));
+                    // if (rdata != g_lastdata[g_fxplccount]) {
+                    //     g_senddata = 1;
+                    // } else {
+                    //     g_senddata = 0;
+                    // }
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    rdata);
+            } else if (g_fxplcdataformat == 1) {
+                FXPLC_ReadBufferBytes(&idata, sizeof(idata));
+                    // if (rdata != g_lastdata[g_fxplccount]) {
+                    //     g_senddata = 1;
+                    // } else {
+                    //     g_senddata = 0;
+                    // }
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata);
+            } else if (g_fxplcdataformat == 2) {
+                FXPLC_ReadBufferBytes(&fdata, sizeof(fdata));
+                    // if (rdata != g_lastdata[g_fxplccount]) {
+                    //     g_senddata = 1;
+                    // } else {
+                    //     g_senddata = 0;
+                    // }
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    fdata);
             }
+            // if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
+            //       g_lastdata[g_fxplccount] = rdata;
+            // }
             break;
         }
         case TEMPCONTROLDATA: {
@@ -373,7 +405,7 @@ void uart_init(void) {
 
 #ifdef CONFIG_PLC_LS_LOAD
     const uart_config_t uart_config = {
-        .baud_rate = 115200,
+        .baud_rate = 9600,   // 115200
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -504,9 +536,10 @@ void tx_task(void *arg)
             memcpy(&sendDataBuffer[14][6], &crc, 2);
             uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
         } else if ((uxBits & BIT_15) != 0) {
-            crc = crc16bitbybit((uint8_t *)sendDataBuffer[15], 6);
-            memcpy(&sendDataBuffer[15][6], &crc, 2);
-            uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[15], 8);
+            // crc = crc16bitbybit((uint8_t *)sendDataBuffer[15], 6);
+            // memcpy(&sendDataBuffer[15][6], &crc, 2);
+            // uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[15], 8);
+            TTesterSetGroupPara(1);
         } else if ((uxBits & BIT_16) != 0) {
             ParseOpCode(controlerStr, SWITCHCOUNT);
             if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
@@ -646,7 +679,8 @@ void rx_task(void *arg)
 
 #ifdef CONFIG_PLC_LS_LOAD
     #ifdef CONFIG_PLC_RS232
-        ret = LSLoadGetSerialWordDataFromFxPlc(&g_rdatalen);
+        // ret = LSLoadGetSerialWordDataFromFxPlc(&g_rdatalen);
+        ret = DBSGetData();
     #endif
 #endif
 
@@ -657,19 +691,24 @@ void rx_task(void *arg)
 #ifdef CONFIG_TESTER_76T
         ret = TTesterResolve();
 #endif
-		if (ret == 0 && g_rdatalen != 0) {
+		// if (ret == 0 && g_rdatalen != 0) {
+        if (ret == 0) {
             // SendAckToPlc();
             // ESP_LOGI(RX_TASK_TAG, "Read bytes length: '%d'", g_rdatalen);
-            for (i = 0; i < g_rdatalen; i++) {
-                ParseOpCode(controlerStr, FXPLCDEMODATA);
+            // for (i = 0; i < g_rdatalen; i++) {
                 // ParseOpCode(controlerStr, dataFrame.operate);
+#ifdef CONFIG_TESTER_76T
+                TTesterGetJsonData(controlerStr);
+#else
+                ParseOpCode(controlerStr, FXPLCDEMODATA);
+#endif
                 if (g_senddata == 1) {
                     ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
                     if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                         //TO DO
                     }
-                }
-                vTaskDelay(10);
+                // }
+                // vTaskDelay(10);
             }
 		} else if (ret == 0 && g_rdatalen == 0) {
             SendAckToPlc();
@@ -689,16 +728,16 @@ void uart_event_task(void *pvParameters)
         //Waiting for UART event.
         if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
-            // ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
+            ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
                 //Event of UART receving data
                 /*We'd better handler data event fast, there would be much more data events than
                 other types of events. If we take too much time on data event, the queue might
                 be full.*/
                 case UART_DATA:
-                    // ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
+                    ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
                     uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
-                    // ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
+                    ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
                     UART_WriteBufferBytes(dtmp, event.size);
                     // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
                     break;

@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "XF-PLC-002"
+#define DEVID        "SN-LM-001"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -61,6 +61,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define MOTORDEVTYPEID    "ZL"
 #define TEMPDEVTYPEID     "WK"
 #define FREEZERDEVTYPEID  "LD"
+#define FRIGEFILLTYPEID   "LM"
 #define PLCDEVTYPEID      "PLC"
 
 // 命令接收JSON格式
@@ -113,18 +114,18 @@ typedef struct {
     char *devTypeId;
     char *deviceOrderFile;
     char *deviceOrderMode;
+    char *groupId;
     char *deviceOrderWay;
     char *orderDate;
     char *orderId;
     char *orderName;
     char *parameterType;
-    parametersData paradata[10];
+    parametersData paradata[8][20];
     char *responseType;
     char *timeStamp;
 } CommandJsonData;
 
 // 电镀厂温控仪表、整流机和冷冻机数据
-
 typedef struct {
     int dPt;      // 小数点位置
     int PV;       // 测量值
@@ -153,8 +154,10 @@ typedef struct {
 
 extern ElectroFactoryData electroData;
 extern int g_fxplccount;
+extern int g_fxplcdataformat;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
+int CalFloatStrPointPos(char *str);
 int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
 uint8_t CalFCS(uint8_t* pbuff, uint16_t len);
 uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
