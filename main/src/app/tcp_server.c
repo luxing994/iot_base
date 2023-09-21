@@ -1000,6 +1000,8 @@ void send_data_task(void *pvParameters)
             SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
             SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
+            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);        //  单班产量
+            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);        //  总产量
         #endif
     #endif
 #endif
@@ -1030,9 +1032,9 @@ void send_data_task(void *pvParameters)
             // vTaskDelay(20);
             // TTesterReadCurrentItem();
             // vTaskDelay(20);
-            TTesterReadCurrentGroup();
+            // TTesterReadCurrentGroup();
             // vTaskDelay(20);
-            // TTesterReadHistoryGroup(3);
+            TTesterReadHistoryGroup(1);
             // vTaskDelay(20);
 #endif
 

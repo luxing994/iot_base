@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "SN-LM-001"
+#define DEVID        "AMASC0364"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -59,10 +59,13 @@ extern EventGroupHandle_t xEventGroup3;
 #define FILETRANSSIZE 240
 
 // device type
-#define MOTORDEVTYPEID    "ZL"
-#define TEMPDEVTYPEID     "WK"
-#define FREEZERDEVTYPEID  "LD"
-#define FRIGEFILLTYPEID   "LM"
+#define MOTORDEVTYPEID     "ZL"
+#define TEMPDEVTYPEID      "WK"
+#define FREEZERDEVTYPEID   "LD"
+
+#define FRIGEFILLTYPEID    "LM"
+#define SAFETYTESTERTYPEID "ST"
+#define VACUUMTYPEID       "ZK"
 
 
 // device plc type
@@ -166,6 +169,8 @@ typedef struct {
     uint16_t asyspressure;
     uint16_t bsyspressure;
     float perfusionvolume;
+    uint16_t singleproduction;
+    uint16_t totalproduction;
 } SNCaclReFillingMachine;
 
 extern ElectroFactoryData electroData;

@@ -24,7 +24,7 @@
 	"orderMode": "group",
 	"groupId": "001", 
 	"ParameterValues": "10.00__84.00__0.00__0.00__0.00__11.00__7.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.000.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.000.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00",
-	"ParameterUnits": "V__mA__s__s__s__A__mO__s__s__s__V__mO__s__s__s__V__A__A__s__s__V__mA__W__W__sV__mA__s__s__s__V__mA__s__s__s__V__mA__s__s__s",
+	"ParameterTags": "1__2__3__4__0__0__0__0",
 	"ParameterChecks": "6__6__7__7__7__7__7__7",
 	"GroupChecks": "6",
 	"TotalChecks": "6",
@@ -77,7 +77,7 @@ const char *TAG = "TTest_Resolve";
 
 static float TTesterResTranData(uint16_t data)
 {
-    if ((data & 0x3f) == 0) {
+    if ((data & 0x3fff) == 0) {
         return (float)0;
     } else {
         return (float)(data & 0x3fff) * pow(10.0, (float)(-(data >> 14)));
@@ -445,30 +445,39 @@ static void TTesterPackJsonFrame(void)
     char ttesterparaunitjsondatabuff[128] = {0};
     char ttestertestresultjsondatabuff[64] = {0};
     
-    (void)sprintf(ttesterparadatajsondatabuff, "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f"
-                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f"
+    (void)sprintf(ttesterparadatajsondatabuff, "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
+                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
                 "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f",
-            ttesterpredata.voltage, ttesterpredata.current, ttesterpredata.testtime, ttesterpredata.uptime, ttesterpredata.downtime, \
-            ttestergrodata.current, ttestergrodata.resistance, ttestergrodata.testtime, ttestergrodata.reserve1, ttestergrodata.reserve2, \
-            ttesterrindata.voltage, ttesterrindata.resistance, ttesterrindata.testtime, ttesterrindata.reserve1, ttesterrindata.reserve2, \
-            ttesterpowdata.voltage, ttesterpowdata.voltage, ttesterpowdata.voltage, ttesterpowdata.voltage, ttesterpowdata.voltage, \
-            ttesterleadata.voltage, ttesterleadata.firecurrent, ttesterleadata.groundcurrent, ttesterleadata.testtime, ttesterleadata.reserve, \
-            ttesterstadata.voltage, ttesterstadata.current, ttesterstadata.voltage, ttesterstadata.reserve1, ttesterstadata.reserve2, \
-            ttesterosdata.voltage, ttesterosdata.current, ttesterosdata.testtime, ttesterosdata.reserve1, ttesterosdata.reserve2, \
-            ttesterdcdata.voltage, ttesterdcdata.current, ttesterdcdata.testtime, ttesterdcdata.reserve1, ttesterdcdata.reserve2);
-    (void)sprintf(ttesterparaunitjsondatabuff, "V__mA__s__s__s__A__mO__s__s__s__V__mO__s__s__s__V__A__A__s__s__V__mA__W__W__s"
-                "V__mA__s__s__s__V__mA__s__s__s__V__mA__s__s__s");
+            *((float *)(&(curgrouptestdata.itemdata[0].para[0]))), *((float *)(&(curgrouptestdata.itemdata[0].para[4]))), *((float *)(&(curgrouptestdata.itemdata[0].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[0].para[12]))), *((float *)(&(curgrouptestdata.itemdata[0].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[1].para[0]))), *((float *)(&(curgrouptestdata.itemdata[1].para[4]))), *((float *)(&(curgrouptestdata.itemdata[1].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[1].para[12]))), *((float *)(&(curgrouptestdata.itemdata[1].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[2].para[0]))), *((float *)(&(curgrouptestdata.itemdata[2].para[4]))), *((float *)(&(curgrouptestdata.itemdata[2].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[2].para[12]))), *((float *)(&(curgrouptestdata.itemdata[2].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[3].para[0]))), *((float *)(&(curgrouptestdata.itemdata[3].para[4]))), *((float *)(&(curgrouptestdata.itemdata[3].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[3].para[12]))), *((float *)(&(curgrouptestdata.itemdata[3].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[4].para[0]))), *((float *)(&(curgrouptestdata.itemdata[4].para[4]))), *((float *)(&(curgrouptestdata.itemdata[4].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[4].para[12]))), *((float *)(&(curgrouptestdata.itemdata[4].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[5].para[0]))), *((float *)(&(curgrouptestdata.itemdata[5].para[4]))), *((float *)(&(curgrouptestdata.itemdata[5].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[5].para[12]))), *((float *)(&(curgrouptestdata.itemdata[5].para[16]))), \
+            *((float *)(&(curgrouptestdata.itemdata[6].para[0]))), *((float *)(&(curgrouptestdata.itemdata[6].para[4]))), *((float *)(&(curgrouptestdata.itemdata[6].para[8]))), \
+            *((float *)(&(curgrouptestdata.itemdata[6].para[12]))), *((float *)(&(curgrouptestdata.itemdata[6].para[16]))), \
+            *((float *)(&(curgrouptestdata.lastitemdata.para[0]))), *((float *)(&(curgrouptestdata.lastitemdata.para[4]))), *((float *)(&(curgrouptestdata.lastitemdata.para[8]))), \
+            *((float *)(&(curgrouptestdata.lastitemdata.para[12]))), *((float *)(&(curgrouptestdata.lastitemdata.para[16]))));
+    (void)sprintf(ttesterparaunitjsondatabuff, "%d__%d__%d__%d__%d__%d__%d__%d", curgrouptestdata.itemdata[0].item, curgrouptestdata.itemdata[1].item, \
+    curgrouptestdata.itemdata[2].item, curgrouptestdata.itemdata[3].item, curgrouptestdata.itemdata[4].item, curgrouptestdata.itemdata[5].item, \
+    curgrouptestdata.itemdata[6].item, curgrouptestdata.lastitemdata.item);
     (void)sprintf(ttestertestresultjsondatabuff, "%d__%d__%d__%d__%d__%d__%d__%d", curgrouptestdata.itemdata[0].termret, curgrouptestdata.itemdata[1].termret, \
     curgrouptestdata.itemdata[2].termret, curgrouptestdata.itemdata[3].termret, curgrouptestdata.itemdata[4].termret, curgrouptestdata.itemdata[5].termret, \
     curgrouptestdata.itemdata[6].termret, curgrouptestdata.lastitemdata.termret);
     (void)sprintf(ttesterjsondatabuff, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devStatus\": \"%s\",\n    \"devTypeId\": \"%s\",\n    \"deviceOrderWay\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterUnits\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
-		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\"\n    \"valueUnit\":\"\"\n"  
-                "    \"expand\":\"\"\n    \"isAnswer\":\"%s\"\n};;**##",
-            T_TESTER_DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, T_TESTER_DEVTYPEID, "read", T_TESTER_ORDERNAME, \
+                "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
+		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"  
+                "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n};;**##",
+            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, VACUUMTYPEID, "read", T_TESTER_ORDERNAME, \
             T_TESTER_ORDERID, T_TESTER_ORDERMODE, ttesterreadgroupnumber, ttesterparadatajsondatabuff, ttesterparaunitjsondatabuff, ttestertestresultjsondatabuff, \
-            curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_YES);
+            curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
 }
 
 uint16_t TTesterStrChangeToUint(char *str)
@@ -536,6 +545,7 @@ void TTesterReadCurrentGroup(void)
 
 void TTesterReadHistoryGroup(uint16_t group)
 {
+    ttesterreadgroupnumber = group;
     TTesterPackReadHistoryGroupFrame(group);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadhisgroupbuff, sizeof(TTesterTwoCommandDataFrameFormat));
 }
@@ -608,9 +618,9 @@ int TTesterResolve(void)
     ESP_LOGI(TAG, "group:%d term:%d item:%d termresult:%d groupresult:%d allresult:%d 1:%f 2:%f 3:%f 4:%f 5:%f", \
         curgrouptestdata.lastitemdata.group, curgrouptestdata.lastitemdata.term, curgrouptestdata.lastitemdata.item, \
         curgrouptestdata.lastitemdata.termret, curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, \
-        *((float *)(&(curgrouptestdata.itemdata[i].para[0]))), *((float *)(&(curgrouptestdata.itemdata[i].para[4]))), \
-        *((float *)(&(curgrouptestdata.itemdata[i].para[8]))), *((float *)(&(curgrouptestdata.itemdata[i].para[12]))), \
-        *((float *)(&(curgrouptestdata.itemdata[i].para[16]))));
+        *((float *)(&(curgrouptestdata.lastitemdata.para[0]))), *((float *)(&(curgrouptestdata.lastitemdata.para[4]))), \
+        *((float *)(&(curgrouptestdata.lastitemdata.para[8]))), *((float *)(&(curgrouptestdata.lastitemdata.para[12]))), \
+        *((float *)(&(curgrouptestdata.lastitemdata.para[16]))));
 
     TTesterPackJsonFrame();
 	return 0;

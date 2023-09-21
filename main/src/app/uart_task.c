@@ -67,6 +67,7 @@ int g_senddata = 1;
 int g_fxplccount = 0;
 int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float)   
 uint16_t g_lastdata[32] = {0};
+char g_lastrdata[5] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
 int g_datapos = 0;
 
@@ -79,7 +80,6 @@ void ParseOpCode(char *str, uint8_t op)
     jsondata = GetCommandJsonData();
     char version[5] = {0};
     char frstr[10] = {0};
-    uint8_t temp;
     switch (op) {
         case BREAK: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -277,7 +277,7 @@ void ParseOpCode(char *str, uint8_t op)
                 if (idata != *(uint16_t *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
                     g_senddata = 1;
                 } else {
-                    g_senddata = 0;
+                    g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], (uint16_t* )&idata, sizeof(uint16_t));
 #endif
@@ -318,8 +318,8 @@ void ParseOpCode(char *str, uint8_t op)
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
                     g_datapos = 0;
                 }
-            }
 #endif
+            }
             break;
         }
         case HLPLCDEMODATA: {
@@ -332,6 +332,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
+                
             } else if (g_fxplcdataformat == 1) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 (void)sscanf(rdata, "%x", &idata);
@@ -343,6 +344,7 @@ void ParseOpCode(char *str, uint8_t op)
                     idata);
                 g_datapos += 2;
             }
+            break;
         }
         case LSPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
@@ -352,8 +354,14 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
+                if (strcmp(rdata, g_lastrdata) != 0) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 0;
+                }
+                strcpy(g_lastrdata, rdata);
             } else if (g_fxplcdataformat == 1) {
                 for (i = 0 ; i < 4; i++) {
                     FXPLC_ReadBufferBytes((uint8_t *)&rdata[(i + 2) % 4], 1);
@@ -367,6 +375,7 @@ void ParseOpCode(char *str, uint8_t op)
                     idata);
                 g_datapos += 2;
             }
+            break;
         }
         case TEMPCONTROLDATA: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -798,8 +807,8 @@ void rx_task(void *arg)
         else if (ret != 0) {
             SendNackToPlc();
         }
-    }
 #endif
+    }
     vTaskDelete(NULL);
 }
 
