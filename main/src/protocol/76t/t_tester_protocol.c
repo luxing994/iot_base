@@ -67,7 +67,7 @@ int ttestparabytenum[9] = {1, sizeof(TTesterSetPressurizationPara) + 1, sizeof(T
     sizeof(TTesterSetInsulationPara) + 1, sizeof(TTesterSetLeakagePara) + 1, sizeof(TTesterSetPowerPara) + 1, \
     sizeof(TTesterSetStartupPara) + 1, sizeof(TTesterSetOpenshortPara) + 1, 1};
 int tterterparasetstatus[8] = {0};
-char ttesterjsondatabuff[1024] = {0};
+char ttesterjsondatabuff[2048] = {0};
 
 TTestestGroupResultPara curgrouptestdata = {0};
 uint8_t ttesterrdatabuffer[256] = {0};
@@ -441,7 +441,7 @@ static void TTesterResolveCommandResponse(uint8_t* data, uint16_t len)
 
 static void TTesterPackJsonFrame(void)
 {
-    char ttesterparadatajsondatabuff[256] = {0};
+    char ttesterparadatajsondatabuff[512] = {0};
     char ttesterparaunitjsondatabuff[128] = {0};
     char ttestertestresultjsondatabuff[64] = {0};
     

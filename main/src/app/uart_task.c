@@ -26,6 +26,7 @@
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
 #include "t_tester_protocol.h"
+#include "ainuo_tester_ascii_protocol.h"
 
 #define CONTROLERTYPE 2
 #define PATTERN_CHR_NUM    (3) 
@@ -473,7 +474,7 @@ int GetDataFromControler(void)
 	return 0;
 }
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
 void uart_init(void) {
     int ret;
     static const char *TAG = "uart_init";
@@ -514,6 +515,17 @@ void uart_init(void) {
 #ifdef CONFIG_TESTER_76T
     const uart_config_t uart_config = {
         .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+    const uart_config_t uart_config = {
+        .baud_rate = 19200,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -744,7 +756,7 @@ void rx_task(void *arg)
     int ret = 0;
 
     TickType_t xLastWakeTime;
- 	const TickType_t xFrequency = 10;
+ 	const TickType_t xFrequency = 100;
     
     xLastWakeTime = xTaskGetTickCount();
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
@@ -777,6 +789,10 @@ void rx_task(void *arg)
         ret = TTesterResolve();
 #endif
 
+#ifdef CONFIG_TESTER_AINUO
+        ret = AINUO_TTesterResolve();
+#endif
+
 // Parse Data
         if (ret == 0) {
             // ParseOpCode(controlerStr, dataFrame.operate);
@@ -795,6 +811,10 @@ void rx_task(void *arg)
 
 #ifdef CONFIG_TESTER_76T
             TTesterGetJsonData(controlerStr);
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+            AINUO_TTesterGetJsonData(controlerStr);
 #endif
             if (g_senddata == 1) {
                 ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);

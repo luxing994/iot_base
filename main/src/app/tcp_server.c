@@ -26,6 +26,7 @@
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
 #include "t_tester_protocol.h"
+#include "ainuo_tester_ascii_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
 
@@ -1036,6 +1037,10 @@ void send_data_task(void *pvParameters)
             // vTaskDelay(20);
             TTesterReadHistoryGroup(1);
             // vTaskDelay(20);
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+            AINUO_TTesterReadaCurrentGroup();
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS

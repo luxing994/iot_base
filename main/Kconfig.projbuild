@@ -235,6 +235,9 @@ choice PLC_PRO_MODE
     
     config TESTER_76T
         bool "tester 76t protocol"
+
+    config TESTER_AINUO
+        bool "tester ainuo protocol"
 endchoice
 
 choice PLC_CONNECT_MODE
