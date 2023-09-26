@@ -291,7 +291,7 @@ void ParseOpCode(char *str, uint8_t op)
 
                 g_datapos += 2;
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
-                    /*
+                    
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -308,7 +308,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     GetStaIp(), GetMilliTimeNow());
-                    */
+                    
                     g_datapos = 0;
                 } else {
                     if (g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4 || g_fxplccount == 5) {    // 温度和压力都除10再输出
@@ -338,12 +338,12 @@ void ParseOpCode(char *str, uint8_t op)
                 if (fdata != *(float *)(&((uint8_t *)&g_lastrefilldata)[g_datapos])) {
                     g_senddata = 1;
                 } else {
-                    g_senddata = 0;
+                    g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], &fdata, sizeof(float));
                 g_datapos += 4;
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
-                    /*
+                    
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -360,7 +360,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     GetStaIp(), GetMilliTimeNow());
-                    */
+                    
                     g_datapos = 0;
                 } else {
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -808,7 +808,7 @@ void rx_task(void *arg)
     int ret = 0;
 
     TickType_t xLastWakeTime;
- 	const TickType_t xFrequency = 100;
+ 	const TickType_t xFrequency = 10;
     
     xLastWakeTime = xTaskGetTickCount();
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
