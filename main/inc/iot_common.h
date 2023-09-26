@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMASC0364"
+#define DEVID        "SN-LM-000"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"

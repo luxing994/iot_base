@@ -41,7 +41,7 @@ static const char *TAG = "uart_events";
 HproFuncCode funcCode;
 CommandJsonData jsondata;
 // HproOpReadCode opCode;
-char controlerStr[1024] = {0};
+char controlerStr[2048] = {0};
 char sendDataBuffer[22][16] = { { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x01 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x02 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x03 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x04 },
                                { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x05 }, { 0x5A, 0xA5, 0x00, 0x02, 0x01, 0x06 },
@@ -272,6 +272,13 @@ void ParseOpCode(char *str, uint8_t op)
                 if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
                     g_lastdata[g_fxplccount] = idata;
                 }
+
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata);
 #endif
 
 #ifdef CONFIG_SN_CACLREFILMAC
@@ -281,17 +288,44 @@ void ParseOpCode(char *str, uint8_t op)
                     g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], (uint16_t* )&idata, sizeof(uint16_t));
-#endif
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+
+                g_datapos += 2;
+                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
+                    /*
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
-                    idata);
-                g_datapos += 2;
-#ifdef CONFIG_SN_CACLREFILMAC
-                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
+                    idata, g_devId, g_devId, FXPLCDEVTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
+                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
+                    GetStaIp(), GetMilliTimeNow());
+                    */
                     g_datapos = 0;
+                } else {
+                    if (g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4 || g_fxplccount == 5) {    // 温度和压力都除10再输出
+                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                        g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                        idata / 10.0);
+                    } else {
+                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                        g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                        idata);
+                    }
                 }
 #endif
             } else if (g_fxplcdataformat == 2) {
@@ -307,18 +341,36 @@ void ParseOpCode(char *str, uint8_t op)
                     g_senddata = 0;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], &fdata, sizeof(float));
-#endif
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                g_datapos += 4;
+                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
+                    /*
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    fdata, g_devId, g_devId, FXPLCDEVTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
+                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
+                    GetStaIp(), GetMilliTimeNow());
+                    */
+                    g_datapos = 0;
+                } else {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     fdata);
-                g_datapos += 4;
-#ifdef CONFIG_SN_CACLREFILMAC
-                if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
-                    g_datapos = 0;
                 }
+                
 #endif
             }
             break;
@@ -331,7 +383,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
                 
             } else if (g_fxplcdataformat == 1) {
@@ -341,7 +393,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     idata);
                 g_datapos += 2;
             }

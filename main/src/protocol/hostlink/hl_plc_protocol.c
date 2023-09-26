@@ -56,7 +56,7 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 1;
-    vTaskDelay(30);
+    vTaskDelay(100);
 }
 
 int GetSerialWordDataFromHlPlc(void)

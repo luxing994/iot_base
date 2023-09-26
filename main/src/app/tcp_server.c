@@ -1021,7 +1021,7 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-            for (i = 0; i <= 32760; i++) {
+            for (i = 0; i <= 4; i++) {
                 HLReadSingleDataRegister(i, i);
             }
 #endif
