@@ -68,14 +68,14 @@ typedef struct {
 
 // Fins 响应帧格式  最多支持读10个word
 typedef struct {
-    uint8_t head[2];
-    uint8_t resdata[2];
-    uint8_t icf[2];
+    uint8_t head[3];
+    uint8_t resdata[3];
+    uint8_t icf[3];
     uint8_t da2[2];
     uint8_t sa2[2];
     uint8_t sid[2];   
-    uint8_t code[4];
-    uint8_t respcode[4];
+    uint8_t code[5];
+    uint8_t respcode[5];
     uint8_t *text;
 } FinsResponseFrameFormat;
 
@@ -99,6 +99,8 @@ typedef struct {
 #pragma pack()
 
 void HLReadSingleDataRegister(uint32_t address, uint16_t frnum);
+void HLReadFloatDataRegister(uint32_t address, uint16_t frnum);
+void HLReadBCDDataRegister(uint32_t address, uint16_t frnum);
 int GetSerialWordDataFromHlPlc(void);
 
 #endif

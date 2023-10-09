@@ -66,10 +66,11 @@ uint32_t g_devStartStatus = 0;
 int g_rdatalen = 1;
 int g_senddata = 1;
 int g_fxplccount = 0;
-int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float)   
+int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float    3:BCD)   
 uint16_t g_lastdata[32] = {0};
 char g_lastrdata[5] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
+SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata = {0};
 int g_datapos = 0;
 
 void ParseOpCode(char *str, uint8_t op)
@@ -288,15 +289,13 @@ void ParseOpCode(char *str, uint8_t op)
                     g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], (uint16_t* )&idata, sizeof(uint16_t));
-
                 g_datapos += 2;
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
-                    
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
-                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008\",\n"
                     "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d\",\n"
@@ -304,7 +303,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
-                    idata, g_devId, g_devId, FXPLCDEVTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     GetStaIp(), GetMilliTimeNow());
@@ -343,12 +342,11 @@ void ParseOpCode(char *str, uint8_t op)
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_datapos], &fdata, sizeof(float));
                 g_datapos += 4;
                 if (g_datapos >= sizeof(SNCaclReFillingMachine)) {
-                    
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##\n"
-                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008\",\n"
                     "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d\",\n"
@@ -356,7 +354,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
-                    fdata, g_devId, g_devId, FXPLCDEVTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     GetStaIp(), GetMilliTimeNow());
@@ -370,13 +368,15 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     fdata);
                 }
-                
 #endif
             }
             break;
         }
         case HLPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
+            if (g_fxplccount - 1 >= 0) {
+                g_fxplccount -= 1;
+            }
             if (g_fxplcdataformat == 0) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -389,13 +389,120 @@ void ParseOpCode(char *str, uint8_t op)
             } else if (g_fxplcdataformat == 1) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 (void)sscanf(rdata, "%x", &idata);
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                if (idata != *(int *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4])) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 1;
+                }
+
+                memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4], (int* )&idata, sizeof(int));
+                if (g_fxplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024\",\n"
+                    "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                    g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                    g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                    g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                    g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                    g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                    g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, GetStaIp(), GetMilliTimeNow());
+                } else {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%d\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
-                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    g_fxplccount * 4, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     idata);
-                g_datapos += 2;
+                }
+            } else if (g_fxplcdataformat == 2) {
+                FXPLC_ReadBufferBytes((uint8_t *)rfdata, 8);
+                (void)sscanf(rfdata, "%x", &idata);
+                idata = (idata >> 16) + ((idata << 16) & 0xffff0000);
+                fdata = *((float *)&idata);
+                if (fdata != *(float *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4])) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 1;
+                }
+
+                memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4], &fdata, sizeof(float));
+                if (g_fxplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2F\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024\",\n"
+                    "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                    g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                    g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                    g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                    g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                    g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                    g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, GetStaIp(), GetMilliTimeNow());
+                } else {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%d\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_fxplccount * 4, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    fdata);
+                }
+            } else if (g_fxplcdataformat == 3) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                (void)sscanf(rdata, "%x", &idata);
+                idata = BCDToInt(idata);
+                if (idata != *(int *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4])) {
+                    g_senddata = 1;
+                } else {
+                    g_senddata = 1;
+                }
+
+                memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4], (int* )&idata, sizeof(int));
+                if (g_fxplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024\",\n"
+                    "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                    g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                    g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                    g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                    g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                    g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                    g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, GetStaIp(), GetMilliTimeNow());
+                } else {
+                    (void)sprintf(str, "{\n    \"devNumber\":\"%d\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    g_fxplccount * 4, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
+                    idata);
+                }
             }
             break;
         }
@@ -555,10 +662,10 @@ void uart_init(void) {
 
 #ifdef CONFIG_PLC_HOSTLINK
     const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_7_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_2,
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
@@ -890,6 +997,7 @@ void uart_event_task(void *pvParameters)
     uart_event_t event;
     size_t buffered_size;
     uint8_t* dtmp = (uint8_t*) malloc(RX_BUF_SIZE);
+    int ret;
     esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
@@ -905,7 +1013,10 @@ void uart_event_task(void *pvParameters)
                     ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
                     uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
                     ESP_LOGI(TAG, "[DATA EVT]: %s", dtmp);
-                    UART_WriteBufferBytes(dtmp, event.size);
+                    ret = UART_WriteBufferBytes(dtmp, event.size);
+                    if (ret != 0) {
+                        ESP_LOGE(TAG, "uart buffer error: %d", ret);
+                    }
                     // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
                     break;
                 //Event of HW FIFO overflow detected

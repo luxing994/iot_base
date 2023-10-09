@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
 #include "esp_log.h"
 #include "iot_common.h"
 
@@ -151,6 +152,18 @@ uint16_t CalSerialReadDataRegister(uint8_t *data)
 
 	rdata = CharToInt(data[0]) * 4096 + CharToInt(data[1]) * 256 + CharToInt(data[2]) * 16 + CharToInt(data[3]);
 	return rdata;
+}
+
+int BCDToInt(int bcd)
+{
+    int i, sum = 0;
+
+    for (i = 0; i < 4; i++) {
+        sum += (bcd & 0xf) * pow(10, i);
+        bcd >>= 4;
+    }
+
+    return sum;
 }
 
 int UART_InitBuffer(void)

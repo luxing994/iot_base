@@ -56,7 +56,25 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 1;
-    vTaskDelay(100);
+    vTaskDelay(30);
+}
+
+void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
+{
+	HLPackReadWordDataRegisterFrame(address, 2, &hlsdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 2;
+    vTaskDelay(30);
+}
+
+void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
+{
+	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 3;
+    vTaskDelay(30);
 }
 
 int GetSerialWordDataFromHlPlc(void)
@@ -79,18 +97,21 @@ int GetSerialWordDataFromHlPlc(void)
 		return -1;
 	}
 	
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.head, sizeof(hlrdatabuff.finscomdata.head));
-	if (ret != 0) {
+	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.head, 2);
+	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.head, "FA")) {
+		ESP_LOGE(TAG, "fins head error: %s", (char *)hlrdatabuff.finscomdata.head);
 		return -1;
 	}
 
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.resdata, sizeof(hlrdatabuff.finscomdata.resdata));
-	if (ret != 0) {
+	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.resdata, 2);
+	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.resdata, "00")) {
+		ESP_LOGE(TAG, "fins resdata error: %s", (char *)hlrdatabuff.finscomdata.resdata);
 		return -1;
 	}
 
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.icf, sizeof(hlrdatabuff.finscomdata.icf));
-	if (ret != 0) {
+	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.icf, 2);
+	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.icf, "40")) {
+		ESP_LOGE(TAG, "fins icf error: %s", (char *)hlrdatabuff.finscomdata.head);
 		return -1;
 	}
 
@@ -109,13 +130,15 @@ int GetSerialWordDataFromHlPlc(void)
 		return -1;
 	}
 
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.code, sizeof(hlrdatabuff.finscomdata.code));
-	if (ret != 0) {
+	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.code, 4);
+	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.code, "0101") != 0) {
+		ESP_LOGE(TAG, "code error: %s", (char *)hlrdatabuff.finscomdata.code);
 		return -1;
 	}
 
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.respcode, sizeof(hlrdatabuff.finscomdata.respcode));
-	if (ret != 0) {
+	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.respcode, 4);
+	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.respcode, "0000") != 0) {
+		ESP_LOGE(TAG, "respcode error: %s", (char *)hlrdatabuff.finscomdata.code);
 		return -1;
 	}
 
@@ -130,6 +153,7 @@ int GetSerialWordDataFromHlPlc(void)
 			count = 0;
 			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 			if (ret != 0) {
+				ESP_LOGE(TAG, "fx buffer error: %d", ret);
 				return -1;
 			}
 		}

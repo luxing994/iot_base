@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "SN-LM-000"
+#define DEVID        "AMAJQ0292"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -173,6 +173,34 @@ typedef struct {
     uint16_t totalproduction;
 } SNCaclReFillingMachine;
 
+// 生能1车间冷媒灌注机数据格式
+typedef struct {
+    int amode;
+    int bmode;
+    int atesttime;
+    int btesttime;
+    float aup;
+    float bup;
+    float adown;
+    float bdown;
+    float apressure;
+    float bpressure;
+    float avacuumdegree;
+    float bvacuumdegree;
+    float aset;
+    float bset;
+    float apercentage;
+    float bpercentage;
+    float aspeed;
+    float bspeed;
+    float achargeamount;
+    float bchargeamount;
+    int astatus;
+    int bstatus;
+    float achargetime;
+    float bchargetime;
+} SNHostLinkCaclReFillingMachine;
+
 extern ElectroFactoryData electroData;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
@@ -186,6 +214,7 @@ uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len);
 int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
 uint16_t CalReadDataRegister(uint8_t *data);
 uint16_t CalSerialReadDataRegister(uint8_t *data);
+int BCDToInt(int bcd);
 int UART_InitBuffer(void);
 int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size);

@@ -1021,10 +1021,31 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-            for (i = 0; i <= 4; i++) {
-                HLReadSingleDataRegister(i, i);
-            }
-#endif
+            HLReadSingleDataRegister(8101, 1);   // A模式选择
+            HLReadSingleDataRegister(8501, 2);   // B模式选择
+            HLReadBCDDataRegister(8824, 3);      // A检测时间
+            HLReadBCDDataRegister(8844, 4);      // B检测时间
+            HLReadFloatDataRegister(8820, 5);    // A抽空上限
+            HLReadFloatDataRegister(8840, 6);    // B抽空上限
+            HLReadFloatDataRegister(8822, 7);    // A抽空下限
+            HLReadFloatDataRegister(8842, 8);    // B抽空下限
+            HLReadFloatDataRegister(19704, 9);    // A充注压力
+            HLReadFloatDataRegister(19724, 10);    // B充注压力
+            HLReadFloatDataRegister(19746, 11);    // A真空度
+            HLReadFloatDataRegister(19766, 12);   // B真空度
+            HLReadFloatDataRegister(8828, 13);    // A设定量
+            HLReadFloatDataRegister(8848, 14);    // B设定量
+            HLReadFloatDataRegister(8182, 15);    // A百分比
+            HLReadFloatDataRegister(8582, 16);    // B百分比
+            HLReadFloatDataRegister(8194, 17);    // A充注速度
+            HLReadFloatDataRegister(8594, 18);    // B充注速度
+            HLReadFloatDataRegister(8180, 19);    // A充注量
+            HLReadFloatDataRegister(8580, 20);    // B充注量
+            HLReadSingleDataRegister(8102, 21);    // A工作状态
+            HLReadSingleDataRegister(8502, 22);    // B工作状态
+            HLReadFloatDataRegister(8104, 23);    // A充注时间
+            HLReadFloatDataRegister(8504, 24);    // B充注时间
+#endif 
 
 #ifdef CONFIG_TESTER_76T
             // TTesterSelectGroup(3);
