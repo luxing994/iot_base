@@ -81,7 +81,7 @@ int GetSerialWordDataFromHlPlc(void)
 {
 	uint8_t curData = 0;
 	uint8_t dataArry[4] = {0};
-	int ret, count = 0;
+	int ret, i, count = 0;
 	static const char *TAG = "GET_SERIAL_HLDATA";
 
 	while (curData != HOSTLINK_HEAD) {
@@ -142,25 +142,56 @@ int GetSerialWordDataFromHlPlc(void)
 		return -1;
 	}
 
-	do {
-		ret = UART_ReadBufferBytes(&curData, 1);
+	if (g_fxplcdataformat == 1 || g_fxplcdataformat == 3) {
+		ret = UART_ReadBufferBytes(dataArry, 4);
 		if (ret != 0) {
 			return -1;
 		}
-		dataArry[count] = curData;
-		count++;
-		if (count % 4 == 0) {
-			count = 0;
+
+		ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
+		if (ret != 0) {
+			ESP_LOGE(TAG, "fx buffer error: %d", ret);
+			return -1;
+		}
+	} else if (g_fxplcdataformat == 2) {
+		for (i = 0; i < 2; i++) {
+			ret = UART_ReadBufferBytes(dataArry, 4);
+			if (ret != 0) {
+				return -1;
+			}
+
 			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 			if (ret != 0) {
 				ESP_LOGE(TAG, "fx buffer error: %d", ret);
 				return -1;
 			}
 		}
-	} while (curData != '*');
+	}
 
-	hlrdatabuff.fcs[0] = dataArry[0];
-	hlrdatabuff.fcs[1] = dataArry[1];
+	// ret = UART_ReadBufferBytes(dataArry, 3);
+	// if (ret != 0 || dataArry[2] != '*') {
+	// 	return -1;
+	// }
+
+	// do {
+	// 	ret = UART_ReadBufferBytes(&curData, 1);
+	// 	if (ret != 0) {
+	// 		return -1;
+	// 	}
+	// 	dataArry[count] = curData;
+	// 	count++;
+	// 	if (count % 4 == 0) {
+	// 		count = 0;
+	// 		ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
+	// 		if (ret != 0) {
+	// 			ESP_LOGE(TAG, "fx buffer error: %d", ret);
+	// 			return -1;
+	// 		}
+	// 	}
+	// } while (curData != '*');
+
+	// hlrdatabuff.fcs[0] = dataArry[0];
+	// hlrdatabuff.fcs[1] = dataArry[1];
 
 	return 0;
 }
