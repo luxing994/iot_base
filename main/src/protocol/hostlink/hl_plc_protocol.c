@@ -11,6 +11,7 @@
 
 HostLinkCommandFrameFormat hlsdatabuff = {0};
 HostLinkResponseFrameFormat hlrdatabuff = {0};
+HostLinkWriteRealCommandFrameFormat hlwrdatabuff = {0};
 
 static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
 {
@@ -39,12 +40,50 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	address *= 256;
 	sprintf(str, "%06X", address);
 	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
-
+	
 	sprintf(str, "%04X", length);
 	memcpy(rdata->finscomdata.text_num, str, 4);
 
 
 	sprintf(str, "%02X", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
+	memcpy(rdata->fcs, str, 2);
+	memcpy(rdata->end, HOSTLINK_END, 2);
+	return 0;
+}
+
+static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, HostLinkWriteRealCommandFrameFormat* rdata)
+{
+	char str[10] = {0};
+
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->head = HOSTLINK_HEAD;
+	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
+    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
+	rdata->finscomdata.resptime = FINS_TIME;
+	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
+	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
+	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
+	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
+	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
+
+	sprintf(str, "%04X", WRITEIO);
+	memcpy(rdata->finscomdata.code, str, 4);
+
+	sprintf(str, "%02X", DMWORD);
+	memcpy(rdata->finscomdata.mem, str, 2);
+
+	address *= 256;
+	sprintf(str, "%06X", address);
+	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
+
+	sprintf(str, "%04X", 2);
+	memcpy(rdata->finscomdata.text_num, str, 4);
+	memcpy(rdata->finscomdata.text_fdata, wdata, 8);
+
+	sprintf(str, "%02X", CalFCS(&hlwrdatabuff, sizeof(HostLinkWriteRealCommandFrameFormat) - 4));
 	memcpy(rdata->fcs, str, 2);
 	memcpy(rdata->end, HOSTLINK_END, 2);
 	return 0;
@@ -74,6 +113,20 @@ void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 3;
+    vTaskDelay(30);
+}
+
+void HLWriteRealDataRegister(uint32_t address, float wdata)
+{
+	int idata;
+	char sfdata[9] = {0};
+
+	idata = *((int *)&wdata);
+	idata = (idata >> 16) + ((idata << 16) & 0xffff0000);
+	(void)sprintf(sfdata, "%08X", idata);
+	
+	HLPackWriteRealDataRegisterFrame(address, (uint8_t *)sfdata, &hlwrdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwrdatabuff, sizeof(HostLinkWriteRealCommandFrameFormat));
     vTaskDelay(30);
 }
 

@@ -75,9 +75,12 @@ extern int ttestparanum[9];
 extern int ttestparabytenum[9];
 extern int tterterparasetstatus[8];
 
+char g_rxbuffer[4096] = {0};
 uint32_t g_devStartFlushFlag = 1;
 uint32_t g_switchPowerOn = 0;
+int g_snttestercurrentgroup = 0;
 extern uint32_t g_devStartStatus;
+SNSetCaclReFillingMachine g_setsnrefillingmachine;
 
 /*
 {
@@ -161,11 +164,6 @@ extern uint32_t g_devStartStatus;
 }
 */
 
-CommandJsonData GetCommandJsonData()
-{
-    return comdata;
-}
-
 void ParseCommandJsonData(cJSON *root)
 {
     cJSON *token = NULL;
@@ -203,7 +201,7 @@ void ParseCommandJsonData(cJSON *root)
 
     token = cJSON_GetObjectItem(root, "groupId");
     if (token != NULL) {
-        comdata.groupId = (token->valuestring);\
+        comdata.groupId = (token->valuestring);
         ESP_LOGI(TAG, "groupId: %s", comdata.groupId);
     }
 
@@ -227,200 +225,208 @@ void ParseCommandJsonData(cJSON *root)
         comdata.orderName = (token->valuestring);
     }
 
-    token = cJSON_GetObjectItem(root, "parameterType");
-    if (token != NULL) {
-        comdata.parameterType = (token->valuestring);
-        ESP_LOGI(TAG, "paradatatype: %s", comdata.parameterType);
-        TTesterGetSetParaStatus(comdata.parameterType);
-        for (i = 0; i < sizeof(tterterparasetstatus) / sizeof(int); i++) {
-            ttestparacount += ttestparanum[tterterparasetstatus[i]];
-            ttestparabytecount += ttestparabytenum[tterterparasetstatus[i]];
+    
+    if (strcmp(comdata.deviceOrderMode, "single") == 0) {
+        token = cJSON_GetObjectItem(root, "parameters");
+        if (token != NULL) {
+            g_setsnrefillingmachine.setchargeamount = atof((token->valuestring));
         }
-        TTesterGetSetParaByteNum(ttestparabytecount);
-    }
-
-    token = cJSON_GetObjectItem(root, "parameters");
-    if (token != NULL) {
-        arraysizerow = cJSON_GetArraySize(token);
-        for (i = 0; i < arraysizerow; i++) {
-            arraysize += cJSON_GetArraySize(cJSON_GetArrayItem(token, i));
-        }
-        if (arraysize != ttestparacount) {
-            ESP_LOGE(TAG, "arraysize error: correct size %d, error size %d ", ttestparacount, arraysize);
-            return;
-        }
-        
-        // JSON一维数组解析
-        // item = token->child;
-        // for (i = 0; i < 8; i++) {
-        //     for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
-        //         comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
-        //         comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
-        //         ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
-        //         item = item->next;
-        //     }
-        // }
-
-        // JSON二维数组解析
-        for (i = 0; i < arraysizerow; i++) {
-            row = cJSON_GetArrayItem(token, i);
-            for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
-                item =  cJSON_GetArrayItem(row, j);
-                comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
-                comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
-                ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
+    } else if (strcmp(comdata.deviceOrderMode, "group") == 0) {
+        token = cJSON_GetObjectItem(root, "parameterType");
+        if (token != NULL) {
+            comdata.parameterType = (token->valuestring);
+            ESP_LOGI(TAG, "paradatatype: %s", comdata.parameterType);
+            TTesterGetSetParaStatus(comdata.parameterType);
+            for (i = 0; i < sizeof(tterterparasetstatus) / sizeof(int); i++) {
+                ttestparacount += ttestparanum[tterterparasetstatus[i]];
+                ttestparabytecount += ttestparabytenum[tterterparasetstatus[i]];
             }
+            TTesterGetSetParaByteNum(ttestparabytecount);
         }
 
-        for (i = 0; i < strlen(comdata.parameterType); i++) {
-            switch (tterterparasetstatus[i]) {
-                case TTESTERPRESSURIZATION: {
-                    setprepara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setprepara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setprepara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setprepara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setprepara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setprepara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setprepara.uptime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setprepara.uptime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setprepara.downtime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
-                    setprepara.downtime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
-                    setprepara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
-                    setprepara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
-                    setprepara.curtozero[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setprepara.curtozero[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    setprepara.teststatus = atoi(comdata.paradata[i][7].value);
-                    setprepara.testmode = atoi(comdata.paradata[i][8].value);
-                    setprepara.curset[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
-                    setprepara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
-                    setprepara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
-                    setprepara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
-                    break;
-                }
-                case TTESTERGROUNDING: {
-                    setgroundpara.curset[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setgroundpara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setgroundpara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setgroundpara.resupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setgroundpara.reslowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setgroundpara.reslowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setgroundpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setgroundpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setgroundpara.testmode = atoi(comdata.paradata[i][4].value);
-                    setgroundpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
-                    setgroundpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
-                    setgroundpara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setgroundpara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    break;
-                }
-                case TTESTERINSULATION: {
-                    setinspara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setinspara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setinspara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setinspara.resupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setinspara.reslowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setinspara.reslowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setinspara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setinspara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setinspara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
-                    setinspara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
-                    setinspara.testmode = atoi(comdata.paradata[i][5].value);
-                    setinspara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setinspara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    setinspara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][7].value) >> 8;
-                    setinspara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][7].value) & 0xff;
-                    setinspara.res1tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
-                    setinspara.res1tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
-                    setinspara.res2tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
-                    setinspara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
-                    break;
-                }
-                case TTESTERLEAKAGE: {
-                    setleapara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setleapara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setleapara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setleapara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setleapara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setleapara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setleapara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setleapara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setleapara.teststatus = atoi(comdata.paradata[i][4].value);
-                    setleapara.testmode = atoi(comdata.paradata[i][5].value);
-                    setleapara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setleapara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    setleapara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][7].value) >> 8;
-                    setleapara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][7].value) & 0xff;
-                    setleapara.res1tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
-                    setleapara.res1tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
-                    setleapara.res2tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
-                    setleapara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
-                    setleapara.curtozero[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
-                    setleapara.curtozero[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
-                    break;
-                }
-                case TTESTERPOWER: {
-                    setpowerpara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setpowerpara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setpowerpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setpowerpara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setpowerpara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setpowerpara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setpowerpara.powerupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setpowerpara.powerupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setpowerpara.powerlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
-                    setpowerpara.powerlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
-                    setpowerpara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
-                    setpowerpara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
-                    setpowerpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setpowerpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    setpowerpara.testmode = atoi(comdata.paradata[i][7].value);
-                    setpowerpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
-                    setpowerpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
-                    setpowerpara.voltype = atoi(comdata.paradata[i][9].value);
-                    break;
-                }
-                case TTESTERSTARTUP: {
-                    setstartuppara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setstartuppara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setstartuppara.volupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setstartuppara.volupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setstartuppara.vollowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setstartuppara.vollowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setstartuppara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
-                    setstartuppara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
-                    setstartuppara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
-                    setstartuppara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
-                    setstartuppara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
-                    setstartuppara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
-                    setstartuppara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
-                    setstartuppara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
-                    setstartuppara.testmode = atoi(comdata.paradata[i][7].value);
-                    setstartuppara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
-                    setstartuppara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
-                    setstartuppara.voltype = atoi(comdata.paradata[i][9].value);
-                    break;
-                }
-                case TTESTEROPENSHORT: {
-                    setopenshortpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
-                    setopenshortpara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
-                    setopenshortpara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
-                    setopenshortpara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
-                    setopenshortpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
-                    setopenshortpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
-                    setopenshortpara.testmode = atoi(comdata.paradata[i][3].value);
-                    setopenshortpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
-                    setopenshortpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
-                    break;
-                }
-                case TTESTERDCVOLTAGE: {
-                    break;
-                }
-                default: {
-                    break;
+        token = cJSON_GetObjectItem(root, "parameters");
+        if (token != NULL) {
+            arraysizerow = cJSON_GetArraySize(token);
+            for (i = 0; i < arraysizerow; i++) {
+                arraysize += cJSON_GetArraySize(cJSON_GetArrayItem(token, i));
+            }
+            if (arraysize != ttestparacount) {
+                ESP_LOGE(TAG, "arraysize error: correct size %d, error size %d ", ttestparacount, arraysize);
+                return;
+            }
+            
+            // JSON一维数组解析
+            // item = token->child;
+            // for (i = 0; i < 8; i++) {
+            //     for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
+            //         comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
+            //         comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
+            //         ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
+            //         item = item->next;
+            //     }
+            // }
+
+            // JSON二维数组解析
+            for (i = 0; i < arraysizerow; i++) {
+                row = cJSON_GetArrayItem(token, i);
+                for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
+                    item =  cJSON_GetArrayItem(row, j);
+                    comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
+                    comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
+                    ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
                 }
             }
+
+            for (i = 0; i < 8; i++) {
+                switch (tterterparasetstatus[i]) {
+                    case TTESTERPRESSURIZATION: {
+                        setprepara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setprepara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setprepara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setprepara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setprepara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setprepara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setprepara.uptime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setprepara.uptime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setprepara.downtime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
+                        setprepara.downtime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+                        setprepara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
+                        setprepara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
+                        setprepara.curtozero[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setprepara.curtozero[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        setprepara.teststatus = atoi(comdata.paradata[i][7].value);
+                        setprepara.testmode = atoi(comdata.paradata[i][8].value);
+                        setprepara.curset[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
+                        setprepara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
+                        setprepara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
+                        setprepara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
+                        break;
+                    }
+                    case TTESTERGROUNDING: {
+                        setgroundpara.curset[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setgroundpara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setgroundpara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setgroundpara.resupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setgroundpara.reslowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setgroundpara.reslowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setgroundpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setgroundpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setgroundpara.testmode = atoi(comdata.paradata[i][4].value);
+                        setgroundpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
+                        setgroundpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
+                        setgroundpara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setgroundpara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        break;
+                    }
+                    case TTESTERINSULATION: {
+                        setinspara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setinspara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setinspara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setinspara.resupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setinspara.reslowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setinspara.reslowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setinspara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setinspara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setinspara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
+                        setinspara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+                        setinspara.testmode = atoi(comdata.paradata[i][5].value);
+                        setinspara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setinspara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        setinspara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][7].value) >> 8;
+                        setinspara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][7].value) & 0xff;
+                        setinspara.res1tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
+                        setinspara.res1tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
+                        setinspara.res2tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
+                        setinspara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
+                        break;
+                    }
+                    case TTESTERLEAKAGE: {
+                        setleapara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setleapara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setleapara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setleapara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setleapara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setleapara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setleapara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setleapara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setleapara.teststatus = atoi(comdata.paradata[i][4].value);
+                        setleapara.testmode = atoi(comdata.paradata[i][5].value);
+                        setleapara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setleapara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        setleapara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][7].value) >> 8;
+                        setleapara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][7].value) & 0xff;
+                        setleapara.res1tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
+                        setleapara.res1tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
+                        setleapara.res2tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
+                        setleapara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
+                        setleapara.curtozero[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
+                        setleapara.curtozero[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
+                        break;
+                    }
+                    case TTESTERPOWER: {
+                        setpowerpara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setpowerpara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setpowerpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setpowerpara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setpowerpara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setpowerpara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setpowerpara.powerupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setpowerpara.powerupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setpowerpara.powerlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
+                        setpowerpara.powerlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+                        setpowerpara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
+                        setpowerpara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
+                        setpowerpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setpowerpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        setpowerpara.testmode = atoi(comdata.paradata[i][7].value);
+                        setpowerpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
+                        setpowerpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
+                        setpowerpara.voltype = atoi(comdata.paradata[i][9].value);
+                        break;
+                    }
+                    case TTESTERSTARTUP: {
+                        setstartuppara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setstartuppara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setstartuppara.volupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setstartuppara.volupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setstartuppara.vollowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setstartuppara.vollowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setstartuppara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][3].value) >> 8;
+                        setstartuppara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][3].value) & 0xff;
+                        setstartuppara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
+                        setstartuppara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+                        setstartuppara.delaytime[0] = TTesterStrChangeToUint(comdata.paradata[i][5].value) >> 8;
+                        setstartuppara.delaytime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
+                        setstartuppara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
+                        setstartuppara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+                        setstartuppara.testmode = atoi(comdata.paradata[i][7].value);
+                        setstartuppara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
+                        setstartuppara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
+                        setstartuppara.voltype = atoi(comdata.paradata[i][9].value);
+                        break;
+                    }
+                    case TTESTEROPENSHORT: {
+                        setopenshortpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
+                        setopenshortpara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
+                        setopenshortpara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
+                        setopenshortpara.curlowerlim[1] = TTesterStrChangeToUint(comdata.paradata[i][1].value) & 0xff;
+                        setopenshortpara.testtime[0] = TTesterStrChangeToUint(comdata.paradata[i][2].value) >> 8;
+                        setopenshortpara.testtime[1] = TTesterStrChangeToUint(comdata.paradata[i][2].value) & 0xff;
+                        setopenshortpara.testmode = atoi(comdata.paradata[i][3].value);
+                        setopenshortpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
+                        setopenshortpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+                        break;
+                    }
+                    case TTESTERDCVOLTAGE: {
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+            }
         }
-    }
+    }   
 
     token = cJSON_GetObjectItem(root, "responseType");
     if (token != NULL) {
@@ -520,6 +526,22 @@ int GetMode(uint8_t *mode)
     *mode = config.mode;
 
     return 0;
+}
+
+CommandJsonData GetCommandJsonData()
+{
+    return comdata;
+}
+
+SNSetCaclReFillingMachine *GetSnSetRefillingData(void)
+{
+    return &g_setsnrefillingmachine;
+}
+
+int GetGroupIdFromRecvJsonData()
+{
+    (void)sscanf(comdata.groupId, "%d", &g_snttestercurrentgroup);
+    return g_snttestercurrentgroup;
 }
 
 void ServerParseOpCode(int op)
@@ -698,22 +720,22 @@ static void do_retransmit(const int sock)
     int len, i;
     int orderId;
     int arraysize;
-    char rx_buffer[1024] = {0};
+  
     cJSON *root = NULL;
     cJSON *token = NULL;
     cJSON *item = NULL;
     const char *TAG = "tcp_server";
 
     do {
-        len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
+        len = recv(sock, g_rxbuffer, sizeof(g_rxbuffer) - 1, 0);
         if (len < 0) {
             ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
         } else if (len == 0) {
             ESP_LOGW(TAG, "Connection closed");
         } else {
-            rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
-            ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
-            root = cJSON_Parse(&rx_buffer);
+            g_rxbuffer[len] = 0; // Null-terminate whatever is received and treat it like a string
+            ESP_LOGI(TAG, "Received %d bytes: %s", len, g_rxbuffer);
+            root = cJSON_Parse(&g_rxbuffer);
             if (root != NULL) {
                 ParseCommandJsonData(root);
                 // if (strcmp(comdata.devId, DEVID) == 0) {
@@ -728,6 +750,8 @@ static void do_retransmit(const int sock)
                         xEventGroupSetBits(xEventGroup3, BIT_0);
                     } else if (strcmp(comdata.orderId, "PowerOff") == 0) {
                         xEventGroupSetBits(xEventGroup3, BIT_1);
+                    } else if (strcmp(comdata.deviceOrderMode, "single") == 0) {
+                        xEventGroupSetBits(xEventGroup1, BIT_14);
                     } else if (strcmp(comdata.deviceOrderMode, "group") == 0) {
                         xEventGroupSetBits(xEventGroup1, BIT_15);
                     } else {
@@ -1001,8 +1025,9 @@ void send_data_task(void *pvParameters)
             SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
             SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
-            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);        //  单班产量
-            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);        //  总产量
+            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
+            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
+            SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
         #endif
     #endif
 #endif
@@ -1021,43 +1046,42 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-            HLReadSingleDataRegister(8101, 1);   // A模式选择
-            HLReadSingleDataRegister(8501, 2);   // B模式选择
-            HLReadBCDDataRegister(8824, 3);      // A检测时间
-            HLReadBCDDataRegister(8844, 4);      // B检测时间
-            HLReadFloatDataRegister(8820, 5);    // A抽空上限
-            HLReadFloatDataRegister(8840, 6);    // B抽空上限
-            HLReadFloatDataRegister(8822, 7);    // A抽空下限
-            HLReadFloatDataRegister(8842, 8);    // B抽空下限
-            HLReadFloatDataRegister(19704, 9);    // A充注压力
-            HLReadFloatDataRegister(19724, 10);    // B充注压力
-            HLReadFloatDataRegister(19746, 11);    // A真空度
-            HLReadFloatDataRegister(19766, 12);   // B真空度
-            HLReadFloatDataRegister(8828, 13);    // A设定量
-            HLReadFloatDataRegister(8848, 14);    // B设定量
-            HLReadFloatDataRegister(8182, 15);    // A百分比
-            HLReadFloatDataRegister(8582, 16);    // B百分比
-            HLReadFloatDataRegister(8194, 17);    // A充注速度
-            HLReadFloatDataRegister(8594, 18);    // B充注速度
-            HLReadFloatDataRegister(8180, 19);    // A充注量
-            HLReadFloatDataRegister(8580, 20);    // B充注量
-            HLReadSingleDataRegister(8102, 21);    // A工作状态
-            HLReadSingleDataRegister(8502, 22);    // B工作状态
-            HLReadFloatDataRegister(8104, 23);    // A充注时间
-            HLReadFloatDataRegister(8504, 24);    // B充注时间
+            // HLReadSingleDataRegister(8101, 1);   // A模式选择
+            // HLReadSingleDataRegister(8501, 2);   // B模式选择
+            // HLReadBCDDataRegister(8824, 3);      // A检测时间
+            // HLReadBCDDataRegister(8844, 4);      // B检测时间
+            // HLReadFloatDataRegister(8820, 5);    // A抽空上限
+            // HLReadFloatDataRegister(8840, 6);    // B抽空上限
+            // HLReadFloatDataRegister(8822, 7);    // A抽空下限
+            // HLReadFloatDataRegister(8842, 8);    // B抽空下限
+            // HLReadFloatDataRegister(19704, 9);    // A充注压力
+            // HLReadFloatDataRegister(19724, 10);    // B充注压力
+            // HLReadFloatDataRegister(19746, 11);    // A真空度
+            // HLReadFloatDataRegister(19766, 12);   // B真空度
+            // HLReadFloatDataRegister(8828, 13);    // A设定量
+            // HLReadFloatDataRegister(8848, 14);    // B设定量
+            // HLReadFloatDataRegister(8182, 15);    // A百分比
+            // HLReadFloatDataRegister(8582, 16);    // B百分比
+            // HLReadFloatDataRegister(8194, 17);    // A充注速度
+            // HLReadFloatDataRegister(8594, 18);    // B充注速度
+            // HLReadFloatDataRegister(8180, 19);    // A充注量
+            // HLReadFloatDataRegister(8580, 20);    // B充注量
+            // HLReadSingleDataRegister(8102, 21);    // A工作状态
+            // HLReadSingleDataRegister(8502, 22);    // B工作状态
+            // HLReadFloatDataRegister(8104, 23);    // A充注时间
+            // HLReadFloatDataRegister(8504, 24);    // B充注时间
+            // HLReadSingleDataRegister(8940, 25);    // 结果判定
+            
+            HLReadFloatDataRegister(8920, 1); 
 #endif 
 
 #ifdef CONFIG_TESTER_76T
-            // TTesterSelectGroup(3);
-            // vTaskDelay(20);
-            // TTesterInquiryStatus();
-            // vTaskDelay(20);
-            // TTesterReadCurrentItem();
-            // vTaskDelay(20);
-            // TTesterReadCurrentGroup();
-            // vTaskDelay(20);
-            TTesterReadHistoryGroup(1);
-            // vTaskDelay(20);
+            if (g_snttestercurrentgroup == 0) {
+                TTesterReadCurrentGroup();
+            } else {
+                TTesterReadHistoryGroup(g_snttestercurrentgroup);
+            }
+            
 #endif
 
 #ifdef CONFIG_TESTER_AINUO

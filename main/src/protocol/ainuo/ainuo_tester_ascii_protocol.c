@@ -204,7 +204,7 @@ static void AINUO_TTesterPackJsonFrame(void)
                 "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
 		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"  
                 "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n};;**##",
-            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, VACUUMTYPEID, "read", T_TESTER_ORDERNAME, \
+            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, SAFETYTESTERTYPEID, "read", T_TESTER_ORDERNAME, \
             T_TESTER_ORDERID, T_TESTER_ORDERMODE, 0, ttesterparadatajsondatabuff, ttesterparaunitjsondatabuff, ttestertestresultjsondatabuff, \
             groupret, allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
 }

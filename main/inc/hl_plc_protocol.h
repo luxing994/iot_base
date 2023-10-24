@@ -66,6 +66,20 @@ typedef struct {
     uint8_t text_num[4];
 } FinsCommandFrameFormat;
 
+typedef struct {
+    uint8_t head[2];
+    uint8_t resptime;
+    uint8_t icf[2];
+    uint8_t da2[2];
+    uint8_t sa2[2];
+    uint8_t sid[2];   
+    uint8_t code[4];
+    uint8_t mem[2];
+    uint8_t text_startaddr[6];
+    uint8_t text_num[4];
+    uint8_t text_fdata[8];
+} FinsWriteRealCommandFrameFormat;
+
 // Fins 响应帧格式  最多支持读10个word
 typedef struct {
     uint8_t head[3];
@@ -88,7 +102,16 @@ typedef struct {
     uint8_t end[2];
 } HostLinkCommandFrameFormat;
 
-// HostLink 命令帧格式
+// HostLink 写实数命令帧格式
+typedef struct {
+    uint8_t head;
+    uint8_t plcnum[2];
+    FinsWriteRealCommandFrameFormat finscomdata;
+    uint8_t fcs[2];
+    uint8_t end[2];
+} HostLinkWriteRealCommandFrameFormat;
+
+// HostLink 响应帧格式
 typedef struct {
     uint8_t head;
     uint8_t plcnum[2];
@@ -101,6 +124,7 @@ typedef struct {
 void HLReadSingleDataRegister(uint32_t address, uint16_t frnum);
 void HLReadFloatDataRegister(uint32_t address, uint16_t frnum);
 void HLReadBCDDataRegister(uint32_t address, uint16_t frnum);
+void HLWriteRealDataRegister(uint32_t address, float wdata);
 int GetSerialWordDataFromHlPlc(void);
 
 #endif

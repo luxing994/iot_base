@@ -161,16 +161,22 @@ typedef struct {
     FreezerData freezerData;
 } ElectroFactoryData;
 
+// 生能1-4车间冷媒灌注机设置数据格式
+typedef struct {
+    float setchargeamount;
+} SNSetCaclReFillingMachine;
+
 // 生能2-4车间冷媒灌注机数据格式
 typedef struct {
     float sysvacuum;
-    uint16_t atemperature;
-    uint16_t btemperature;
-    uint16_t asyspressure;
-    uint16_t bsyspressure;
+    int atemperature;
+    int btemperature;
+    int asyspressure;
+    int bsyspressure;
     float perfusionvolume;
-    uint16_t singleproduction;
-    uint16_t totalproduction;
+    int singleproduction;
+    int totalproduction;
+    int result;
 } SNCaclReFillingMachine;
 
 // 生能1车间冷媒灌注机数据格式
@@ -199,6 +205,7 @@ typedef struct {
     int bstatus;
     float achargetime;
     float bchargetime;
+    int result;
 } SNHostLinkCaclReFillingMachine;
 
 extern ElectroFactoryData electroData;
