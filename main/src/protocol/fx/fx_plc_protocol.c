@@ -11,6 +11,7 @@
 FxPlcReadFrameFormat rdatabuff = {0};
 FxPlcSerialAskReadFrameFormat srdatabuff = {0};
 FxPlcSerialAskReadBackFrameFormat srbdatabuff = {0};
+FxPlcSerialAskWriteFrameFormat swfdatabuff = {0};
 FxPlcSerialAnsNackFrameFormat srbedatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mackdatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mnackdatabuff = {0};
@@ -272,6 +273,58 @@ static int PackSerialReadDataRegisterFrame(uint16_t plcnum, uint16_t pcnum, uint
 	return 0;
 }
 
+static int PackSerialWriteRealDataRegisterFrame(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address,  
+	float wdata, FxPlcSerialAskWriteFrameFormat* rdata)
+{
+	uint32_t addr;
+	uint16_t plcn, pcn, len, sumcheck;
+	char rfdata[9] = {0};
+	int idata;
+	const char *cmd = PLC_WW;
+
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->enq = PLC_ENQ;
+
+	plcn = CalLength(plcnum);
+	rdata->plcnum[0] = plcn & 0xff;
+	rdata->plcnum[1] = (plcn >> 8) & 0xff;
+
+	pcn = CalLength(pcnum);
+	rdata->pcnum[0] = pcn & 0xff;
+	rdata->pcnum[1] = (pcn >> 8) & 0xff;
+
+	rdata->cmd[0] = cmd[0];
+	rdata->cmd[1] = cmd[1];
+
+	rdata->timeout = CalTimeout(timeout);
+
+	addr = CalSerialDataRegisterAddress(address);
+	rdata->address[0] = 'D';
+	rdata->address[1] = addr & 0xff;
+	rdata->address[2] = (addr >> 8) & 0xff;
+	rdata->address[3] = (addr >> 16) & 0xff;
+	rdata->address[4] = (addr >> 24) & 0xff;
+
+	len = CalLength(2);
+	rdata->length[0] = len & 0xff;
+	rdata->length[1] = (len >> 8) & 0xff;
+
+	
+	idata = *((int *)&wdata);
+	sprintf(rfdata, "%X", idata);
+	memcpy(rdata->data, &rfdata[4], 4);
+	memcpy(&(rdata->data[4]), rfdata, 4);
+
+	sumcheck = CalSumCheckData((uint8_t *)(&(rdata->plcnum[0])), PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_CAL_LEAGTH);
+	rdata->sum[0] = sumcheck & 0xff;
+	rdata->sum[1] = (sumcheck >> 8) & 0xff;
+	
+	return 0;
+}
+
 int GetDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
@@ -408,6 +461,14 @@ void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t 
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 2;
+    vTaskDelay(50);
+}
+
+
+void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata)    // RS485
+{
+	PackSerialWriteRealDataRegisterFrame(plcnum, pcnum, timeout, address, wdata, &swfdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&swfdatabuff, PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_LEAGTH);
     vTaskDelay(50);
 }
 

@@ -796,7 +796,7 @@ void tx_task(void *arg)
             // uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
             snrefillingsetdata = GetSnSetRefillingData();
 #ifdef CONFIG_PLC_FX
-            // HLWriteRealDataRegister(uint32_t address, float wdata);
+            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, snrefillingsetdata->setchargeamount); //  设置加注量
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK

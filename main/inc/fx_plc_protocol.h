@@ -63,6 +63,9 @@ UART传输格式
 #define PLC_SERIAL_QREAD_DATA_FRAME_LEAGTH  19
 #define PLC_SERIAL_QREAD_DATA_FRAME_CAL_LEAGTH  16
 
+#define PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_LEAGTH  25
+#define PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_CAL_LEAGTH  22
+
 #define FX_PLC_MAX_X  32
 #define FX_PLC_MAX_X_LEN  (FX_PLC_MAX_X / 8)
 
@@ -98,7 +101,7 @@ typedef struct {
     uint8_t pcnum[2];
     uint8_t cmd[2];
     uint8_t timeout;      // 0-150ms -> 0x0-0xf
-    uint8_t address[7];   
+    uint8_t address[7];
     uint8_t length[2];
     uint8_t sum[2];
 } FxPlcSerialAskQReadFrameFormat;
@@ -109,9 +112,9 @@ typedef struct {
     uint8_t pcnum[2];
     uint8_t cmd[2];
     uint8_t timeout;      // 0-150ms -> 0x0-0xf
-    uint8_t *address;
+    uint8_t address[5];
     uint8_t length[2];
-    uint8_t *data;
+    uint8_t data[8];
     uint8_t sum[2];
 } FxPlcSerialAskWriteFrameFormat;
 
@@ -141,6 +144,7 @@ typedef struct {
 void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
+void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
 int ReadInputRelayData();
