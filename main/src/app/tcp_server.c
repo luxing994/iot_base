@@ -74,6 +74,8 @@ extern TTesterSetOpenshortPara setopenshortpara;
 extern int ttestparanum[9];
 extern int ttestparabytenum[9];
 extern int tterterparasetstatus[8];
+extern SNCaclReFillingMachine g_lastrefilldata;
+extern SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata;
 
 char g_rxbuffer[4096] = {0};
 uint32_t g_devStartFlushFlag = 1;
@@ -303,6 +305,7 @@ void ParseCommandJsonData(cJSON *root)
                         break;
                     }
                     case TTESTERGROUNDING: {
+#ifdef CONFIG_TESTER_76T
                         setgroundpara.curset[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setgroundpara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setgroundpara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -316,6 +319,14 @@ void ParseCommandJsonData(cJSON *root)
                         setgroundpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][5].value) & 0xff;
                         setgroundpara.res0tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][6].value) >> 8;
                         setgroundpara.res0tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][6].value) & 0xff;
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetgroudingtestdata.current = atof(comdata.paradata[i][0].value);
+                        ainuosetgroudingtestdata.resistance1 = atof(comdata.paradata[i][1].value);
+                        ainuosetgroudingtestdata.resistance2 = atof(comdata.paradata[i][2].value);
+                        ainuosetgroudingtestdata.time = atof(comdata.paradata[i][3].value);
+#endif
                         break;
                     }
                     case TTESTERINSULATION: {
@@ -533,11 +544,6 @@ CommandJsonData GetCommandJsonData()
     return comdata;
 }
 
-SNSetCaclReFillingMachine *GetSnSetRefillingData(void)
-{
-    return &g_setsnrefillingmachine;
-}
-
 int GetGroupIdFromRecvJsonData()
 {
     (void)sscanf(comdata.groupId, "%d", &g_snttestercurrentgroup);
@@ -717,10 +723,12 @@ int ParseFile(char *buffer, int length)
 
 static void do_retransmit(const int sock)
 {
-    int len, i;
+    int len, i, err;
     int orderId;
     int arraysize;
-  
+    EventBits_t uxBits;
+    uint64_t timestart;
+    
     cJSON *root = NULL;
     cJSON *token = NULL;
     cJSON *item = NULL;
@@ -760,9 +768,29 @@ static void do_retransmit(const int sock)
                         // ServerParseOpCode(orderId);
                     }
                 // }
+            } 
+#ifdef CONFIG_PLC_FX
+            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetchargeamount) {
+                err = send(sock, "true", strlen("true"), 0);
+                if (err < 0) {
+                    ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                }
             }
+#endif
+
+#ifdef CONFIG_PLC_HOSTLINK
+            // while (GetMilliTimeNow() - timestart < 10000) {
+                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.realsetchargeamount) {
+                    err = send(sock, "true", strlen("true"), 0);
+                    if (err < 0) {
+                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                    }
+                }
+            // }
+#endif   
         }
     } while (len > 0);
+ 
 }
 
 static void do_retransmit1(const int sock)
@@ -1019,17 +1047,16 @@ void send_data_task(void *pvParameters)
         #endif
 
         #ifdef CONFIG_SN_CACLREFILMAC
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
-            // SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
-            // SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
-            // SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
-            // SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
-
-            SerialReadSingleFloatDataRegister(0, 255, 10, 16, 1);   //  系统真空
+            SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
+            SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
+            SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
+            SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
+            SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
+            SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
+            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
+            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
+            SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
+            SerialReadSingleFloatDataRegister(0, 255, 10, 16, 10);   //  系统真空
         #endif
     #endif
 #endif
@@ -1073,8 +1100,7 @@ void send_data_task(void *pvParameters)
             HLReadFloatDataRegister(8104, 23);    // A充注时间
             HLReadFloatDataRegister(8504, 24);    // B充注时间
             HLReadSingleDataRegister(8940, 25);    // 结果判定
-            
-            // HLReadFloatDataRegister(8920, 1); 
+            HLReadFloatDataRegister(8920, 26);     // 充注设定值
 #endif 
 
 #ifdef CONFIG_TESTER_76T
@@ -1087,7 +1113,7 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_TESTER_AINUO
-            AINUO_TTesterReadaCurrentGroup();
+            AINUO_TTesterReadCurrentGroup();
 #endif
 
 #ifdef CONFIG_PLC_MUDBUS

@@ -24,6 +24,7 @@
 #include "iot_common.h"
 #include "protocol_examples_common.h"
 #include "time.h"
+#include "tcp_server.h"
 
 
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -36,6 +37,7 @@
 
 #define PORT CONFIG_EXAMPLE_PORT     // read data com
 #define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
+#define PORT2 8767   // init data com
 
 #define CLIENT_RECONNECT_INTERVAL  5 // second
 #define HEART_BEAT_INTERVAL        1 // second

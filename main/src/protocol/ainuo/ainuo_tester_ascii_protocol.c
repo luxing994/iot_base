@@ -20,9 +20,11 @@ AINUOTTesterPowerPara ainuopowertestdata = {0};
 AINUOTTesterStartPara ainuostarttestdata = {0};
 AINUOTTesterDCVoltagePara ainuodcvoltagetestdata = {0};
 AINUOTTesterShortCircuitPara ainuoshortcircuittestdata = {0};
+
+AINUOTTesterSetGroundingPara ainuosetgroudingtestdata = {0};
 int ainuotesterstatus = 0;
 
-char g_ainuosenddatabuff[16] = {0};
+char g_ainuosenddatabuff[256] = {0};
 char g_ainuoreaddatabuff[256] = {0};
 char g_ainuottesterjsondatabuff[2048] = {0};
 const char *AINUOTAG = "AINUO_TTest";
@@ -35,6 +37,22 @@ static int AINUO_TTesterPackSendCommandData(int address, int command)
     if (len != 8) {
         return -1;
     }
+
+    return 0;
+}
+
+static int AINUO_TTesterPackSendSetCommandData(int address, int group)
+{
+    uint8_t checksum;
+    char addstring[16] = {0};
+    
+    (void)sprintf(g_ainuosenddatabuff, "{%03d%1d1%04d%04d%04d%04d", address, AINUOTTESTSETPARA, (int)(ainuosetgroudingtestdata.current * 100), \
+    (int)ainuosetgroudingtestdata.resistance1, (int)ainuosetgroudingtestdata.resistance2, (int)(ainuosetgroudingtestdata.time * 10));
+
+    checksum = CalSumCheckDataLow((uint8_t *)&g_ainuosenddatabuff[1], strlen(g_ainuosenddatabuff) - 1);
+    
+    (void)sprintf(addstring, "%02X}", checksum);
+    strcat(g_ainuosenddatabuff, addstring);
 
     return 0;
 }
@@ -209,7 +227,7 @@ static void AINUO_TTesterPackJsonFrame(void)
             groupret, allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
 }
 
-void AINUO_TTesterReadaCurrentGroup(void)
+void AINUO_TTesterReadCurrentGroup(void)
 {
     AINUO_TTesterPackSendCommandData(AINUO_TESTER_ADDRESS, AINUOTTESTERREADDATA);
     uart_write_bytes(UART_NUM_1, (uint8_t *)&g_ainuosenddatabuff, strlen(g_ainuosenddatabuff));

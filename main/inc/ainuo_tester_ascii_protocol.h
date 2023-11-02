@@ -25,6 +25,7 @@ typedef enum {
     AINUOTTESTERREADDATA = 0,
     AINUOTTESTERSTART,
     AINUOTTESTERSTOP,
+    AINUOTTESTSETPARA = 7
 } AINUOTTesterMainCommandCode;
 
 typedef struct {
@@ -91,7 +92,66 @@ typedef struct {
     int result;
 } AINUOTTesterShortCircuitPara;
 
-void AINUO_TTesterReadaCurrentGroup(void);
+typedef struct {
+    float current;
+    float resistance1;
+    float resistance2;
+    float time;
+} AINUOTTesterSetGroundingPara;
+
+typedef struct {
+    float current;
+    float resistance1;
+    float resistance2;
+    float time;
+} AINUOTTesterSetInsulationPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float time;
+    int condition;
+} AINUOTTesterSetPressurizationPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float time;
+    int condition;
+} AINUOTTesterSetLeakagePara;
+
+typedef struct {
+    float voltage;
+    float power1;
+    float power2;
+    float time;
+} AINUOTTesterSetPowerPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float time;
+} AINUOTTesterSetStartPara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float time;
+    int condition;
+} AINUOTTesterSetDCVoltagePara;
+
+typedef struct {
+    float voltage;
+    float resistance;
+    float time;
+} AINUOTTesterSetShortCircuitPara;
+
+extern AINUOTTesterSetGroundingPara ainuosetgroudingtestdata;
+
+void AINUO_TTesterReadCurrentGroup(void);
 void AINUO_TTesterGetJsonData(char *str);
 int AINUO_TTesterResolve(void);
 

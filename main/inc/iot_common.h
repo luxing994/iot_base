@@ -177,6 +177,7 @@ typedef struct {
     int singleproduction;
     int totalproduction;
     int result;
+    float realsetchargeamount;
 } SNCaclReFillingMachine;
 
 // 生能1车间冷媒灌注机数据格式
@@ -206,6 +207,7 @@ typedef struct {
     float achargetime;
     float bchargetime;
     int result;
+    float realsetchargeamount;
 } SNHostLinkCaclReFillingMachine;
 
 extern ElectroFactoryData electroData;

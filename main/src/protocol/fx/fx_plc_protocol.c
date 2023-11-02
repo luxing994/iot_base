@@ -359,8 +359,9 @@ int GetDataFromFxPlc(void)
 int GetSerialDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
-	int ret;
+	int ret, i;
 	static const char *TAG = "GET_SERIAL_DATA";
+	uint8_t dataArry[4] = {0};
 
 	while ((curData != PLC_STX) && (curData != PLC_NAK)) {
 		ret = UART_ReadBufferBytes(&curData, 1);
@@ -396,21 +397,53 @@ int GetSerialDataFromFxPlc(void)
 			return -1;
 		}
 
-		ret = UART_ReadBufferBytes(&curData, 1);
-		if (ret != 0) {
+		// ret = UART_ReadBufferBytes(&curData, 1);
+		// if (ret != 0) {
+		// 	return -1;
+		// }
+		// while (curData != PLC_ETX) {
+		// 	ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
+		// 	if (ret != 0) {
+		// 		return -1;
+		// 	}
+		// 	ret = UART_ReadBufferBytes(&curData, 1);
+		// 	if (ret != 0) {
+		// 		// return -1;
+		// 	}
+		// }
+		if (g_fxplcdataformat == 1) {
+			ret = UART_ReadBufferBytes(dataArry, 4);
+			if (ret != 0) {
+				return -1;
+			}
+
+			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
+			if (ret != 0) {
+				ESP_LOGE(TAG, "fx buffer error: %d", ret);
+				return -1;
+			}
+		} else if (g_fxplcdataformat == 2) {
+			for (i = 0; i < 2; i++) {
+				ret = UART_ReadBufferBytes(dataArry, 4);
+				if (ret != 0) {
+					return -1;
+				}
+
+				ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
+				if (ret != 0) {
+					ESP_LOGE(TAG, "fx buffer error: %d", ret);
+					return -1;
+				}
+			}
+		}
+
+		ret = UART_ReadBufferBytes(dataArry, 1);
+		if (ret != 0 || dataArry[0] != PLC_ETX) {
 			return -1;
 		}
-		while (curData != PLC_ETX) {
-			ret = FXPLC_WriteBufferBytes(&curData, sizeof(curData));
-			if (ret != 0) {
-				return -1;
-			}
-			ret = UART_ReadBufferBytes(&curData, 1);
-			if (ret != 0) {
-				return -1;
-			}
-		}
 	}
+
+	
 
 	return 0;
 }
@@ -461,7 +494,7 @@ void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t 
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 2;
-    vTaskDelay(50);
+    vTaskDelay(20);
 }
 
 
@@ -469,7 +502,7 @@ void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t
 {
 	PackSerialWriteRealDataRegisterFrame(plcnum, pcnum, timeout, address, wdata, &swfdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&swfdatabuff, PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_LEAGTH);
-    vTaskDelay(50);
+    vTaskDelay(20);
 }
 
 int ReadInputRelayData()
