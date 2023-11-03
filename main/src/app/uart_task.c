@@ -432,8 +432,8 @@ void ParseOpCode(char *str, uint8_t op)
                 }
             } else if (g_fxplcdataformat == 2) {
                 FXPLC_ReadBufferBytes((uint8_t *)rfdata, 8);
-                (void)sscanf(rfdata, "%x", &idata);
-                idata = (idata >> 16) + ((idata << 16) & 0xffff0000);
+                (void)sscanf(rfdata, "%x", &idata); 
+                idata = ((idata & 0x0000ffff) << 16) | ((idata >> 16) & 0x0000ffff);
                 fdata = *((float *)&idata);
                 if (fdata != *(float *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_fxplccount * 4])) {
                     g_senddata = 1;
@@ -998,7 +998,7 @@ void rx_task(void *arg)
             AINUO_TTesterGetJsonData(controlerStr);
 #endif
             if (g_senddata == 1) {
-                ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
+                // ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
                 if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                     //TO DO
                 }
@@ -1025,7 +1025,7 @@ void uart_event_task(void *pvParameters)
         //Waiting for UART event.
         if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
             bzero(dtmp, RX_BUF_SIZE);
-            ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
+            // ESP_LOGI(TAG, "uart[%d] event:", UART_NUM_1);
             switch(event.type) {
                 //Event of UART receving data
                 /*We'd better handler data event fast, there would be much more data events than
