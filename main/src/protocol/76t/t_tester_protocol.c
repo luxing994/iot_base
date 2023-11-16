@@ -42,6 +42,7 @@ TTesterOneCommandDataFrameFormat ttesterreadcuritemsbuff = {0};
 TTesterOneCommandDataFrameFormat ttesterreadcurgroupbuff = {0};
 TTesterTwoCommandDataFrameFormat ttesterreadhisgroupbuff = {0};
 TTesterOneCommandDataFrameFormat ttesterselectgroupbuff = {0};
+TTesterCommonFrameFormat ttestersetgroupcommonbuff = {0};
 TTesterCommonFrameFormat ttestersetgroupbuff = {0};
 
 TTesterPressurizationPara ttesterpredata = {0};
@@ -60,13 +61,16 @@ TTesterSetLeakagePara setleapara = {0};
 TTesterSetPowerPara setpowerpara = {0};
 TTesterSetStartupPara setstartuppara = {0};
 TTesterSetOpenshortPara setopenshortpara = {0};
-int ttestparanum[9] = {0, T_TESTER_SET_PRESSURIZATION_PARA_NUM, T_TESTER_SET_GROUNDING_PARA_NUM, \
+TTesterSetDCVoltagePara setdcvoltagepara = {0};
+TTesterSetCommonPara setcommonpara = {0};
+int ttestparanum[10] = {0, T_TESTER_SET_PRESSURIZATION_PARA_NUM, T_TESTER_SET_GROUNDING_PARA_NUM, \
     T_TESTER_SET_INSULATION_PARA_NUM, T_TESTER_SET_LEAKAGE_PARA_NUM, T_TESTER_SET_POWER_PARA_NUM, \
-    T_TESTER_SET_STARTUP_PARA_NUM, T_TESTER_SET_OPENSHORT_PARA_NUM, T_TESTER_SET_DCVOLTAGE_PARA_NUM};
-int ttestparabytenum[9] = {1, sizeof(TTesterSetPressurizationPara) + 1, sizeof(TTesterSetGroundingPara) + 1, \
+    T_TESTER_SET_STARTUP_PARA_NUM, T_TESTER_SET_OPENSHORT_PARA_NUM, T_TESTER_SET_DCVOLTAGE_PARA_NUM, \
+    T_TESTER_SET_COMMON_PARA_NUM};
+int ttestparabytenum[10] = {1, sizeof(TTesterSetPressurizationPara) + 1, sizeof(TTesterSetGroundingPara) + 1, \
     sizeof(TTesterSetInsulationPara) + 1, sizeof(TTesterSetLeakagePara) + 1, sizeof(TTesterSetPowerPara) + 1, \
-    sizeof(TTesterSetStartupPara) + 1, sizeof(TTesterSetOpenshortPara) + 1, 1};
-int tterterparasetstatus[8] = {0};
+    sizeof(TTesterSetStartupPara) + 1, sizeof(TTesterSetOpenshortPara) + 1, 1, 0};
+int tterterparasetstatus[9] = {0};
 char ttesterjsondatabuff[2048] = {0};
 
 TTestestGroupResultPara curgrouptestdata = {0};
@@ -129,7 +133,7 @@ static void TTesterPackReadCurrentItemFrame(void)
         sizeof(TTesterOneCommandDataFrameFormat) - 1);
 }
 
-static void TTesterPackReaCurrentGroupFrame(void)
+static void TTesterPackReadCurrentGroupFrame(void)
 {
     ttesterreadcurgroupbuff.head = T_TESTER_FRAME_HEAD;
     ttesterreadcurgroupbuff.pronum = T_TESTER_PROTOCOL_NUM;
@@ -160,6 +164,35 @@ static void TTesterPackReadHistoryGroupFrame(uint16_t group)
         sizeof(TTesterTwoCommandDataFrameFormat) - 1);
 }
 
+static void TTesterPackSetGroupCommonParaFrame(uint16_t group)
+{
+    int count;
+    uint8_t sum[3] = {0}; 
+    
+    ttestersetgroupcommonbuff.data = (uint8_t *)malloc(T_TESTER_SET_COMMON_DATA_LENGTH);
+    if (ttestersetgroupcommonbuff.data == NULL) {
+        ESP_LOGE(TAG, "mem error");
+        return;
+    }
+    ttestersetgroupcommonbuff.head = T_TESTER_FRAME_HEAD;
+    ttestersetgroupcommonbuff.pronum = T_TESTER_PROTOCOL_NUM;
+    ttestersetgroupcommonbuff.address[0] = 0;
+    ttestersetgroupcommonbuff.address[1] = T_TESTER_ADDRESS;
+    ttestersetgroupcommonbuff.length = 0x0e;
+    ttestersetgroupcommonbuff.reserve = 0;
+    ttestersetgroupcommonbuff.data[0] = TTESTERSETPARA;
+    ttestersetgroupcommonbuff.data[1] = T_TESTER_SET_COMMON_PARA_SECOND_BYTE;
+    ttestersetgroupcommonbuff.data[2] = group;
+    count = 3;
+
+    memcpy(&ttestersetgroupcommonbuff.data[count], &setcommonpara, T_TESTER_SET_COMMON_DATA_LENGTH - 3);
+    ttestersetgroupcommonbuff.end = T_TESTER_FRAME_END;
+    sum[0] = CalSumCheckDataLow(&ttestersetgroupcommonbuff.head, 6);
+    sum[1] = CalSumCheckDataLow(&ttestersetgroupcommonbuff.data[0], T_TESTER_SET_COMMON_DATA_LENGTH);
+    sum[2] = T_TESTER_FRAME_END;
+    ttestersetgroupcommonbuff.sum = CalSumCheckDataLow(sum, sizeof(sum));
+}
+
 static void TTesterPackSetGroupParaFrame(uint16_t group)
 {
     int i, count;
@@ -180,7 +213,11 @@ static void TTesterPackSetGroupParaFrame(uint16_t group)
     ttestersetgroupbuff.data[2] = group;
     count = 3;
     for (i = 0; i < 8; i++) {
-        ttestersetgroupbuff.data[count] = (uint8_t)(tterterparasetstatus[i]);
+        if (i == 7) {
+            ttestersetgroupbuff.data[count] = 0;
+        } else {
+            ttestersetgroupbuff.data[count] = (uint8_t)(tterterparasetstatus[i]);
+        }
         switch (tterterparasetstatus[i]) {
             case TTESTERPRESSURIZATION: {
                 memcpy(&ttestersetgroupbuff.data[count + 1], &setprepara, ttestparabytenum[tterterparasetstatus[i]] - 1);
@@ -539,7 +576,7 @@ void TTesterReadCurrentItem(void)
 
 void TTesterReadCurrentGroup(void)
 {
-    TTesterPackReaCurrentGroupFrame();
+    TTesterPackReadCurrentGroupFrame();
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadcurgroupbuff, sizeof(TTesterOneCommandDataFrameFormat));
 }
 
@@ -552,7 +589,13 @@ void TTesterReadHistoryGroup(uint16_t group)
 
 void TTesterSetGroupPara(uint16_t group)
 {
+    TTesterPackSetGroupCommonParaFrame(group);
     TTesterPackSetGroupParaFrame(group);
+
+    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupcommonbuff.head, 6);
+    uart_write_bytes(UART_NUM_1, (uint8_t *)&(ttestersetgroupcommonbuff.data[0]), T_TESTER_SET_COMMON_DATA_LENGTH);
+    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupcommonbuff.end, 2);
+    vTaskDelay(10);
     uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupbuff.head, 6);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&(ttestersetgroupbuff.data[0]), 3 + ttestersetparabytenum);
     uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupbuff.end, 2);

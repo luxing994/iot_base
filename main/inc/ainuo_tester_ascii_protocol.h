@@ -1,6 +1,8 @@
 #ifndef AINUO_TESTER_ASCII_PROTOCOL_H
 #define AINUO_TESTER_ASCII_PROTOCOL_H
 
+#include <stdint.h>
+
 /*
 AINUO安全测试仪 ASCII协议
 UART传输格式
@@ -96,29 +98,34 @@ typedef struct {
     float current;
     float resistance1;
     float resistance2;
-    float time;
+    float testtime;
 } AINUOTTesterSetGroundingPara;
 
 typedef struct {
-    float current;
+    float voltage;
     float resistance1;
     float resistance2;
-    float time;
+    float testtime;
+    float delaytime;
+    float uptime;
 } AINUOTTesterSetInsulationPara;
 
 typedef struct {
     float voltage;
     float current1;
     float current2;
-    float time;
+    float testtime;
     int condition;
+    float uptime;
+    float downtime;
+    int startpoint;
 } AINUOTTesterSetPressurizationPara;
 
 typedef struct {
     float voltage;
     float current1;
     float current2;
-    float time;
+    float testtime;
     int condition;
 } AINUOTTesterSetLeakagePara;
 
@@ -126,32 +133,52 @@ typedef struct {
     float voltage;
     float power1;
     float power2;
-    float time;
+    float testtime;
 } AINUOTTesterSetPowerPara;
 
 typedef struct {
     float voltage;
     float current1;
     float current2;
-    float time;
+    float testtime;
 } AINUOTTesterSetStartPara;
 
 typedef struct {
     float voltage;
     float current;
-    float time;
+    float testtime;
     int condition;
+    float uptime;
+    int startpoint;
+    float delaytime;
 } AINUOTTesterSetDCVoltagePara;
 
 typedef struct {
     float voltage;
     float resistance;
-    float time;
+    float testtime;
 } AINUOTTesterSetShortCircuitPara;
 
+typedef struct {
+    int compensate;
+    int failitem;
+    int ofrequence;
+    int loadground;
+    int utensiltype;
+} AINUOTTesterSetCommonPara;
+
 extern AINUOTTesterSetGroundingPara ainuosetgroudingtestdata;
+extern AINUOTTesterSetPressurizationPara ainuosetpressurizationtestdata;
+extern AINUOTTesterSetInsulationPara ainuosetinsulationtestdata;
+extern AINUOTTesterSetLeakagePara ainuosetleakagetestdata;
+extern AINUOTTesterSetPowerPara ainuosetpowertestdata;
+extern AINUOTTesterSetStartPara ainuosetstarttestdata;
+extern AINUOTTesterSetDCVoltagePara ainuosetdcvoltagetestdata;
+extern AINUOTTesterSetShortCircuitPara ainuosetshortcircuittestdata;
+extern AINUOTTesterSetCommonPara ainuosetcommontestdata;
 
 void AINUO_TTesterReadCurrentGroup(void);
+void AINUO_TTesterSetGroupPara(uint16_t group);
 void AINUO_TTesterGetJsonData(char *str);
 int AINUO_TTesterResolve(void);
 

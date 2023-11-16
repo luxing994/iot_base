@@ -71,9 +71,11 @@ extern TTesterSetLeakagePara setleapara;
 extern TTesterSetPowerPara setpowerpara;
 extern TTesterSetStartupPara setstartuppara;
 extern TTesterSetOpenshortPara setopenshortpara;
-extern int ttestparanum[9];
-extern int ttestparabytenum[9];
-extern int tterterparasetstatus[8];
+extern TTesterSetDCVoltagePara setdcvoltagepara;
+extern TTesterSetCommonPara setcommonpara;
+extern int ttestparanum[10];
+extern int ttestparabytenum[10];
+extern int tterterparasetstatus[9];
 extern SNCaclReFillingMachine g_lastrefilldata;
 extern SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata;
 
@@ -233,6 +235,11 @@ void ParseCommandJsonData(cJSON *root)
         if (token != NULL) {
             g_setsnrefillingmachine.setchargeamount = atof((token->valuestring));
         }
+
+        token = cJSON_GetObjectItem(root, "parameterType");
+        if (token != NULL) {
+            g_setsnrefillingmachine.select = token->valuestring;
+        }
     } else if (strcmp(comdata.deviceOrderMode, "group") == 0) {
         token = cJSON_GetObjectItem(root, "parameterType");
         if (token != NULL) {
@@ -279,9 +286,10 @@ void ParseCommandJsonData(cJSON *root)
                 }
             }
 
-            for (i = 0; i < 8; i++) {
+            for (i = 0; i < 9; i++) {
                 switch (tterterparasetstatus[i]) {
                     case TTESTERPRESSURIZATION: {
+#ifdef CONFIG_TESTER_76T
                         setprepara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setprepara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setprepara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -302,6 +310,19 @@ void ParseCommandJsonData(cJSON *root)
                         setprepara.curset[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
                         setprepara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
                         setprepara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetpressurizationtestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetpressurizationtestdata.current1 = atof(comdata.paradata[i][1].value);
+                        ainuosetpressurizationtestdata.current2 = atof(comdata.paradata[i][2].value);
+                        ainuosetpressurizationtestdata.uptime = atof(comdata.paradata[i][3].value);
+                        ainuosetpressurizationtestdata.downtime = atof(comdata.paradata[i][4].value);
+                        ainuosetpressurizationtestdata.testtime = atof(comdata.paradata[i][5].value);
+                        ainuosetpressurizationtestdata.startpoint = atoi(comdata.paradata[i][6].value);
+                        ainuosetpressurizationtestdata.condition = atoi(comdata.paradata[i][7].value);
+                        
+#endif
                         break;
                     }
                     case TTESTERGROUNDING: {
@@ -325,11 +346,12 @@ void ParseCommandJsonData(cJSON *root)
                         ainuosetgroudingtestdata.current = atof(comdata.paradata[i][0].value);
                         ainuosetgroudingtestdata.resistance1 = atof(comdata.paradata[i][1].value);
                         ainuosetgroudingtestdata.resistance2 = atof(comdata.paradata[i][2].value);
-                        ainuosetgroudingtestdata.time = atof(comdata.paradata[i][3].value);
+                        ainuosetgroudingtestdata.testtime = atof(comdata.paradata[i][3].value);
 #endif
                         break;
                     }
                     case TTESTERINSULATION: {
+#ifdef CONFIG_TESTER_76T
                         setinspara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setinspara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setinspara.resupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -349,9 +371,21 @@ void ParseCommandJsonData(cJSON *root)
                         setinspara.res1tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
                         setinspara.res2tozero[0] = TTesterStrChangeToUint(comdata.paradata[i][9].value) >> 8;
                         setinspara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetinsulationtestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetinsulationtestdata.resistance1 = atof(comdata.paradata[i][1].value);
+                        ainuosetinsulationtestdata.resistance2 = atof(comdata.paradata[i][2].value);
+                        ainuosetinsulationtestdata.testtime = atof(comdata.paradata[i][3].value);
+                        ainuosetinsulationtestdata.delaytime = atof(comdata.paradata[i][4].value);  // 绝缘延判定时间
+                        ainuosetinsulationtestdata.uptime = atof(comdata.paradata[i][6].value);   //绝缘缓升时间
+#endif
+
                         break;
                     }
                     case TTESTERLEAKAGE: {
+#ifdef CONFIG_TESTER_76T
                         setleapara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setleapara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setleapara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -372,9 +406,20 @@ void ParseCommandJsonData(cJSON *root)
                         setleapara.res2tozero[1] = TTesterStrChangeToUint(comdata.paradata[i][9].value) & 0xff;
                         setleapara.curtozero[0] = TTesterStrChangeToUint(comdata.paradata[i][10].value) >> 8;
                         setleapara.curtozero[1] = TTesterStrChangeToUint(comdata.paradata[i][10].value) & 0xff;
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetleakagetestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetleakagetestdata.current1 = atof(comdata.paradata[i][1].value);
+                        ainuosetleakagetestdata.current2 = atof(comdata.paradata[i][2].value);
+                        ainuosetleakagetestdata.testtime = atof(comdata.paradata[i][3].value);
+                        ainuosetleakagetestdata.condition = atoi(comdata.paradata[i][4].value);
+#endif
+
                         break;
                     }
                     case TTESTERPOWER: {
+#ifdef CONFIG_TESTER_76T
                         setpowerpara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setpowerpara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setpowerpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -393,9 +438,18 @@ void ParseCommandJsonData(cJSON *root)
                         setpowerpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
                         setpowerpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
                         setpowerpara.voltype = atoi(comdata.paradata[i][9].value);
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetpowertestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetpowertestdata.power1 = atof(comdata.paradata[i][3].value);
+                        ainuosetpowertestdata.power2 = atof(comdata.paradata[i][4].value);
+                        ainuosetpowertestdata.testtime = atof(comdata.paradata[i][6].value);
+#endif
                         break;
                     }
                     case TTESTERSTARTUP: {
+#ifdef CONFIG_TESTER_76T
                         setstartuppara.voltage[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setstartuppara.voltage[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setstartuppara.volupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -414,9 +468,18 @@ void ParseCommandJsonData(cJSON *root)
                         setstartuppara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][8].value) >> 8;
                         setstartuppara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][8].value) & 0xff;
                         setstartuppara.voltype = atoi(comdata.paradata[i][9].value);
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetstarttestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetstarttestdata.current1 = atof(comdata.paradata[i][3].value);
+                        ainuosetstarttestdata.current2 = atof(comdata.paradata[i][4].value);
+                        ainuosetstarttestdata.testtime = atof(comdata.paradata[i][6].value);
+#endif
                         break;
                     }
                     case TTESTEROPENSHORT: {
+#ifdef CONFIG_TESTER_76T
                         setopenshortpara.curupperlim[0] = TTesterStrChangeToUint(comdata.paradata[i][0].value) >> 8;
                         setopenshortpara.curupperlim[1] = TTesterStrChangeToUint(comdata.paradata[i][0].value) & 0xff;
                         setopenshortpara.curlowerlim[0] = TTesterStrChangeToUint(comdata.paradata[i][1].value) >> 8;
@@ -426,9 +489,41 @@ void ParseCommandJsonData(cJSON *root)
                         setopenshortpara.testmode = atoi(comdata.paradata[i][3].value);
                         setopenshortpara.suspendtime[0] = TTesterStrChangeToUint(comdata.paradata[i][4].value) >> 8;
                         setopenshortpara.suspendtime[1] = TTesterStrChangeToUint(comdata.paradata[i][4].value) & 0xff;
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetshortcircuittestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetshortcircuittestdata.resistance = atof(comdata.paradata[i][1].value);
+                        ainuosetshortcircuittestdata.testtime = atof(comdata.paradata[i][2].value);
+#endif
                         break;
                     }
                     case TTESTERDCVOLTAGE: {
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetdcvoltagetestdata.voltage = atof(comdata.paradata[i][0].value);
+                        ainuosetdcvoltagetestdata.current = atof(comdata.paradata[i][1].value);
+                        ainuosetdcvoltagetestdata.testtime = atof(comdata.paradata[i][2].value);
+                        ainuosetdcvoltagetestdata.condition = atoi(comdata.paradata[i][3].value);
+                        ainuosetdcvoltagetestdata.uptime = atof(comdata.paradata[i][4].value);
+                        ainuosetdcvoltagetestdata.startpoint = atoi(comdata.paradata[i][5].value);
+                        ainuosetdcvoltagetestdata.delaytime = atof(comdata.paradata[i][6].value);
+#endif
+                        break;
+                    }
+                    case TTESTERCOMMON: {
+#ifdef CONFIG_TESTER_76T
+                        setcommonpara.failitem = atoi(comdata.paradata[i][1].value);
+                        setcommonpara.frequence = atoi(comdata.paradata[i][2].value);
+                        setcommonpara.grouplink = atoi(comdata.paradata[i][3].value);
+                        setcommonpara.utensiltype = atoi(comdata.paradata[i][4].value);
+#endif
+#ifdef CONFIG_TESTER_AINUO
+                        ainuosetcommontestdata.compensate = atoi(comdata.paradata[i][0].value);
+                        ainuosetcommontestdata.failitem = atoi(comdata.paradata[i][1].value);
+                        ainuosetcommontestdata.ofrequence = atoi(comdata.paradata[i][2].value);
+                        ainuosetcommontestdata.loadground = atoi(comdata.paradata[i][3].value);
+                        ainuosetcommontestdata.utensiltype = atoi(comdata.paradata[i][4].value);
+#endif
                         break;
                     }
                     default: {
@@ -733,6 +828,8 @@ static void do_retransmit(const int sock)
     cJSON *token = NULL;
     cJSON *item = NULL;
     const char *TAG = "tcp_server";
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 100;
 
     do {
         len = recv(sock, g_rxbuffer, sizeof(g_rxbuffer) - 1, 0);
@@ -768,7 +865,9 @@ static void do_retransmit(const int sock)
                         // ServerParseOpCode(orderId);
                     }
                 // }
-            } 
+            }
+
+            timestart = GetMilliTimeNow();
 #ifdef CONFIG_PLC_FX
             if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetchargeamount) {
                 err = send(sock, "true", strlen("true"), 0);
@@ -780,12 +879,24 @@ static void do_retransmit(const int sock)
 
 #ifdef CONFIG_PLC_HOSTLINK
             // while (GetMilliTimeNow() - timestart < 10000) {
-                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.realsetchargeamount) {
+            //     vTaskDelayUntil(&xLastWakeTime, xFrequency);
+            if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
+                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.arealsetchargeamount) {
                     err = send(sock, "true", strlen("true"), 0);
                     if (err < 0) {
                         ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                     }
                 }
+            } else if (strcmp(g_setsnrefillingmachine.select, "B") == 0) {
+                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.brealsetchargeamount) {
+                    err = send(sock, "true", strlen("true"), 0);
+                    if (err < 0) {
+                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                    }
+                }
+            }
+                
+               
             // }
 #endif   
         }
@@ -1100,7 +1211,8 @@ void send_data_task(void *pvParameters)
             HLReadFloatDataRegister(8104, 23);    // A充注时间
             HLReadFloatDataRegister(8504, 24);    // B充注时间
             HLReadSingleDataRegister(8940, 25);    // 结果判定
-            HLReadFloatDataRegister(8920, 26);     // 充注设定值
+            HLReadFloatDataRegister(8150, 26);     // A充注设定值
+            HLReadFloatDataRegister(8550, 27);     // B充注设定值
 #endif 
 
 #ifdef CONFIG_TESTER_76T

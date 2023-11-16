@@ -22,6 +22,7 @@ UART传输格式
 #define T_TESTER_READ_CURRENT_GROUP_TEST_DATA     199    // 04 or 07 C7
 #define T_TESTER_READ_HISTORY_GROUP_TEST_DATA     150    // 04 or 07 96 xx:组号
 #define T_TESTER_SET_PARA_SECOND_BYTE             0x63   // 03 63
+#define T_TESTER_SET_COMMON_PARA_SECOND_BYTE      0x01   // 03 63
 
 
 #define T_TESTER_GROUP_TEST_QUALIFY               0x10
@@ -37,9 +38,12 @@ UART传输格式
 #define T_TESTER_SET_POWER_PARA_NUM               10
 #define T_TESTER_SET_STARTUP_PARA_NUM             10
 #define T_TESTER_SET_OPENSHORT_PARA_NUM           5
-#define T_TESTER_SET_DCVOLTAGE_PARA_NUM           0
+#define T_TESTER_SET_DCVOLTAGE_PARA_NUM           7
+#define T_TESTER_SET_COMMON_PARA_NUM              5
 
+#define T_TESTER_SET_COMMON_DATA_LENGTH           7
 #define T_TESTER_FLOAT_POINT_MAX                  3
+
 
 #define T_TESTER_DEVID                           "TTester"
 #define T_TESTER_DEVNUMBER                       "TTester"
@@ -105,7 +109,8 @@ typedef enum {
     TTESTERPOWER,
     TTESTERSTARTUP,
     TTESTEROPENSHORT,
-    TTESTERDCVOLTAGE
+    TTESTERDCVOLTAGE,
+    TTESTERCOMMON
 } TTesterTestItem;
 
 // 测试状态
@@ -355,6 +360,23 @@ typedef struct {
     uint8_t testmode;
     uint8_t suspendtime[2];
 } TTesterSetOpenshortPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curset[2];
+    uint8_t testtime[2];
+    uint8_t teststatus;
+    uint8_t uptime[2];
+    uint8_t suspendtime[2];
+    uint8_t delaytime[2];
+} TTesterSetDCVoltagePara;
+
+typedef struct {
+    uint8_t frequence;
+    uint8_t failitem;
+    uint8_t grouplink;
+    uint8_t utensiltype;
+} TTesterSetCommonPara;
 #pragma pack()
 
 void TTesterGetSetParaByteNum(uint16_t num);

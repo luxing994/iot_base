@@ -154,7 +154,7 @@ void tcp_client_task(void *pvParameters)
 
         while (1) {
             if(xQueueReceive(xQueue1, &recvp, (TickType_t)10) == pdPASS) {
-                ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
+                // ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
                 int err = send(sock, (uint8_t *)recvp, strlen(recvp), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);

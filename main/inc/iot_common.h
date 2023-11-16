@@ -129,7 +129,7 @@ typedef struct {
     char *orderId;
     char *orderName;
     char *parameterType;
-    parametersData paradata[8][20];
+    parametersData paradata[9][20];
     char *responseType;
     char *timeStamp;
 } CommandJsonData;
@@ -163,6 +163,7 @@ typedef struct {
 
 // 生能1-4车间冷媒灌注机设置数据格式
 typedef struct {
+    char *select;
     float setchargeamount;
 } SNSetCaclReFillingMachine;
 
@@ -207,7 +208,8 @@ typedef struct {
     float achargetime;
     float bchargetime;
     int result;
-    float realsetchargeamount;
+    float arealsetchargeamount;
+    float brealsetchargeamount;
 } SNHostLinkCaclReFillingMachine;
 
 extern ElectroFactoryData electroData;

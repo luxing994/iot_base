@@ -22,9 +22,17 @@ AINUOTTesterDCVoltagePara ainuodcvoltagetestdata = {0};
 AINUOTTesterShortCircuitPara ainuoshortcircuittestdata = {0};
 
 AINUOTTesterSetGroundingPara ainuosetgroudingtestdata = {0};
+AINUOTTesterSetPressurizationPara ainuosetpressurizationtestdata = {0};
+AINUOTTesterSetInsulationPara ainuosetinsulationtestdata = {0};
+AINUOTTesterSetLeakagePara ainuosetleakagetestdata = {0};
+AINUOTTesterSetPowerPara ainuosetpowertestdata = {0};
+AINUOTTesterSetStartPara ainuosetstarttestdata = {0};
+AINUOTTesterSetDCVoltagePara ainuosetdcvoltagetestdata = {0};
+AINUOTTesterSetShortCircuitPara ainuosetshortcircuittestdata = {0};
+AINUOTTesterSetCommonPara ainuosetcommontestdata = {0};
 int ainuotesterstatus = 0;
 
-char g_ainuosenddatabuff[256] = {0};
+char g_ainuosenddatabuff[512] = {0};
 char g_ainuoreaddatabuff[256] = {0};
 char g_ainuottesterjsondatabuff[2048] = {0};
 const char *AINUOTAG = "AINUO_TTest";
@@ -46,8 +54,25 @@ static int AINUO_TTesterPackSendSetCommandData(int address, int group)
     uint8_t checksum;
     char addstring[16] = {0};
     
-    (void)sprintf(g_ainuosenddatabuff, "{%03d%1d1%04d%04d%04d%04d", address, AINUOTTESTSETPARA, (int)(ainuosetgroudingtestdata.current * 100), \
-    (int)ainuosetgroudingtestdata.resistance1, (int)ainuosetgroudingtestdata.resistance2, (int)(ainuosetgroudingtestdata.time * 10));
+    (void)sprintf(g_ainuosenddatabuff, "{%03d%1d1%04d%04d%04d%04d01%04d%04d%04d%04d01%04d%04d%04d%04d%01d1%04d%04d%04d%04d%01d1%04d%04d%04d%04d0"
+    "1%04d%04d%04d%04d01%04d%04d0000%04d%01d1%04d%04d0000%04d0%01d%01d%01d%01d0000%08d00000000%04d%04d%04d%04d%04d%04d%04d%04d%01d",
+    address, AINUOTTESTSETPARA, (int)(ainuosetgroudingtestdata.current * 100), (int)ainuosetgroudingtestdata.resistance1, \
+    (int)ainuosetgroudingtestdata.resistance2, (int)(ainuosetgroudingtestdata.testtime * 10), \
+    (int)ainuosetinsulationtestdata.voltage, (int)(ainuosetinsulationtestdata.resistance1 * 10), \
+    (int)(ainuosetinsulationtestdata.resistance2 * 10), (int)(ainuosetinsulationtestdata.testtime * 10), \
+    (int)ainuosetpressurizationtestdata.voltage, (int)(ainuosetpressurizationtestdata.current1 * 100), \
+    (int)(ainuosetpressurizationtestdata.current2 * 100), (int)(ainuosetpressurizationtestdata.testtime * 10), \
+    ainuosetpressurizationtestdata.condition, (int)(ainuosetleakagetestdata.voltage * 10), (int)ainuosetleakagetestdata.current1, \
+    (int)ainuosetleakagetestdata.current2, (int)(ainuosetleakagetestdata.testtime * 10), ainuosetleakagetestdata.condition, \
+    (int)(ainuosetpowertestdata.voltage * 10), (int)(ainuosetpowertestdata.power1 * 10), (int)(ainuosetpowertestdata.power2 * 10), \
+    (int)(ainuosetpowertestdata.testtime * 10), (int)(ainuosetstarttestdata.voltage * 10), (int)(ainuosetstarttestdata.current1 * 100), \
+    (int)(ainuosetstarttestdata.current2 * 100), (int)(ainuosetstarttestdata.testtime * 10), (int)ainuosetdcvoltagetestdata.voltage, \
+    (int)ainuosetdcvoltagetestdata.current, (int)(ainuosetdcvoltagetestdata.testtime * 10), ainuosetdcvoltagetestdata.condition, \
+    (int)(ainuosetshortcircuittestdata.voltage * 10), (int)(ainuosetshortcircuittestdata.resistance * 10), (int)(ainuosetshortcircuittestdata.testtime * 10), 
+    ainuosetcommontestdata.failitem, ainuosetcommontestdata.ofrequence, ainuosetcommontestdata.loadground, ainuosetcommontestdata.utensiltype, \
+    ainuosetcommontestdata.compensate, (int)(ainuosetinsulationtestdata.uptime * 10), (int)(ainuosetinsulationtestdata.delaytime * 10), \
+    (int)(ainuosetpressurizationtestdata.uptime * 10), ainuosetpressurizationtestdata.startpoint, (int)(ainuosetpressurizationtestdata.downtime * 10), \
+    (int)(ainuosetdcvoltagetestdata.uptime * 10), ainuosetdcvoltagetestdata.startpoint, (int)(ainuosetdcvoltagetestdata.delaytime * 10), group);
 
     checksum = CalSumCheckDataLow((uint8_t *)&g_ainuosenddatabuff[1], strlen(g_ainuosenddatabuff) - 1);
     
@@ -231,6 +256,12 @@ void AINUO_TTesterReadCurrentGroup(void)
 {
     AINUO_TTesterPackSendCommandData(AINUO_TESTER_ADDRESS, AINUOTTESTERREADDATA);
     uart_write_bytes(UART_NUM_1, (uint8_t *)&g_ainuosenddatabuff, strlen(g_ainuosenddatabuff));
+}
+
+void AINUO_TTesterSetGroupPara(uint16_t group)
+{
+    AINUO_TTesterPackSendSetCommandData(AINUO_TESTER_ADDRESS, group);
+    uart_write_bytes(UART_NUM_1, (uint8_t *)g_ainuosenddatabuff, strlen(g_ainuosenddatabuff));
 }
 
 void AINUO_TTesterGetJsonData(char *str)
