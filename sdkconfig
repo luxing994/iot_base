@@ -399,14 +399,17 @@ CONFIG_MB_COMM_MODE_RTU=y
 #
 # PLC Communication Configuration
 #
-# CONFIG_PLC_FX is not set
+CONFIG_PLC_FX=y
+# CONFIG_RY_LINE is not set
+# CONFIG_XF_CONTROLER is not set
+CONFIG_SN_CACLREFILMAC=y
 # CONFIG_PLC_LS_LOAD is not set
-CONFIG_PLC_HOSTLINK=y
+# CONFIG_PLC_HOSTLINK is not set
 # CONFIG_PLC_MUDBUS is not set
 # CONFIG_TESTER_76T is not set
 # CONFIG_TESTER_AINUO is not set
-CONFIG_PLC_RS232=y
-# CONFIG_PLC_RS485 is not set
+# CONFIG_PLC_RS232 is not set
+CONFIG_PLC_RS485=y
 # end of PLC Communication Configuration
 
 #

@@ -301,16 +301,16 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00\",\n"
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetchargeamount, GetStaIp(), GetMilliTimeNow());
+                    g_lastrefilldata.result, GetStaIp(), GetMilliTimeNow());
                 } else {
                     if (g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4 || g_fxplccount == 5) {    // 温度和压力都除10再输出
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -349,16 +349,16 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00\",\n"
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetchargeamount, GetStaIp(), GetMilliTimeNow());
+                    g_lastrefilldata.result, GetStaIp(), GetMilliTimeNow());
                 } else {
                     // if (g_fxplccount == 9) {
                     //     if (g_snrefillingsetdata->setchargeamount == fdata) {
@@ -803,8 +803,8 @@ void tx_task(void *arg)
             // memcpy(&sendDataBuffer[14][6], &crc, 2);
             // uart_write_bytes(UART_NUM_1, (uint8_t *)sendDataBuffer[14], 8);
 #ifdef CONFIG_PLC_FX
-            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount); //  设置加注量
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 16, 10);
+            SerialWriteSingleFloatDataRegister(0, 255, 10, 512, g_setsnrefillingmachine.setchargeamount); //  设置加注量
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 10);
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK

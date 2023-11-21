@@ -79,7 +79,7 @@ extern int tterterparasetstatus[9];
 extern SNCaclReFillingMachine g_lastrefilldata;
 extern SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata;
 
-char g_rxbuffer[4096] = {0};
+char g_rxbuffer[10240] = {0};
 uint32_t g_devStartFlushFlag = 1;
 uint32_t g_switchPowerOn = 0;
 int g_snttestercurrentgroup = 0;
@@ -869,7 +869,7 @@ static void do_retransmit(const int sock)
 
             timestart = GetMilliTimeNow();
 #ifdef CONFIG_PLC_FX
-            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetchargeamount) {
+            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.perfusionvolume) {
                 err = send(sock, "true", strlen("true"), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -1167,7 +1167,6 @@ void send_data_task(void *pvParameters)
             SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
             SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
             SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
-            SerialReadSingleFloatDataRegister(0, 255, 10, 16, 10);   //  系统真空
         #endif
     #endif
 #endif
