@@ -174,7 +174,7 @@ void ParseCommandJsonData(cJSON *root)
     cJSON *item = NULL;
     cJSON *row = NULL;
     const char *TAG = "parse json data";
-    int arraysizerow, arraysize = 0, i, j;
+    int arraysizerow, arraysize = 0, i, j, k;
     int ttestparacount = 0;
     int ttestparabytecount = 0;
 
@@ -276,14 +276,20 @@ void ParseCommandJsonData(cJSON *root)
             // }
 
             // JSON二维数组解析
-            for (i = 0; i < arraysizerow; i++) {
-                row = cJSON_GetArrayItem(token, i);
-                for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
-                    item =  cJSON_GetArrayItem(row, j);
-                    comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
-                    comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
-                    ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
+            for (i = 0,  k = 0; i < sizeof(tterterparasetstatus) / sizeof(int); i++) {
+                if (tterterparasetstatus[i] == 0) {
+                    continue;
+                } else {
+                    row = cJSON_GetArrayItem(token, k);
+                    k++;
+                    for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
+                        item =  cJSON_GetArrayItem(row, j);
+                        comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
+                        comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
+                        ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
+                    }
                 }
+                
             }
 
             for (i = 0; i < 9; i++) {

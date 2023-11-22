@@ -213,7 +213,7 @@ static void TTesterPackSetGroupParaFrame(uint16_t group)
     ttestersetgroupbuff.data[2] = group;
     count = 3;
     for (i = 0; i < 8; i++) {
-        if (i == 7) {
+        if (tterterparasetstatus[i] == TTESTERDCVOLTAGE) {
             ttestersetgroupbuff.data[count] = 0;
         } else {
             ttestersetgroupbuff.data[count] = (uint8_t)(tterterparasetstatus[i]);

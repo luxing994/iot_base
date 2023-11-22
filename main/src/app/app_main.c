@@ -58,14 +58,12 @@ void app_main(void)
 
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
-    xTaskCreate(tx1_task, "uart_tx1_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
 #if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
 #endif
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_client1_task, "tcp_client1", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
-    // xTaskCreate(tcp_server_send_task, "tcp_server_send", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(send_data_task, "send_data_task", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(send_command_task, "send_command_task", 4096, (void*)AF_INET, 5, NULL);
