@@ -29,7 +29,6 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
 	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
 	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
 
 	sprintf(str, "%04X", READIO);
 	memcpy(rdata->finscomdata.code, str, 4);
@@ -66,7 +65,6 @@ static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, Ho
 	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
 	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
 	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
 	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
 
 	sprintf(str, "%04X", WRITEIO);
