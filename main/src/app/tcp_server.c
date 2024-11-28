@@ -1135,7 +1135,7 @@ void send_data_task(void *pvParameters)
     
     
     xLastWakeTime = xTaskGetTickCount();
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    // esp_log_level_set(TAG, ESP_LOG_INFO);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         if (g_devStartFlushFlag == 0) {
@@ -1164,15 +1164,19 @@ void send_data_task(void *pvParameters)
         #endif
 
         #ifdef CONFIG_SN_CACLREFILMAC
-            SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
-            SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
-            SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
-            SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
-            SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
-            SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
-            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
-            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
-            SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
+            // SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
+            // SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
+            // SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
+            // SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
+            // SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
+            // SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
+            // SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
+            
+            // 弯管机
+            SerialReadSingleDataRegister(0, 255, 10, 228, 1);         //  当前计数
+            SerialReadSingleDataRegister(0, 255, 10, 260, 2);         //  总计数
         #endif
     #endif
 #endif
@@ -1191,33 +1195,39 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
-            HLReadSingleDataRegister(8101, 1);   // A模式选择
-            HLReadSingleDataRegister(8501, 2);   // B模式选择
-            HLReadBCDDataRegister(8824, 3);      // A检测时间
-            HLReadBCDDataRegister(8844, 4);      // B检测时间
-            HLReadFloatDataRegister(8820, 5);    // A抽空上限
-            HLReadFloatDataRegister(8840, 6);    // B抽空上限
-            HLReadFloatDataRegister(8822, 7);    // A抽空下限
-            HLReadFloatDataRegister(8842, 8);    // B抽空下限
-            HLReadFloatDataRegister(19704, 9);    // A充注压力
-            HLReadFloatDataRegister(19724, 10);    // B充注压力
-            HLReadFloatDataRegister(19746, 11);    // A真空度
-            HLReadFloatDataRegister(19766, 12);   // B真空度
-            HLReadFloatDataRegister(8828, 13);    // A设定量
-            HLReadFloatDataRegister(8848, 14);    // B设定量
-            HLReadFloatDataRegister(8182, 15);    // A百分比
-            HLReadFloatDataRegister(8582, 16);    // B百分比
-            HLReadFloatDataRegister(8194, 17);    // A充注速度
-            HLReadFloatDataRegister(8594, 18);    // B充注速度
-            HLReadFloatDataRegister(8180, 19);    // A充注量
-            HLReadFloatDataRegister(8580, 20);    // B充注量
-            HLReadSingleDataRegister(8102, 21);    // A工作状态
-            HLReadSingleDataRegister(8502, 22);    // B工作状态
-            HLReadFloatDataRegister(8104, 23);    // A充注时间
-            HLReadFloatDataRegister(8504, 24);    // B充注时间
-            HLReadSingleDataRegister(8940, 25);    // 结果判定
-            HLReadFloatDataRegister(8150, 26);     // A充注设定值
-            HLReadFloatDataRegister(8550, 27);     // B充注设定值
+            // 冷媒灌注机
+            // HLReadSingleDataRegister(8101, 1);    // A模式选择
+            // HLReadSingleDataRegister(8501, 2);    // B模式选择
+            // HLReadBCDDataRegister(8824, 3);       // A检测时间
+            // HLReadBCDDataRegister(8844, 4);       // B检测时间
+            // HLReadFloatDataRegister(8820, 5);     // A抽空上限
+            // HLReadFloatDataRegister(8840, 6);     // B抽空上限
+            // HLReadFloatDataRegister(8822, 7);     // A抽空下限
+            // HLReadFloatDataRegister(8842, 8);     // B抽空下限
+            // HLReadFloatDataRegister(19704, 9);    // A充注压力
+            // HLReadFloatDataRegister(19724, 10);   // B充注压力
+            // HLReadFloatDataRegister(19746, 11);   // A真空度
+            // HLReadFloatDataRegister(19766, 12);   // B真空度
+            // HLReadFloatDataRegister(8828, 13);    // A设定量
+            // HLReadFloatDataRegister(8848, 14);    // B设定量
+            // HLReadFloatDataRegister(8182, 15);    // A百分比
+            // HLReadFloatDataRegister(8582, 16);    // B百分比
+            // HLReadFloatDataRegister(8194, 17);    // A充注速度
+            // HLReadFloatDataRegister(8594, 18);    // B充注速度
+            // HLReadFloatDataRegister(8180, 19);    // A充注量
+            // HLReadFloatDataRegister(8580, 20);    // B充注量
+            // HLReadSingleDataRegister(8102, 21);   // A工作状态
+            // HLReadSingleDataRegister(8502, 22);   // B工作状态
+            // HLReadFloatDataRegister(8104, 23);    // A充注时间
+            // HLReadFloatDataRegister(8504, 24);    // B充注时间
+            // HLReadSingleDataRegister(8940, 25);   // 结果判定
+            // HLReadFloatDataRegister(8150, 26);    // A充注设定值
+            // HLReadFloatDataRegister(8550, 27);    // B充注设定值
+            
+
+            // 高速冲床
+            HLReadSingleDataRegister(12, 1);         // 总累计冲次
+            HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
 #endif 
 
 #ifdef CONFIG_TESTER_76T
