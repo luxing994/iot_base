@@ -46,7 +46,7 @@ uint32_t g_devStartStatus = 0;
 int g_rdatalen = 1;
 int g_senddata = 1;
 int g_fxplccount = 0;
-int g_fxplcdataformat = 0;   // (0:char *    1:int      2:float    3:BCD)   
+int g_fxplcdataformat = 0;   // (0:char *    1:short     2:float    3:BCD   4:int   5:bit)   
 uint16_t g_lastdata[32] = {0};
 char g_lastrdata[5] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
@@ -56,6 +56,8 @@ int g_datapos = 0;
 void ParseOpCode(char *str, uint8_t op)
 {
     char rdata[5] = {0};
+    char rdatah[9] = {0};
+    char rdatal[5] = {0};
     char rfdata[9] = {0};
     int idata, i;
     float fdata;
@@ -94,10 +96,21 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                     rdata);
-            } else if (g_fxplcdataformat == 1) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                (void)sscanf(rdata, "%x", &idata);
-
+            } else if ((g_fxplcdataformat == 1) || (g_fxplcdataformat == 4) || (g_fxplcdataformat == 5) ) {
+                if (g_fxplcdataformat == 1) {
+                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                    (void)sscanf(rdata, "%x", &idata);
+                } else if (g_fxplcdataformat == 4) {
+                    FXPLC_ReadBufferBytes((uint8_t *)rdatal, 4);
+                    FXPLC_ReadBufferBytes((uint8_t *)rdatah, 4);
+                    strcat(rdatah, rdatal);
+                    (void)sscanf(rdatah, "%x", &idata);
+                } else if (g_fxplcdataformat == 5) {
+                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                    (void)sscanf(rdata, "%x", &idata);
+                    idata &= 0x0001;
+                }
+                
 #if defined(CONFIG_XF_CONTROLER) || defined(CONFIG_RY_LINE)
                 if (idata != g_lastdata[g_fxplccount]) {
                     g_senddata = 1;
@@ -142,6 +155,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     g_lastrefilldata.result, GetStaIp(), GetMilliTimeNow());
                 } else {
+                    /*
                     if (g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4 || g_fxplccount == 5) {    // 温度和压力都除10再输出
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
@@ -150,13 +164,14 @@ void ParseOpCode(char *str, uint8_t op)
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                         idata / 10.0);
                     } else {
+                    */
                          (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                         "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, GetMilliTimeNow(), 
                         idata);
-                    }
+                    // }
                 }
 #endif
                 } else if (g_fxplcdataformat == 2) {

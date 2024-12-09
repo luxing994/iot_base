@@ -40,6 +40,11 @@ UART传输格式
 #define PLC_CR  0x0D
 #define PLC_NAK 0x15
 
+// FX 软元件类型
+#define PLC_TYPE_D 'D'
+#define PLC_TYPE_X 'X'
+#define PLC_TYPE_Y 'Y'
+
 // FX PLC 串口指令
 #define PLC_BR  "BR"   // 位单位成批读出
 #define PLC_WR  "WR"   // 字单位成批读出（5字符） 
@@ -144,7 +149,9 @@ typedef struct {
 void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
+void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata);
+void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
 int ReadInputRelayData();

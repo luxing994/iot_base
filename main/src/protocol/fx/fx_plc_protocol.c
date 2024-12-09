@@ -229,7 +229,7 @@ static int PackOutputRelayFrame(uint16_t length, FxPlcReadFrameFormat* rdata)
 	return 0;
 }
 
-static int PackSerialReadDataRegisterFrame(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address,  
+static int PackSerialReadDataRegisterFrame(uint8_t type, uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address,  
 	uint16_t length, FxPlcSerialAskReadFrameFormat* rdata)
 {
 	uint32_t addr;
@@ -256,7 +256,7 @@ static int PackSerialReadDataRegisterFrame(uint16_t plcnum, uint16_t pcnum, uint
 	rdata->timeout = CalTimeout(timeout);
 
 	addr = CalSerialDataRegisterAddress(address);
-	rdata->address[0] = 'D';
+	rdata->address[0] = type;
 	rdata->address[1] = addr & 0xff;
 	rdata->address[2] = (addr >> 8) & 0xff;
 	rdata->address[3] = (addr >> 16) & 0xff;
@@ -411,7 +411,7 @@ int GetSerialDataFromFxPlc(void)
 		// 		// return -1;
 		// 	}
 		// }
-		if (g_fxplcdataformat == 1) {
+		if ((g_fxplcdataformat == 1) || (g_fxplcdataformat == 5)) {
 			ret = UART_ReadBufferBytes(dataArry, 4);
 			if (ret != 0) {
 				return -1;
@@ -422,7 +422,7 @@ int GetSerialDataFromFxPlc(void)
 				ESP_LOGE(TAG, "fx buffer error: %d", ret);
 				return -1;
 			}
-		} else if (g_fxplcdataformat == 2) {
+		} else if ((g_fxplcdataformat == 2) || (g_fxplcdataformat == 4)) {
 			for (i = 0; i < 2; i++) {
 				ret = UART_ReadBufferBytes(dataArry, 4);
 				if (ret != 0) {
@@ -442,8 +442,6 @@ int GetSerialDataFromFxPlc(void)
 			return -1;
 		}
 	}
-
-	
 
 	return 0;
 }
@@ -481,22 +479,39 @@ void ReadSingleDataRegister(uint16_t address, uint16_t frnum)   // RS232
 
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
 {
-	PackSerialReadDataRegisterFrame(plcnum, pcnum, timeout, address, 1, &srdatabuff);
+	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 1, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 1;
     vTaskDelay(20);
 }
 
+void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
+{
+	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 2, &srdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 4;
+    vTaskDelay(20);
+}
+
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
 {
-	PackSerialReadDataRegisterFrame(plcnum, pcnum, timeout, address, 2, &srdatabuff);
+	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 2, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 2;
     vTaskDelay(20);
 }
 
+void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
+{
+	PackSerialReadDataRegisterFrame(PLC_TYPE_Y, plcnum, pcnum, timeout, address, 1, &srdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 5;
+    vTaskDelay(20);
+}
 
 void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata)    // RS485
 {
