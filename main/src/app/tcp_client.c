@@ -43,6 +43,7 @@
 #define HEART_BEAT_INTERVAL        1 // second
 
 static char initdata[1024] = {0};
+static char initrevdata[1024] = {0};
 char mcu_ip[32] = {0};
 
 static bool is_our_netif(const char *prefix, esp_netif_t *netif)
@@ -89,21 +90,23 @@ void PackInitData(char *strip)
             }
         }
     }
-
-    (void)sprintf(initdata, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, mcu_ip, "initDev", ORDERNAME, GetMilliTimeNow());
+     
+    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"
+            "    \"devStatus\":\"\",\n    \"devTypeId\":\"%s\",\n    \"orderName\":\"%s\",\n"
+            "    \"orderId\":\"%s\",\n    \"devIP\":\"%s\",\n    \"connectPort\":\"%s\",\n"
+            "    \"value\":\"NULL\",\n    \"timeStamp\":\"%lld\",\n    \"isAnswer\":\"yes\",\n"
+            "    \"expand\":\"NULL\"};;**##",  \ 
+            DEVID, "Hello", DEVNAME, DEVTYPEID, ORDERNAME, "initDev", mcu_ip, "8766", GetMilliTimeNow());
 }
 
 void PackHeartBeatData()
 {
-    (void)sprintf(initdata, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"   
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"NULL\",\n    \"expand\":\"NULL\"\n};;**##",  \ 
-                "-1", DEVID, DEVNAME, DEVTYPEID, DEVTYPENAME, mcu_ip, "heartBeat", ORDERNAME, GetMilliTimeNow());
+    (void)sprintf(initdata, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"
+            "    \"devStatus\":\"\",\n    \"devTypeId\":\"%s\",\n    \"orderName\":\"%s\",\n"
+            "    \"orderId\":\"%s\",\n    \"devIP\":\"%s\",\n    \"connectPort\":\"%s\",\n"
+            "    \"value\":\"NULL\",\n    \"timeStamp\":\"%lld\",\n    \"isAnswer\":\"no\",\n"
+            "    \"expand\":\"NULL\"};;**##",  \ 
+            DEVID, "Hello", DEVNAME, DEVTYPEID, ORDERNAME, "heartBeat", mcu_ip, "8766", GetMilliTimeNow());
 }
 
 void tcp_client_task(void *pvParameters)
@@ -154,7 +157,7 @@ void tcp_client_task(void *pvParameters)
 
         while (1) {
             if(xQueueReceive(xQueue1, &recvp, (TickType_t)10) == pdPASS) {
-                // ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
+                ESP_LOGI(TAG, "Read data %s\n", (uint8_t *)recvp);
                 int err = send(sock, (uint8_t *)recvp, strlen(recvp), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -226,6 +229,21 @@ void tcp_client1_task(void *pvParameters)
         err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
         if (err < 0) {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+        }
+
+        int len = recv(sock, initrevdata, sizeof(initrevdata) - 1, 0);
+        // Error occurred during receiving
+        if (len < 0) {
+            ESP_LOGE(TAG, "recv failed: errno %d", errno);
+            // break;
+        }
+        // Data received
+        else {
+            initrevdata[len] = 0; // Null-terminate whatever we received and treat like a string
+            ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
+            ESP_LOGI(TAG, "%s", initrevdata);
+            g_baseTime = atoll(initrevdata);
+            ESP_LOGI(TAG, "time:%lld  timenow:%lld\n", g_baseTime, GetMilliTimeNow());
         }
         memset(initdata, 0, sizeof(initdata));
         PackHeartBeatData();

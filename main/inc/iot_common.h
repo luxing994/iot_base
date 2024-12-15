@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMAJQ0118"
+#define DEVID        "AMAJQ0216"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -57,6 +57,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define ORDERNAME    "Hello"
 #define INITORDERID  "FR000"
 #define FILETRANSSIZE 240
+#define DEVTIMEMODE  "yes"
 
 // device type
 #define MOTORDEVTYPEID     "ZL"
@@ -156,9 +157,14 @@ typedef struct {
 } FreezerData;
 
 typedef struct {
+    int status;
+} AirSwitchData;
+
+typedef struct {
     TempControlData tempControl;
     MotorData motorData;
     FreezerData freezerData;
+    AirSwitchData switchData;
 } ElectroFactoryData;
 
 // 生能1-4车间冷媒灌注机设置数据格式
@@ -214,6 +220,7 @@ typedef struct {
 extern ElectroFactoryData electroData;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
+extern uint64_t g_baseTime;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CalFloatStrPointPos(char *str);
