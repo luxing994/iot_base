@@ -1175,13 +1175,13 @@ void send_data_task(void *pvParameters)
             // SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
             
             // 弯管机
-            SerialReadSingleYDataRegister(0, 255, 10, 62, 1);        // 报警状态
-            SerialReadSingleYDataRegister(0, 255, 10, 63, 2);        // 自动运行
-            SerialReadSingleYDataRegister(0, 255, 10, 64, 3);        // 停止
-            SerialReadDoubleDataRegister(0, 255, 10, 166, 4);        // 当前产量
-            SerialReadDoubleDataRegister(0, 255, 10, 168, 5);        // 产量设定
-            SerialReadDoubleDataRegister(0, 255, 10, 170, 6);        // 总产量
-            SerialReadSingleDataRegister(0, 255, 10, 112, 7);        // 每分钟循环次数
+            SerialReadSingleYDataRegister(0, 255, 10, 33, 1);        // 报警状态
+            SerialReadSingleYDataRegister(0, 255, 10, 34, 2);        // 自动运行
+            SerialReadSingleYDataRegister(0, 255, 10, 35, 3);        // 停止
+            SerialReadDoubleDataRegister(0, 255, 10, 240, 4);        // 当前产量
+            SerialReadDoubleDataRegister(0, 255, 10, 242, 5);        // 产量设定
+            SerialReadDoubleDataRegister(0, 255, 10, 244, 6);        // 总产量
+            SerialReadDoubleDataRegister(0, 255, 10, 96, 7);        // 每分钟循环次数
             
         #endif
     #endif
