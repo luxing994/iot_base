@@ -47,6 +47,7 @@ int g_rdatalen = 1;
 int g_senddata = 1;
 int g_fxplccount = 0;
 int g_fxplcdataformat = 0;   // (0:char *    1:short     2:float    3:BCD   4:int   5:bit)   
+int g_fxplcbitpos = 0; 
 uint16_t g_lastdata[32] = {0};
 char g_lastrdata[5] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
@@ -69,7 +70,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 GetSwitchCount());
             break;
@@ -78,7 +79,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, jsondata.devTypeId, DEVTYPENAME, GetStaIp(), jsondata.orderId, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 GetSwitchLevel());
             break;
@@ -93,7 +94,7 @@ void ParseOpCode(char *str, uint8_t op)
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata);
             } else if ((g_fxplcdataformat == 1) || (g_fxplcdataformat == 4) || (g_fxplcdataformat == 5) ) {
@@ -125,7 +126,7 @@ void ParseOpCode(char *str, uint8_t op)
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
 #endif
@@ -141,7 +142,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
@@ -160,7 +161,7 @@ void ParseOpCode(char *str, uint8_t op)
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                         idata / 10.0);
                     } else {
@@ -168,7 +169,7 @@ void ParseOpCode(char *str, uint8_t op)
                          (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%u\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%u\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                         idata);
                     // }
@@ -191,7 +192,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
@@ -215,7 +216,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata);
                 }
@@ -233,7 +234,7 @@ void ParseOpCode(char *str, uint8_t op)
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata);
                 
@@ -251,7 +252,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
@@ -272,7 +273,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
                 }
@@ -292,7 +293,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2F\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2F\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
@@ -313,7 +314,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata);
                 }
@@ -332,7 +333,7 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
                     "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
@@ -353,10 +354,22 @@ void ParseOpCode(char *str, uint8_t op)
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
                 }
+            } else if (g_fxplcdataformat == 5) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                (void)sscanf(rdata, "%x", &idata);
+                idata >>= g_fxplcbitpos;
+                idata &= 0x0001;
+
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
+                g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                idata);
             }
             break;
         }
@@ -367,13 +380,13 @@ void ParseOpCode(char *str, uint8_t op)
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata);
                 if (strcmp(rdata, g_lastrdata) != 0) {
                     g_senddata = 1;
                 } else {
-                    g_senddata = 0;
+                    g_senddata = 1;
                 }
                 strcpy(g_lastrdata, rdata);
             } else if (g_fxplcdataformat == 1) {
@@ -384,7 +397,7 @@ void ParseOpCode(char *str, uint8_t op)
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
                 g_datapos += 2;
@@ -395,7 +408,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, TEMPDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 electroData.tempControl.realData);
             break;
@@ -404,11 +417,11 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##"
                 "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 electroData.motorData.voltage, g_devId, jsondata.devId, jsondata.devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), 
                 "FR002", jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), electroData.motorData.current);
@@ -418,7 +431,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR002", jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 electroData.motorData.current);
             break;
@@ -427,7 +440,7 @@ void ParseOpCode(char *str, uint8_t op)
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                 "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n};;**##", \ 
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\"\n    \"isAnswer\":\"no\"\n};;**##", \ 
             g_devId, jsondata.devId, jsondata.devName, FREEZERDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                 electroData.freezerData.temperature);
             break;
@@ -671,7 +684,7 @@ void uart_event_task(void *pvParameters)
     size_t buffered_size;
     uint8_t* dtmp = (uint8_t*) malloc(RX_BUF_SIZE);
     int ret;
-    esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
+    // esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
     for(;;) {
         //Waiting for UART event.
         if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {

@@ -125,6 +125,7 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum);
 void HLReadFloatDataRegister(uint32_t address, uint16_t frnum);
 void HLReadBCDDataRegister(uint32_t address, uint16_t frnum);
 void HLWriteRealDataRegister(uint32_t address, float wdata);
+void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum);
 int GetSerialWordDataFromHlPlc(void);
 
 #endif

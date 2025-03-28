@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMAJQ0216"
+#define DEVID        "AMASC0378"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -220,6 +220,7 @@ typedef struct {
 extern ElectroFactoryData electroData;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
+extern int g_fxplcbitpos;
 extern uint64_t g_baseTime;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);

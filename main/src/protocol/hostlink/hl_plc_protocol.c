@@ -50,6 +50,43 @@ static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, Ho
 	return 0;
 }
 
+static int HLPackReadWordCIORegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
+{
+	char str[10] = {0};
+
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->head = HOSTLINK_HEAD;
+	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
+    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
+	rdata->finscomdata.resptime = FINS_TIME;
+	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
+	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
+	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
+	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
+
+	sprintf(str, "%04X", READIO);
+	memcpy(rdata->finscomdata.code, str, 4);
+
+	sprintf(str, "%02X", CIOWORD);
+	memcpy(rdata->finscomdata.mem, str, 2);
+
+	address *= 256;
+	sprintf(str, "%06X", address);
+	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
+	
+	sprintf(str, "%04X", length);
+	memcpy(rdata->finscomdata.text_num, str, 4);
+
+
+	sprintf(str, "%02X", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
+	memcpy(rdata->fcs, str, 2);
+	memcpy(rdata->end, HOSTLINK_END, 2);
+	return 0;
+}
+
 static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, HostLinkWriteRealCommandFrameFormat* rdata)
 {
 	char str[10] = {0};
@@ -93,6 +130,16 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 1;
+    vTaskDelay(30);
+}
+
+void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
+{
+	HLPackReadWordCIORegisterFrame(address, 1, &hlsdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = 5;
+	g_fxplcbitpos = bitpos;
     vTaskDelay(30);
 }
 
@@ -193,7 +240,7 @@ int GetSerialWordDataFromHlPlc(void)
 		return -1;
 	}
 
-	if (g_fxplcdataformat == 1 || g_fxplcdataformat == 3) {
+	if (g_fxplcdataformat == 1 || g_fxplcdataformat == 3 || g_fxplcdataformat == 5) {
 		ret = UART_ReadBufferBytes(dataArry, 4);
 		if (ret != 0) {
 			return -1;
