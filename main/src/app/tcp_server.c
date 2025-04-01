@@ -1192,7 +1192,8 @@ void send_data_task(void *pvParameters)
             // for (i = 0; i < 5120; i++) {
             //     LSLoadReadSingleDataRegister(i, i);
             // }
-            DBSReadData();
+            // DBSReadData();
+            TRReadData();
     #endif
 
     #ifdef CONFIG_PLC_RS485
@@ -1234,9 +1235,11 @@ void send_data_task(void *pvParameters)
             // 高速冲床
             // HLReadSingleDataRegister(12, 1);         // 总累计冲次
             // HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
+            // HLWriteBitCIORegister(2, 0, 0, 1);
+            HLWriteBitCIORegister(2, 0, 1, 1);
             HLReadBitCIORegister(100, 0, 1);
             HLReadBitCIORegister(100, 1, 2);
-            HLReadBitCIORegister(101, 5, 3);
+            HLReadBitCIORegister(101, 5, 1);
 #endif 
 
 #ifdef CONFIG_TESTER_76T

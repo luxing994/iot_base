@@ -82,9 +82,38 @@ typedef struct {
 } DbsResponseFrameFormat;
 #pragma pack()
 
+/*
+TR0906-N真空计
+UART传输格式
+通讯方式：RS-232
+数据位：8位
+停止位：1位
+波特率: 9600bps
+奇偶: 无
+*/
+#define TR_ADDRESS           0x01    // 设备地址
+#define TR_REQUIRE_CODE      0xA2    // 响应帧帧头
+
+#pragma pack(1)
+typedef struct {
+    uint8_t addr;
+    uint8_t commmand;
+    uint8_t check;
+} TrSendFrameFormat;
+
+typedef struct {
+    uint8_t addr;
+    uint8_t commmand;
+    uint8_t data[4];
+    uint8_t check;
+} TrResponseFrameFormat;
+#pragma pack()
+
 void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum);
 int LSLoadGetSerialWordDataFromFxPlc(void);
 void DBSReadData(void);
 int DBSGetData(void);
+void TRReadData(void);
+int TRGetData(void);
 
 #endif

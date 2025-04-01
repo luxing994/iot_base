@@ -12,6 +12,8 @@
 HostLinkCommandFrameFormat hlsdatabuff = {0};
 HostLinkResponseFrameFormat hlrdatabuff = {0};
 HostLinkWriteRealCommandFrameFormat hlwrdatabuff = {0};
+HostLinkWriteCIOCommandFrameFormat hlwbdatabuff = {0};
+int feedback_data;
 
 static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
 {
@@ -87,6 +89,45 @@ static int HLPackReadWordCIORegisterFrame(uint32_t address, uint16_t length, Hos
 	return 0;
 }
 
+static int HLPackWriteWordCIORegisterFrame(uint32_t address, uint16_t bitpos, uint16_t data, HostLinkWriteCIOCommandFrameFormat* rdata)
+{
+	char str[10] = {0};
+
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->head = HOSTLINK_HEAD;
+	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
+    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
+	rdata->finscomdata.resptime = FINS_TIME;
+	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
+	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
+	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
+	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
+
+	sprintf(str, "%04X", WRITEIO);
+	memcpy(rdata->finscomdata.code, str, 4);
+
+	sprintf(str, "%02X", CIOBIT);
+	memcpy(rdata->finscomdata.mem, str, 2);
+
+	address *= 256;
+	address += bitpos;
+	sprintf(str, "%06X", address);
+	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
+
+	sprintf(str, "%04X", 1);
+	memcpy(rdata->finscomdata.text_num, str, 4);
+	sprintf(str, "%02X", data);
+	memcpy(rdata->finscomdata.text_data, str, 4);
+
+	sprintf(str, "%02X", CalFCS(&hlwbdatabuff, sizeof(HostLinkWriteCIOCommandFrameFormat) - 4));
+	memcpy(rdata->fcs, str, 2);
+	memcpy(rdata->end, HOSTLINK_END, 2);
+	return 0;
+}
+
 static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, HostLinkWriteRealCommandFrameFormat* rdata)
 {
 	char str[10] = {0};
@@ -124,6 +165,11 @@ static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, Ho
 	return 0;
 }
 
+void HLReadDataCallback(int data)
+{
+	feedback_data = data;
+}
+
 void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 {
 	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
@@ -158,6 +204,15 @@ void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = 3;
+    vTaskDelay(30);
+}
+
+void HLWriteBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t data, uint16_t frnum)
+{
+	// HLReadBitCIORegister(address, bitpos, frnum);
+	// feedback_data = feedback_data | (0x0001 << bitpos);
+	HLPackWriteWordCIORegisterFrame(address, bitpos, data, &hlwbdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwbdatabuff, sizeof(HostLinkWriteCIOCommandFrameFormat));
     vTaskDelay(30);
 }
 

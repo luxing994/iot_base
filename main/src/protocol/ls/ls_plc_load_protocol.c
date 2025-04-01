@@ -12,6 +12,10 @@
 LsLoadCommandFrameFormat lsloadsdatabuff = {0};
 LsLoadAckFrameFormat lsloadackrdatabuff = {0};
 LsLoadNackFrameFormat lsloadnackrdatabuff = {0};
+
+TrSendFrameFormat trsenddatabuff = {0};
+TrResponseFrameFormat trresponsedatabuff = {0};
+
 static const char *TAG = "LS_LOAD_GET_SERIAL_DATA";
 
 static int LSLoadPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, LsLoadCommandFrameFormat* rdata)
@@ -154,6 +158,62 @@ int DBSGetData(void)
 	if (ret != 0) {
 		return -1;
 	}
+
+
+	return 0;
+}
+
+void TRReadData(void)
+{
+	trsenddatabuff.addr = TR_ADDRESS;
+	trsenddatabuff.commmand = TR_REQUIRE_CODE;
+	trsenddatabuff.check = CalFCS(&trsenddatabuff, sizeof(TrSendFrameFormat) - 1);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&trsenddatabuff, sizeof(TrSendFrameFormat));
+	g_fxplcdataformat = 0;
+}
+
+int TRGetData(void)
+{
+	uint8_t curData1 = 0;
+	uint8_t curData2 = 0;
+	uint8_t checkcode = 0;
+	int ret;
+	char str[5] = {0};
+
+	while (curData1 != TR_ADDRESS || curData2 != TR_REQUIRE_CODE) {
+		ret = UART_ReadBufferBytes(&curData1, 1);
+		if (ret != 0) {
+			return -1;
+		}
+
+		ret = UART_ReadBufferBytes(&curData2, 1);
+		if (ret != 0) {
+			return -1;
+		}
+	}
+	trresponsedatabuff.addr = curData1;
+	trresponsedatabuff.commmand = curData2;
+
+	ret = UART_ReadBufferBytes(trresponsedatabuff.data, 4);
+	if (ret != 0) {
+		return -1;
+	}
+	
+	memcpy(str, trresponsedatabuff.data, 4);
+	ESP_LOGI(TAG, "TR read data: %s", str);
+	ret = FXPLC_WriteBufferBytes((uint8_t *)str, sizeof(str));
+	if (ret != 0) {
+		return -1;
+	}
+
+	ret = UART_ReadBufferBytes(&checkcode, 1);
+	if (ret != 0) {
+		return -1;
+	}
+
+	// if (checkcode != CalFCS(&trresponsedatabuff, sizeof(TrResponseFrameFormat) - 1)) {
+	// 	return -1;
+	// }
 
 
 	return 0;
