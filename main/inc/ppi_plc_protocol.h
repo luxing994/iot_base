@@ -149,6 +149,8 @@ typedef struct {
 #pragma pack()
 
 void PPIReadByteDataRegister(uint32_t address, uint8_t length, uint16_t frnum);
+void PPIReadBitInputRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum);
+void PPIReadBitOutputRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum);
 int GetSerialWordDataFromPpiPlc(void);
 
 #endif

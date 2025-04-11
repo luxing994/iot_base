@@ -408,7 +408,7 @@ void ParseOpCode(char *str, uint8_t op)
         }
         case PPIPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
-            if (g_fxplcdataformat == 0) {
+            if (g_fxplcdataformat == 0 || g_fxplcdataformat == 5) {
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, 1);
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
@@ -416,7 +416,7 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata[0]);
-            } 
+            }
             /*
             else if (g_fxplcdataformat == 1) {
                 for (i = 0 ; i < 4; i++) {

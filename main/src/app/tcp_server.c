@@ -1244,9 +1244,13 @@ void send_data_task(void *pvParameters)
 #endif 
 
 #ifdef CONFIG_PLC_PPI
-            PPIReadByteDataRegister(100, 1, 0);
-            PPIReadByteDataRegister(101, 1, 2);
-            PPIReadByteDataRegister(102, 1, 3);
+            // PPIReadByteDataRegister(100, 1, 0);
+            // PPIReadByteDataRegister(101, 1, 2);
+            // PPIReadByteDataRegister(102, 1, 3);
+            PPIReadBitInputRegister(1, 7, 1, 0);
+            PPIReadBitInputRegister(2, 3, 1, 1);
+            PPIReadBitOutputRegister(1, 6, 1, 2);
+            PPIReadBitOutputRegister(2, 0, 1, 3);
 #endif
 
 #ifdef CONFIG_TESTER_76T
