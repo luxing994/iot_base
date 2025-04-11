@@ -24,6 +24,7 @@
 #include "iot_common.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
+#include "ppi_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
@@ -1236,11 +1237,17 @@ void send_data_task(void *pvParameters)
             // HLReadSingleDataRegister(12, 1);         // 总累计冲次
             // HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
             // HLWriteBitCIORegister(2, 0, 0, 1);
-            HLWriteBitCIORegister(2, 0, 1, 1);
+            // HLWriteBitCIORegister(2, 0, 1, 1);
             HLReadBitCIORegister(100, 0, 1);
             HLReadBitCIORegister(100, 1, 2);
-            HLReadBitCIORegister(101, 5, 1);
+            HLReadBitCIORegister(101, 5, 1);        
 #endif 
+
+#ifdef CONFIG_PLC_PPI
+            PPIReadByteDataRegister(100, 1, 0);
+            PPIReadByteDataRegister(101, 1, 2);
+            PPIReadByteDataRegister(102, 1, 3);
+#endif
 
 #ifdef CONFIG_TESTER_76T
             if (g_snttestercurrentgroup == 0) {

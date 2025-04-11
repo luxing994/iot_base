@@ -15,6 +15,7 @@
 #define FREEZERDATA      36
 #define HLPLCDEMODATA    37
 #define LSPLCDEMODATA    38
+#define PPIPLCDEMODATA   39
 
 #define VERSION_SIZE     4
 

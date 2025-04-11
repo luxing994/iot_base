@@ -25,7 +25,7 @@ EventGroupHandle_t xEventGroup3;
 
 void app_main(void)
 {    
-#if defined(CONFIG_MB_COMM_MODE_RTU) || defined(CONFIG_PLC_FX) || defined(CONFIG_PLC_HOSTLINK) || defined(CONFIG_PLC_LS_LOAD) || defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
+#if defined(CONFIG_MB_COMM_MODE_RTU) || defined(CONFIG_PLC_FX) || defined(CONFIG_PLC_HOSTLINK) || defined(CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -45,7 +45,7 @@ void app_main(void)
     #endif
 #endif
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
     uart_init();
 #endif
     InitSensorGpio();
@@ -58,7 +58,7 @@ void app_main(void)
 
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
 #endif
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);

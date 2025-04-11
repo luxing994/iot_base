@@ -230,6 +230,9 @@ choice PLC_PRO_MODE
     config PLC_HOSTLINK
         bool "hostlink protocol"
 
+    config PLC_PPI
+        bool "ppi protocol"
+
     config PLC_MUDBUS
         bool "modbus protocol"
     

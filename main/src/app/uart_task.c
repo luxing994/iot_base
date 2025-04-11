@@ -25,6 +25,7 @@
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
+#include "ppi_plc_protocol.h"
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
 
@@ -46,7 +47,7 @@ uint32_t g_devStartStatus = 0;
 int g_rdatalen = 1;
 int g_senddata = 1;
 int g_fxplccount = 0;
-int g_fxplcdataformat = 0;   // (0:char *    1:short     2:float    3:BCD   4:int   5:bit)   
+int g_fxplcdataformat = 0;   // (0:char * or byte(for ppi)  1:short     2:float    3:BCD   4:int   5:bit)   
 int g_fxplcbitpos = 0; 
 uint16_t g_lastdata[32] = {0};
 char g_lastrdata[5] = {0};
@@ -405,6 +406,33 @@ void ParseOpCode(char *str, uint8_t op)
             }
             break;
         }
+        case PPIPLCDEMODATA: {
+            (void)sprintf(frstr, "FR%03d", g_fxplccount);
+            if (g_fxplcdataformat == 0) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 1);
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    rdata[0]);
+            } 
+            /*
+            else if (g_fxplcdataformat == 1) {
+                for (i = 0 ; i < 4; i++) {
+                    FXPLC_ReadBufferBytes((uint8_t *)&rdata[(i + 2) % 4], 1);
+                } 
+                (void)sscanf(rdata, "%x", &idata);
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    idata);
+                g_datapos += 2;
+            }*/
+            break;
+        }
         case TEMPCONTROLDATA: {
             (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
 		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
@@ -452,7 +480,7 @@ void ParseOpCode(char *str, uint8_t op)
     }
 }
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
 void uart_init(void) {
     int ret;
     static const char *UART_INIT_TAG = "UART_INIT";
@@ -485,6 +513,17 @@ void uart_init(void) {
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#endif
+
+#ifdef CONFIG_PLC_PPI
+    const uart_config_t uart_config = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_EVEN,
+        .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
@@ -625,6 +664,10 @@ void rx_task(void *arg)
         ret = GetSerialWordDataFromHlPlc();
 #endif
 
+#ifdef CONFIG_PLC_PPI
+        ret = GetSerialWordDataFromPpiPlc();
+#endif
+
 #ifdef CONFIG_PLC_LS_LOAD
     #ifdef CONFIG_PLC_RS232
         // ret = LSLoadGetSerialWordDataFromFxPlc();
@@ -650,6 +693,10 @@ void rx_task(void *arg)
 
 #ifdef CONFIG_PLC_HOSTLINK
             ParseOpCode(controlerStr, HLPLCDEMODATA);
+#endif
+
+#ifdef CONFIG_PLC_PPI
+            ParseOpCode(controlerStr, PPIPLCDEMODATA);
 #endif
 
 #ifdef CONFIG_PLC_LS_LOAD
