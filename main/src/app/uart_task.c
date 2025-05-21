@@ -100,8 +100,15 @@ void ParseOpCode(char *str, uint8_t op)
                     rdata);
             } else if ((g_fxplcdataformat == 1) || (g_fxplcdataformat == 4) || (g_fxplcdataformat == 5) ) {
                 if (g_fxplcdataformat == 1) {
+#if defined(CONFIG_PLC_RS232) || defined(CONFIG_PLC_RS485)
                     FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                     (void)sscanf(rdata, "%x", &idata);
+#endif
+
+#if defined(CONFIG_PLC_NETWORK)
+                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
+                    idata = rdata[1] << 8 | rdata[0];
+#endif
                 } else if (g_fxplcdataformat == 4) {
                     FXPLC_ReadBufferBytes((uint8_t *)rdatal, 4);
                     FXPLC_ReadBufferBytes((uint8_t *)rdatah, 4);
@@ -657,6 +664,11 @@ void rx_task(void *arg)
 
     #ifdef CONFIG_PLC_RS485
         ret = GetSerialDataFromFxPlc();
+        
+    #endif
+
+    #ifdef CONFIG_PLC_NETWORK
+        ret = GetNetDataFromFxPlc();
     #endif
 #endif
 

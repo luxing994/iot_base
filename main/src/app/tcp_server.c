@@ -1238,9 +1238,14 @@ void send_data_task(void *pvParameters)
             // HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
             // HLWriteBitCIORegister(2, 0, 0, 1);
             // HLWriteBitCIORegister(2, 0, 1, 1);
-            HLReadBitCIORegister(100, 0, 1);
-            HLReadBitCIORegister(100, 1, 2);
-            HLReadBitCIORegister(101, 5, 1);        
+            HLReadBitCIORegister(101, 5, 1);
+            HLReadBitCIORegister(101, 4, 2);
+            HLReadBitCIORegister(102, 2, 3);
+            HLReadBitCIORegister(102, 3, 4);
+            HLReadBitCIORegister(101, 2, 5);
+            HLReadBitCIORegister(101, 3, 6);
+            HLReadBitCIORegister(100, 0, 7);
+            HLReadBitCIORegister(100, 1, 8);
 #endif 
 
 #ifdef CONFIG_PLC_PPI

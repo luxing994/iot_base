@@ -251,6 +251,23 @@ choice PLC_CONNECT_MODE
 
     config PLC_RS485
         bool "rs485(serial port)"
+    
+    config PLC_NETWORK
+        bool "wired network port"
+    if PLC_NETWORK
+        config EXAMPLE_IPV4_ADDR1
+            string "IPV4 Address1"
+            default "169.254.221.82"
+            help
+                The PLC server IP configaration.
+        
+        config EXAMPLE_PORT2
+            int "Port2"
+            range 0 65535
+            default 8765
+            help
+                The PLC server port.
+    endif 
 
 endchoice
 

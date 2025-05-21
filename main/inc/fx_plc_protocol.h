@@ -77,6 +77,38 @@ UART传输格式
 #define FX_PLC_MAX_Y  32
 #define FX_PLC_MAX_Y_LEN  (FX_PLC_MAX_Y / 8)
 
+// FX PLC 以太网口指令
+#define FX_PLC_NET_REQUIRE_START_FIRST 0x50
+#define FX_PLC_NET_REQUIRE_START_SECOND 0x00
+#define FX_PLC_NET_RESPONSE_START_FIRST 0xD0
+#define FX_PLC_NET_RESPONSE_START_SECOND 0x00
+#define FX_PLC_NET_NET_NUMBER 0x00
+#define FX_PLC_NET_PLC_NUMBER 0xFF
+#define FX_PLC_NET_IO_NUMBER 0x03FF
+#define FX_PLC_NET_MODULE_NUMBER 0x00
+#define FX_PLC_NET_WATCHTIMER 0x000A
+
+#define FX_PLC_NET_FIRST_INS_MWORD_MB_READ 0x0406      // Multiple block(1 block contain n word)
+#define FX_PLC_NET_FIRST_INS_MWORD_MB_WRITE 0x1406      // Multiple block(1 block contain n word)
+#define FX_PLC_NET_FIRST_INS_MDATA_OB_READ 0x0401      // One block(1 block contain n data:word or bit)
+#define FX_PLC_NET_FIRST_INS_MDATA_OB_WRITE 0x1401      // One block(1 block contain n data:word or bit)
+
+#define FX_PLC_NET_SECOND_INSTRUCTION_WORD 0x0000      // word
+#define FX_PLC_NET_SECOND_INSTRUCTION_BIT 0x0001      // bit: 0401 1401 
+
+#define FX_PLC_NET_FIRST_LEN_MDATA_OB_READ 0x000C
+#define FX_PLC_NET_RESPONSE_FRAME_MIN_SIZE 11 
+
+#define FX_PLC_NET_REGISTER_D 0xA8
+#define FX_PLC_NET_REGISTER_X 0x9C
+#define FX_PLC_NET_REGISTER_Y 0x9D
+#define FX_PLC_NET_REGISTER_M 0x90
+#define FX_PLC_NET_REGISTER_L 0x92
+#define FX_PLC_NET_REGISTER_F 0x93
+#define FX_PLC_NET_REGISTER_V 0x94
+#define FX_PLC_NET_REGISTER_B 0xA0
+#define FX_PLC_NET_REGISTER_W 0xB4
+
 // FX PLC 编程口通讯格式
 #pragma pack(1)
 typedef struct {
@@ -144,7 +176,36 @@ typedef struct {
     uint8_t pcnum[2];
     uint8_t errorcode[2];
 } FxPlcSerialAnsNackFrameFormat;
+
+// FX PLC 以太网口通讯格式
+typedef struct {
+    uint8_t sechead[2];
+    uint8_t netnum;
+    uint8_t plcnum;
+    uint8_t ionum[2];
+    uint8_t modulenum;  
+    uint8_t length[2];        // start:watchtimer[0]
+    uint8_t watchtimer[2];
+    uint8_t instruction[2];
+    uint8_t secinstruction[2];
+    uint8_t startregaddr[3];
+    uint8_t regcode;
+    uint8_t regnum[2];
+} FxPlcInternetAskReadFrameFormat;
+
+typedef struct {
+    uint8_t sechead[2];
+    uint8_t netnum;
+    uint8_t plcnum;
+    uint8_t ionum[2];
+    uint8_t modulenum;  
+    uint8_t length[2];    // start:endcode[0]
+    uint8_t endcode[2];
+    uint8_t* data;
+} FxPlcInternetAskReadBackFrameFormat;
 #pragma pack()
+
+extern FxPlcInternetAskReadFrameFormat netsdatabuff;
 
 void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
@@ -154,10 +215,13 @@ void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t
 void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
+void FX_PackNetReadSingleDataRegister(uint32_t address, uint16_t frnum);
+void FX_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype);
 int ReadInputRelayData();
 int ReadOutputRelayData();
 int GetDataFromFxPlc(void);
 int GetSerialDataFromFxPlc(void);
+int GetNetDataFromFxPlc(void);
 int FXPLC_InitBuffer(void);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 

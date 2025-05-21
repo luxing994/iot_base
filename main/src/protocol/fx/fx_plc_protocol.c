@@ -15,6 +15,11 @@ FxPlcSerialAskWriteFrameFormat swfdatabuff = {0};
 FxPlcSerialAnsNackFrameFormat srbedatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mackdatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mnackdatabuff = {0};
+FxPlcInternetAskReadFrameFormat netsdatabuff = {0};
+uint32_t netsrdatabuffaddr = 0;
+uint32_t netsrdatalen = 0;
+
+static int netdatarecvflag = 0;
 
 static int MoveLeftArry(uint8_t *data, uint16_t length, uint16_t num)
 {
@@ -325,6 +330,40 @@ static int PackSerialWriteRealDataRegisterFrame(uint16_t plcnum, uint16_t pcnum,
 	return 0;
 }
 
+static int PackNetReadDataRegisterFrame(uint8_t netnum, uint8_t plcnum, uint16_t ionum, uint8_t mudulenum, uint32_t address,  
+	uint16_t length, FxPlcInternetAskReadFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->sechead[0] = FX_PLC_NET_REQUIRE_START_FIRST;
+	rdata->sechead[1] = FX_PLC_NET_REQUIRE_START_SECOND;
+	rdata->netnum = netnum;
+	rdata->plcnum = plcnum;
+	rdata->ionum[0] = ionum & 0xff;
+	rdata->ionum[1] = (ionum >> 8) & 0xff;
+	rdata->modulenum = mudulenum;
+	rdata->length[0] = FX_PLC_NET_FIRST_LEN_MDATA_OB_READ & 0xff;
+	rdata->length[1] = (FX_PLC_NET_FIRST_LEN_MDATA_OB_READ >> 8) & 0xff;
+	rdata->watchtimer[0] = FX_PLC_NET_WATCHTIMER & 0xff;
+	rdata->watchtimer[1] = (FX_PLC_NET_WATCHTIMER >> 8) & 0xff;
+	rdata->instruction[0] = FX_PLC_NET_FIRST_INS_MDATA_OB_READ & 0xff;
+    rdata->instruction[1] = (FX_PLC_NET_FIRST_INS_MDATA_OB_READ >> 8) & 0xff;
+	rdata->secinstruction[0] = FX_PLC_NET_SECOND_INSTRUCTION_WORD & 0xff;
+	rdata->secinstruction[1] = (FX_PLC_NET_SECOND_INSTRUCTION_WORD >> 8) & 0xff;
+    
+	rdata->startregaddr[0] = address & 0xff;
+	rdata->startregaddr[1] = (address >> 8) & 0xff;
+	rdata->startregaddr[2] = (address >> 16) & 0xff;
+
+	rdata->regcode = FX_PLC_NET_REGISTER_D;
+	rdata->regnum[0] = length & 0xff;
+	rdata->regnum[1] = (length >> 8) & 0xff;
+
+	return 0;
+}
+
 int GetDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
@@ -446,6 +485,57 @@ int GetSerialDataFromFxPlc(void)
 	return 0;
 }
 
+void FX_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype)
+{
+    netdatarecvflag = 1;
+	netsrdatabuffaddr = dataaddr;
+	netsrdatalen = len;
+	g_fxplccount = frnum;
+	g_fxplcdataformat = datatype;
+}
+
+int GetNetDataFromFxPlc(void)
+{
+	uint16_t datalen;
+	int16_t tdata;
+	uint8_t* data = NULL;
+	static const char *TAG = "GET_NET_DATA";
+	int i, ret;
+
+	if (netdatarecvflag != 1 || netsrdatabuffaddr == NULL || netsrdatalen == 0) {
+		return -1;
+	}
+
+	data = (uint8_t *)netsrdatabuffaddr;
+
+	if (netsrdatalen < FX_PLC_NET_RESPONSE_FRAME_MIN_SIZE) {
+		return -1;
+	}
+
+	if ((data[0] != FX_PLC_NET_RESPONSE_START_FIRST) && (data[1] != FX_PLC_NET_RESPONSE_START_SECOND)) {
+		return -1;
+	}
+
+	datalen = (data[8] << 8 | data[7]) - 2;
+	if (netsrdatalen != sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + datalen) {
+		return -1;
+	}
+	
+	for (i = 0; i < datalen / 2; i++) {
+		tdata = (data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i + 1] << 8) | \
+		data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i];
+		ret = FXPLC_WriteBufferBytes(&tdata, sizeof(tdata));
+		if (ret != 0) {
+			ESP_LOGE(TAG, "fx buffer error: %d", ret);
+			return -1;
+		}
+	}
+
+	netdatarecvflag = 0;
+
+	return 0;
+}
+
 void SendAckToPlc(void)
 {
 	mackdatabuff.ack = PLC_ACK;
@@ -544,4 +634,10 @@ int ReadOutputRelayData()
 
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&rdatabuff, sizeof(FxPlcReadFrameFormat));
 	return 0;
+}
+
+void FX_PackNetReadSingleDataRegister(uint32_t address, uint16_t frnum)
+{
+	PackNetReadDataRegisterFrame(FX_PLC_NET_NET_NUMBER, FX_PLC_NET_PLC_NUMBER, FX_PLC_NET_IO_NUMBER, \
+		FX_PLC_NET_MODULE_NUMBER, address, 1, &netsdatabuff);
 }
