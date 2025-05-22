@@ -1,5 +1,5 @@
-#ifndef FX_PLC_PROTOCOL
-#define FX_PLC_PROTOCOL
+#ifndef FX_PLC_PROTOCOL_H
+#define FX_PLC_PROTOCOL_H
 
 #include <stdint.h>
 

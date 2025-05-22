@@ -1,5 +1,5 @@
-#ifndef HL_PLC_PROTOCOL
-#define HL_PLC_PROTOCOL
+#ifndef HL_PLC_PROTOCOL_H
+#define HL_PLC_PROTOCOL_H
 
 #include <stdint.h>
 

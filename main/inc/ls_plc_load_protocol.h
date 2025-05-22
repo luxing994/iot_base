@@ -1,5 +1,5 @@
-#ifndef LS_PLC_LOAD_PROTOCOL
-#define LS_PLC_LOAD_PROTOCOL
+#ifndef LS_PLC_LOAD_PROTOCOL_H
+#define LS_PLC_LOAD_PROTOCOL_H
 
 #include <stdint.h>
 

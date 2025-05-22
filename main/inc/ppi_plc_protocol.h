@@ -1,5 +1,5 @@
-#ifndef PPI_PLC_PROTOCOL
-#define PPI_PLC_PROTOCOL
+#ifndef PPI_PLC_PROTOCOL_H
+#define PPI_PLC_PROTOCOL_H
 
 #include <stdint.h>
 

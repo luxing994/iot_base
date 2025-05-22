@@ -26,6 +26,7 @@
 #include "time.h"
 #include "tcp_server.h"
 #include "fx_plc_protocol.h"
+#include "ota_task.h"
 
 
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -46,6 +47,7 @@
 static char initdata[1024] = {0};
 static char initrevdata[1024] = {0};
 char mcu_ip[32] = {0};
+int ota_tcp_sock;
 
 static bool is_our_netif(const char *prefix, esp_netif_t *netif)
 {
@@ -66,6 +68,23 @@ static void GetIpArry(char *ip, int *data, uint16_t len)
     for (i = 0; i < len && token != NULL; i++) {
         data[i] = atoi(token);
         token = strtok(NULL, ".");
+    }
+}
+
+static void handle_tcp_ota_command(const char *cmd_line) {
+    // 跳过前导空白
+    while (*cmd_line == ' ' || *cmd_line == '\t') ++cmd_line;
+
+    const char *prefix = "OTA_UPDATE:";
+    if (strstr(cmd_line, prefix) == cmd_line) {
+        const char *url = cmd_line + strlen(prefix);
+        ESP_LOGI("OTA_CMD", "解析到 OTA 更新，URL=%s", url);
+        char *u = strdup(url);
+        if (u) {
+            xTaskCreate(ota_task, "ota_task", 8192, u, 5, NULL);
+        }
+    } else {
+        ESP_LOGI("OTA_CMD", "未知命令：%s", cmd_line);
     }
 }
 
@@ -181,7 +200,6 @@ void tcp_client1_task(void *pvParameters)
 {
     int addr_family = 0;
     int ip_protocol = 0;
-    int sock;
     uint32_t recvp;
     char host_ip[] = HOST_IP_ADDR;
     const char *TAG = "tcp client1";
@@ -211,28 +229,29 @@ void tcp_client1_task(void *pvParameters)
         struct sockaddr_storage dest_addr = { 0 };
         ESP_ERROR_CHECK(get_addr_from_stdin(PORT1, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
-        sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-        if (sock < 0) {
+        ota_tcp_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
+        if (ota_tcp_sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
         }
         // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT1);
         ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT1);
 
-        int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
+        int err = connect(ota_tcp_sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {
             ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
             goto end;
         }
         ESP_LOGI(TAG, "Successfully connected");
+        ESP_LOGI(TAG, "Firmware version: V3");
 
         PackInitData(host_ip);
-        err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
+        err = send(ota_tcp_sock, (uint8_t *)initdata, strlen(initdata), 0);
         if (err < 0) {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
         }
 
-        int len = recv(sock, initrevdata, sizeof(initrevdata) - 1, 0);
+        int len = recv(ota_tcp_sock, initrevdata, sizeof(initrevdata) - 1, 0);
         // Error occurred during receiving
         if (len < 0) {
             ESP_LOGE(TAG, "recv failed: errno %d", errno);
@@ -246,22 +265,35 @@ void tcp_client1_task(void *pvParameters)
             g_baseTime = atoll(initrevdata);
             ESP_LOGI(TAG, "time:%lld  timenow:%lld\n", g_baseTime, GetMilliTimeNow());
         }
-        memset(initdata, 0, sizeof(initdata));
-        PackHeartBeatData();
+        
         while (1) {
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
-            err = send(sock, (uint8_t *)initdata, strlen(initdata), 0);
+            PackHeartBeatData();
+            err = send(ota_tcp_sock, (uint8_t *)initdata, strlen(initdata), 0);
             if (err < 0) {
                 ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                 break;
             }
+
+            // 非阻塞接收命令
+            len = recv(ota_tcp_sock, initrevdata, sizeof(initrevdata) - 1, MSG_DONTWAIT);
+            if (len > 0) {
+                initrevdata[len] = '\0';
+                // 按行拆分并逐行解析
+                char *saveptr = NULL;
+                char *line = strtok_r(initrevdata, "\r\n", &saveptr);
+                while (line) {
+                    handle_tcp_ota_command(line);
+                    line = strtok_r(NULL, "\r\n", &saveptr);
+                }
+            }
         }
 
         end:
-        if (sock != -1) {
+        if (ota_tcp_sock != -1) {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
+            shutdown(ota_tcp_sock, 0);
+            close(ota_tcp_sock);
         }
     }
     vTaskDelete(NULL);
