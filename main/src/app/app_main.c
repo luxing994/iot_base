@@ -66,6 +66,7 @@ void app_main(void)
 #if (defined CONFIG_PLC_NETWORK)
     xTaskCreate(tcp_client2_task, "tcp_client2", 1024*8, NULL, 5, NULL);
 #endif
+    xTaskCreate(tcp_client3_task, "tcp_client3", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(send_data_task, "send_data_task", 4096, (void*)AF_INET, 5, NULL);

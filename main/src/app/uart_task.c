@@ -683,8 +683,8 @@ void rx_task(void *arg)
 #ifdef CONFIG_PLC_LS_LOAD
     #ifdef CONFIG_PLC_RS232
         // ret = LSLoadGetSerialWordDataFromFxPlc();
-        // ret = DBSGetData();
-        ret = TRGetData();
+        ret = DBSGetData();
+        // ret = TRGetData();
     #endif
 #endif
 

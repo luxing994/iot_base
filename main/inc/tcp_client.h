@@ -6,6 +6,7 @@ void tcp_client1_task(void *pvParameters);
 #if (defined CONFIG_PLC_NETWORK)
 void tcp_client2_task(void *pvParameters);
 #endif
+void tcp_client3_task(void *pvParameters);
 void heart_beat_task(void *pvParameters);
 char* GetStaIp(void);
 

@@ -1193,8 +1193,8 @@ void send_data_task(void *pvParameters)
             // for (i = 0; i < 5120; i++) {
             //     LSLoadReadSingleDataRegister(i, i);
             // }
-            // DBSReadData();
-            TRReadData();
+            DBSReadData();
+            // TRReadData();
     #endif
 
     #ifdef CONFIG_PLC_RS485
