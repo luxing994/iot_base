@@ -6,18 +6,19 @@
 #define HPRO_HEAD_FIRST_BYTE      0x5A
 #define HPRO_HEAD_SECOND_BYTE     0xA5
 
-#define SWITCHCOUNT      30
-#define SWITCHSTATUS     31
-#define FXPLCDEMODATA    32
-#define TEMPCONTROLDATA  33
-#define MOTORDATAVOL     34
-#define MOTORDATACUR     35
-#define FREEZERDATA      36
-#define HLPLCDEMODATA    37
-#define LSPLCDEMODATA    38
-#define PPIPLCDEMODATA   39
+#define SWITCHCOUNT         30
+#define SWITCHSTATUS        31
+#define FXPLCDEMODATA       32
+#define TEMPCONTROLDATA     33
+#define MOTORDATAVOL        34
+#define MOTORDATACUR        35
+#define FREEZERDATA         36
+#define HLPLCDEMODATA       37
+#define LSPLCDEMODATA       38
+#define PPIPLCDEMODATA      39
+#define MODBUSPLCDEMODATA   40
 
-#define VERSION_SIZE     4
+#define VERSION_SIZE        4
 
 typedef enum {
     READ = 0x01,

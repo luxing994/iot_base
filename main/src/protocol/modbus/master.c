@@ -24,8 +24,11 @@
 
 #define DEVICE_VERSION    FREEZER
 
-#define MB_PORT_NUM     (CONFIG_MB_UART_PORT_NUM)   // Number of UART port used for Modbus connection
-#define MB_DEV_SPEED    (CONFIG_MB_UART_BAUD_RATE)  // The communication speed of the UART
+#define MB_PORT_NUM       1   // Number of UART port used for Modbus connection
+#define MB_DEV_SPEED      9600  // The communication speed of the UART
+#define MB_UART_TXD_PIN   17
+#define MB_UART_RXD_PIN   18
+#define MB_UART_RTS_PIN   8
 
 // Note: Some pins on target chip cannot be assigned for UART communication.
 // See UART documentation for selected board and target to configure pins using Kconfig.
@@ -423,8 +426,7 @@ esp_err_t master_init(void)
                             (uint32_t)err);
 
     // Set UART pin numbers
-    err = uart_set_pin(MB_PORT_NUM, CONFIG_MB_UART_TXD, CONFIG_MB_UART_RXD,
-                              CONFIG_MB_UART_RTS, UART_PIN_NO_CHANGE);
+    err = uart_set_pin(MB_PORT_NUM, MB_UART_TXD_PIN, MB_UART_RXD_PIN, MB_UART_RTS_PIN, UART_PIN_NO_CHANGE);
 
     err = mbc_master_start();
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,

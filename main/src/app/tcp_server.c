@@ -1165,25 +1165,131 @@ void send_data_task(void *pvParameters)
         #endif
 
         #ifdef CONFIG_SN_CACLREFILMAC
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
-            // SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
-            // SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
-            // SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
-            // SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
-            // SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果
-            
+            SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
+            SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
+            SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
+            SerialReadSingleDataRegister(0, 255, 10, 200, 4);        //  系统压力（A系统）
+            SerialReadSingleDataRegister(0, 255, 10, 210, 5);        //  系统压力（B系统）
+            SerialReadSingleFloatDataRegister(0, 255, 10, 512, 6);   //  灌注量
+            SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
+            SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
+            SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果:4=真空合格 10=真空不合格 52：充注合格
+        #endif
+
+        #ifdef CONFIG_OTHER_DEVICE
             // 弯管机
-            SerialReadSingleYDataRegister(0, 255, 10, 33, 1);        // 报警状态
-            SerialReadSingleYDataRegister(0, 255, 10, 34, 2);        // 自动运行
-            SerialReadSingleYDataRegister(0, 255, 10, 35, 3);        // 停止
-            SerialReadDoubleDataRegister(0, 255, 10, 240, 4);        // 当前产量
-            SerialReadDoubleDataRegister(0, 255, 10, 242, 5);        // 产量设定
-            SerialReadDoubleDataRegister(0, 255, 10, 244, 6);        // 总产量
-            SerialReadDoubleDataRegister(0, 255, 10, 96, 7);        // 每分钟循环次数
+            // SerialReadSingleYDataRegister(0, 255, 10, 62, 1);        // 报警状态
+            // SerialReadSingleYDataRegister(0, 255, 10, 63, 2);        // 自动运行
+            // SerialReadSingleYDataRegister(0, 255, 10, 64, 3);        // 停止
+            // SerialReadDoubleDataRegister(0, 255, 10, 166, 4);        // 当前产量
+            // SerialReadDoubleDataRegister(0, 255, 10, 168, 5);        // 产量设定
+            // SerialReadDoubleDataRegister(0, 255, 10, 170, 6);        // 总产量
+            // SerialReadSingleDataRegister(0, 255, 10, 112, 7);         // 每分钟循环次数
+
+            // 高速冲床（换热车间）
+            SerialReadSingleYDataRegister(0, 255, 10, 94, 1);        // 正常运行状态
+            SerialReadSingleYDataRegister(0, 255, 10, 93, 2);        // 暂停状态
+            SerialReadSingleYDataRegister(0, 255, 10, 92, 3);        // 异常停止状态
+            SerialReadSingleDataRegister(0, 255, 10, 214, 4);        // 白班生产时间
+            SerialReadSingleDataRegister(0, 255, 10, 215, 5);        // 晚班生产时间
+            SerialReadDoubleDataRegister(0, 255, 10, 30, 6);         // 总累计冲次
+            SerialReadSingleDataRegister(0, 255, 10, 10, 7);         // 实时冲速 
+            SerialReadSingleDataRegister(0, 255, 10, 101, 8);        // 当前累积生产数量
+
+            // 双两管无削开料机
+            // SerialReadSingleDataRegister(0, 255, 10, 8340, 1);        // 位置（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 132, 2);         // 长度（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 130, 3);         // 次数（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 134, 4);         // 切割（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 144, 5);         // 总计数值（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 140, 6);         // 计数值（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 138, 7);         // 设定值（自动1）
+            // SerialReadSingleDataRegister(0, 255, 10, 8350, 8);        // 位置（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 182, 9);         // 长度（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 180, 10);        // 次数（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 184, 11);        // 切割（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 194, 12);        // 总计数值（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 190, 13);        // 计数值（自动2）
+            // SerialReadSingleDataRegister(0, 255, 10, 188, 14);        // 设定值（自动2）
             
+            // 毛细管下料机（AMAJQ0205）
+            // SerialReadSingleMDataRegister(0, 255, 10, 222, 1);           // 运行/停止（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 1030, 2);           // 设定（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 224, 3);            // 送料（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 610, 4);            // 检测（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 290, 5);            // 记数值（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 294, 6);            // 设定值（A1组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 223, 7);           // 运行/停止（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 1040, 8);           // 设定（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 274, 9);            // 送料（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 660, 10);           // 检测（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 292, 11);           // 记数值（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 296, 12);           // 设定值（A2组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 224, 13);          // 运行/停止（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 530, 14);           // 设定（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 320, 15);           // 送料（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 640, 16);           // 检测（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 390, 17);           // 记数值（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 394, 18);           // 设定值（B1组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 225, 19);          // 运行/停止（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 540, 20);           // 设定（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 130, 21);           // 送料（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 644, 22);           // 检测（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 392, 23);           // 记数值（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 396, 24);           // 设定值（B2组）
+
+            // 毛细管下料机（AMAJQ0252）
+            // SerialReadSingleYDataRegister(0, 255, 10, 34, 1);            // 运行状态
+            // SerialReadSingleYDataRegister(0, 255, 10, 35, 2);            // 停止状态
+            // SerialReadSingleYDataRegister(0, 255, 10, 36, 3);            // 故障状态
+            // SerialReadSingleDataRegister(0, 255, 10, 908, 4);            // 总计数（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 916, 5);            // 设定值（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 900, 6);            // 计数值（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 300, 7);            // 开料总长（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 306, 8);            // 打凸长度补偿（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 312, 9);            // 长度修正校验（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 314, 10);            // 长度修正不校验（A1组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 770, 11);           // 打凸设定（A1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 910, 12);            // 总计数（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 918, 13);            // 设定值（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 902, 14);            // 计数值（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 350, 15);            // 开料总长（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 356, 16);            // 打凸长度补偿（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 362, 17);            // 长度修正校验（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 354, 18);            // 长度修正不校验（A2组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 771, 19);           // 打凸设定（A2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 912, 20);            // 总计数（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 920, 21);            // 设定值（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 904, 22);            // 计数值（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 600, 23);            // 开料总长（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 606, 24);            // 打凸长度补偿（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 612, 25);            // 长度修正校验（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 614, 26);            // 长度修正不校验（B1组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 772, 27);           // 打凸设定（B1组）
+            // SerialReadSingleDataRegister(0, 255, 10, 914, 28);            // 总计数（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 922, 29);            // 设定值（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 906, 30);            // 计数值（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 650, 31);            // 开料总长（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 656, 32);            // 打凸长度补偿（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 662, 33);            // 长度修正校验（B2组）
+            // SerialReadSingleDataRegister(0, 255, 10, 664, 34);            // 长度修正不校验（B2组）
+            // SerialReadSingleMDataRegister(0, 255, 10, 773, 35);           // 打凸设定（B2组）
+            
+            // 开料机
+            // SerialReadSingleMDataRegister(0, 255, 10, 40, 1);             // 工作状态（1号）
+            // SerialReadSingleMDataRegister(0, 255, 10, 0, 2);              // 故障状态（1号）
+            // SerialReadSingleDataRegister(0, 255, 10, 324, 3);             // 设定量（1号）
+            // SerialReadSingleDataRegister(0, 255, 10, 340, 4);             // 计件量（1号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 350, 5);        // 产品加工长度（1号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 8360, 6);       // 扩口当前位置（1号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 8340, 7);       // 送料当前位置（1号）
+            // SerialReadSingleMDataRegister(0, 255, 10, 90, 8);             // 工作状态（2号）
+            // SerialReadSingleMDataRegister(0, 255, 10, 50, 9);              // 故障状态（2号）
+            // SerialReadSingleDataRegister(0, 255, 10, 524, 10);             // 设定量（2号）
+            // SerialReadSingleDataRegister(0, 255, 10, 540, 11);             // 计件量（2号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 352, 12);        // 产品加工长度（2号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 2520, 13);       // 扩口当前位置（2号）
+            // SerialReadSingleFloatDataRegister(0, 255, 10, 8350, 14);       // 送料当前位置（2号）
         #endif
     #endif
 #endif
@@ -1203,6 +1309,7 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
+    #ifdef CONFIG_SN_CACLREFILMAC
             // 冷媒灌注机
             // HLReadSingleDataRegister(8101, 1);    // A模式选择
             // HLReadSingleDataRegister(8501, 2);    // B模式选择
@@ -1231,8 +1338,9 @@ void send_data_task(void *pvParameters)
             // HLReadSingleDataRegister(8940, 25);   // 结果判定
             // HLReadFloatDataRegister(8150, 26);    // A充注设定值
             // HLReadFloatDataRegister(8550, 27);    // B充注设定值
+    #endif
             
-
+    #ifdef CONFIG_OTHER_DEVICE
             // 高速冲床
             // HLReadSingleDataRegister(12, 1);         // 总累计冲次
             // HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
@@ -1246,6 +1354,7 @@ void send_data_task(void *pvParameters)
             HLReadBitCIORegister(101, 3, 6);
             HLReadBitCIORegister(100, 0, 7);
             HLReadBitCIORegister(100, 1, 8);
+    #endif
 #endif 
 
 #ifdef CONFIG_PLC_PPI
@@ -1271,10 +1380,8 @@ void send_data_task(void *pvParameters)
             AINUO_TTesterReadCurrentGroup();
 #endif
 
-#ifdef CONFIG_PLC_MUDBUS
-    #ifdef CONFIG_MB_COMM_MODE_TCP
-            tcp_master_operation_func(NULL);
-    #else   
+#ifdef CONFIG_PLC_MODBUS
+    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
             master_operation_func(NULL);
     #endif
 #endif
@@ -1283,22 +1390,23 @@ void send_data_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+#ifdef CONFIG_PLC_MODBUS
+    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
 void send_command_task(void *pvParameters)
 {
     const char *TAG = "SEND_COMMAND_TASK";
     EventBits_t uxBits;
-#ifdef CONFIG_PLC_MUDBUS
     while (1) {
-    #ifdef CONFIG_MB_COMM_MODE_TCP  
-    #else   
+    
         uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_0) != 0) {
             master_send_switch_func(1);     // 1:ON   0:OFF
         } else if ((uxBits & BIT_1) != 0) {
             master_send_switch_func(0);
         }      
-    #endif
+    
     }
-#endif
     vTaskDelete(NULL);
 }
+    #endif
+#endif

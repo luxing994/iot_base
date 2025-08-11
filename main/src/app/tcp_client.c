@@ -26,6 +26,7 @@
 #include "time.h"
 #include "tcp_server.h"
 #include "fx_plc_protocol.h"
+#include "lx_modbus_tcp_master.h"
 #include "ota_task.h"
 
 
@@ -39,7 +40,7 @@
 
 #define PORT CONFIG_EXAMPLE_PORT     // read data com
 #define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
-#define PORT2 8767   // init data com
+#define PORT2 CONFIG_EXAMPLE_PORT2   // init data com
 #define PORT3 8768   // OTA
 
 #define CLIENT_RECONNECT_INTERVAL  5 // second
@@ -286,40 +287,7 @@ void tcp_client1_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-#if (defined CONFIG_PLC_NETWORK)
-static void NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    int i, err;
-    const char *TAG = "tcp client2";
-    
-    FX_PackNetReadSingleDataRegister(address, frnum);
-    // for (i = 0; i < sizeof(netsdatabuff); i++) {
-    //     ESP_LOGI(TAG, "send%d:0x%02x", i + 1, ((uint8_t *)&netsdatabuff)[i]);
-    // }
-    
-    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
-    if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-    }
-
-    int len = recv(sock, initrevdata, sizeof(initrevdata) - 1, 0);
-    // Error occurred during receiving
-    if (len < 0) {
-        ESP_LOGE(TAG, "recv failed: errno %d", errno);
-        // break;
-    }
-    // Data received
-    else {
-        initrevdata[len] = 0; // Null-terminate whatever we received and treat like a string
-        // ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
-        // for (i = 0; i < len; i++) {
-        //     ESP_LOGI(TAG, "recv%d:0x%02x", i + 1, initrevdata[i]);
-        // }
-        FX_NetDataRecvNotice(&initrevdata, len, frnum, 1);
-    }
-}
-
-
+#if defined(CONFIG_PLC_NETWORK)
 void tcp_client2_task(void *pvParameters)
 {
     int addr_family = 0;
@@ -329,7 +297,7 @@ void tcp_client2_task(void *pvParameters)
     char host_ip[] = CONFIG_EXAMPLE_IPV4_ADDR1;
     const char *TAG = "tcp client2";
     TickType_t xLastWakeTime1, xLastWakeTime2;
- 	const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
+    const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
     
     while (1) {
@@ -338,27 +306,27 @@ void tcp_client2_task(void *pvParameters)
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
         dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(PORT);
+        dest_addr.sin_port = htons(PORT2);
         addr_family = AF_INET;
         ip_protocol = IPPROTO_IP;
 #elif defined(CONFIG_EXAMPLE_IPV6)
         struct sockaddr_in6 dest_addr = { 0 };
         inet6_aton(host_ip, &dest_addr.sin6_addr);
         dest_addr.sin6_family = AF_INET6;
-        dest_addr.sin6_port = htons(PORT);
+        dest_addr.sin6_port = htons(PORT2);
         dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
         addr_family = AF_INET6;
         ip_protocol = IPPROTO_IPV6;
 #elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
         struct sockaddr_storage dest_addr = { 0 };
-        ESP_ERROR_CHECK(get_addr_from_stdin(PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
+        ESP_ERROR_CHECK(get_addr_from_stdin(PORT2, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
         sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
         }
-        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, CONFIG_EXAMPLE_PORT2);
+        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT2);
 
         int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {
@@ -369,14 +337,21 @@ void tcp_client2_task(void *pvParameters)
     
         while (1) {
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
-            
-            NetReadSingleDataRegister(sock, i, i);
-            i++;
-            if (i > 5) {
-                i = 0;
-            }
-        }
+#if defined(CONFIG_PLC_FX)
+            FX_NetReadSingleYDataRegister(sock, 94, 1);        // 正常运行状态
+            FX_NetReadSingleYDataRegister(sock, 93, 2);        // 暂停状态
+            FX_NetReadSingleYDataRegister(sock, 92, 3);        // 异常停止状态
+            FX_NetReadSingleDataRegister(sock, 214, 4);        // 白班生产时间
+            FX_NetReadSingleDataRegister(sock, 215, 5);        // 晚班生产时间
+            FX_NetReadDoubleDataRegister(sock, 30, 6);         // 总累计冲次
+            FX_NetReadSingleDataRegister(sock, 10, 7);         // 实时冲速 
+            FX_NetReadSingleDataRegister(sock, 101, 8);        // 当前累积生产数量
+#endif
 
+#if defined(CONFIG_PLC_MODBUS)
+            MODBUS_NetReadFloatRegister(sock, 1, 0);
+#endif
+        }
         end:
         if (sock != -1) {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");

@@ -16,4 +16,5 @@ idf_component_register(SRCS "./src/app/tcp_client.c"
                        SRCS "./src/protocol/modbus/master.c"
                        SRCS "./src/protocol/modbus/tcp_master.c"
                        SRCS "./src/protocol/modbus/modbus_params.c"
+                       SRCS "./src/protocol/modbus/lx_modbus_tcp_master.c"
                     INCLUDE_DIRS "./inc")

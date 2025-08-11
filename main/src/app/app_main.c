@@ -25,7 +25,6 @@ EventGroupHandle_t xEventGroup3;
 
 void app_main(void)
 {    
-#if defined(CONFIG_MB_COMM_MODE_RTU) || defined(CONFIG_PLC_FX) || defined(CONFIG_PLC_HOSTLINK) || defined(CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -35,17 +34,15 @@ void app_main(void)
      * examples/protocols/README.md for more information about this function.
      */
     ESP_ERROR_CHECK(example_connect());
-#endif
 
-#ifdef CONFIG_PLC_MUDBUS
-    #ifdef CONFIG_MB_COMM_MODE_TCP
-    tcp_master_init();
-    #else
+#ifdef CONFIG_PLC_MODBUS
+    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485)
     master_init();
     #endif
 #endif
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
+|| ((defined CONFIG_PLC_MODBUS) && (defined CONFIG_PLC_NETWORK))
     uart_init();
 #endif
     InitSensorGpio();
@@ -58,7 +55,8 @@ void app_main(void)
 
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
+|| ((defined CONFIG_PLC_MODBUS) && (defined CONFIG_PLC_NETWORK))
     xTaskCreate(uart_event_task, "uart_event_task", 1024*4, NULL, configMAX_PRIORITIES - 1, NULL);
 #endif
     xTaskCreate(tcp_client_task, "tcp_client", 1024*8, NULL, 5, NULL);
@@ -70,5 +68,9 @@ void app_main(void)
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(tcp_server1_task, "tcp_server1", 4096, (void*)AF_INET, 5, NULL);
     xTaskCreate(send_data_task, "send_data_task", 4096, (void*)AF_INET, 5, NULL);
+#ifdef CONFIG_PLC_MODBUS
+    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
     xTaskCreate(send_command_task, "send_command_task", 4096, (void*)AF_INET, 5, NULL);
+    #endif
+#endif
 }

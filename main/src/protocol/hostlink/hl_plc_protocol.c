@@ -175,7 +175,7 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 1;
+	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
     vTaskDelay(30);
 }
 
@@ -184,7 +184,7 @@ void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
 	HLPackReadWordCIORegisterFrame(address, 1, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 5;
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
 	g_fxplcbitpos = bitpos;
     vTaskDelay(30);
 }
@@ -194,7 +194,7 @@ void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
 	HLPackReadWordDataRegisterFrame(address, 2, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 2;
+	g_fxplcdataformat = PLC_DATA_TYPE_FLOAT;
     vTaskDelay(30);
 }
 
@@ -203,7 +203,7 @@ void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
 	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 3;
+	g_fxplcdataformat = PLC_DATA_TYPE_BCD;
     vTaskDelay(30);
 }
 
@@ -295,7 +295,7 @@ int GetSerialWordDataFromHlPlc(void)
 		return -1;
 	}
 
-	if (g_fxplcdataformat == 1 || g_fxplcdataformat == 3 || g_fxplcdataformat == 5) {
+	if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT || g_fxplcdataformat == PLC_DATA_TYPE_BCD || g_fxplcdataformat == PLC_DATA_TYPE_BIT) {
 		ret = UART_ReadBufferBytes(dataArry, 4);
 		if (ret != 0) {
 			return -1;
@@ -306,7 +306,7 @@ int GetSerialWordDataFromHlPlc(void)
 			ESP_LOGE(TAG, "fx buffer error: %d", ret);
 			return -1;
 		}
-	} else if (g_fxplcdataformat == 2) {
+	} else if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT) {
 		for (i = 0; i < 2; i++) {
 			ret = UART_ReadBufferBytes(dataArry, 4);
 			if (ret != 0) {

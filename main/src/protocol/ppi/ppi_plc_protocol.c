@@ -171,7 +171,7 @@ void PPIReadByteDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
     PPIPackReadByteDataRegisterFrame(address, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 0;  // byte
+	g_fxplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
     vTaskDelay(10);
     if (g_confirmflag == 1) {
         PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
@@ -188,7 +188,7 @@ void PPIReadBitOutputRegister(uint32_t address, uint8_t bit, uint8_t length, uin
     PPIPackReadBitOutputFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 5;  // bit
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
     vTaskDelay(10);
     if (g_confirmflag == 1) {
         PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
@@ -205,7 +205,7 @@ void PPIReadBitInputRegister(uint32_t address, uint8_t bit, uint8_t length, uint
     PPIPackReadBitInputFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 5;  // bit
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
     vTaskDelay(10);
     if (g_confirmflag == 1) {
         PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
@@ -256,7 +256,7 @@ int GetSerialWordDataFromPpiPlc(void)
 		return -1;
 	}
     
-    if (g_fxplcdataformat == 5) {
+    if (g_fxplcdataformat == PLC_DATA_TYPE_BIT) {
         ret = UART_ReadBufferBytes(&(ppirescdatabuff.directaddr), PPI_PLC_RESPOND_DA_LENGTH);
         if ((ret != 0) || datalen != (ppirescdatabuff.datalengthbit[0] << 8 | ppirescdatabuff.datalengthbit[1])) {
             ESP_LOGE(TAG, "datalen error: %d != %d", datalen, (ppirescdatabuff.datalengthbit[0] \

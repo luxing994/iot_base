@@ -44,6 +44,7 @@ UART传输格式
 #define PLC_TYPE_D 'D'
 #define PLC_TYPE_X 'X'
 #define PLC_TYPE_Y 'Y'
+#define PLC_TYPE_M 'M'
 
 // FX PLC 串口指令
 #define PLC_BR  "BR"   // 位单位成批读出
@@ -205,18 +206,21 @@ typedef struct {
 } FxPlcInternetAskReadBackFrameFormat;
 #pragma pack()
 
-extern FxPlcInternetAskReadFrameFormat netsdatabuff;
-
 void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata);
 void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
+void SerialReadSingleMDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
 void SendAckToPlc(void);
 void SendNackToPlc(void);
 void FX_PackNetReadSingleDataRegister(uint32_t address, uint16_t frnum);
-void FX_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype);
+void FX_PackNetReadSingleYDataRegister(uint32_t address, uint16_t frnum);
+void FX_PackNetReadDoubleDataRegister(uint32_t address, uint16_t frnum);
+void FX_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
+void FX_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum);
+void FX_NetReadSingleYDataRegister(int sock, uint32_t address, uint16_t frnum);
 int ReadInputRelayData();
 int ReadOutputRelayData();
 int GetDataFromFxPlc(void);
@@ -224,5 +228,6 @@ int GetSerialDataFromFxPlc(void);
 int GetNetDataFromFxPlc(void);
 int FXPLC_InitBuffer(void);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
+
 
 #endif

@@ -6,7 +6,11 @@
 void tcp_server_task(void *pvParameters);
 void tcp_server1_task(void *pvParameters);
 void send_data_task(void *pvParameters);
+#ifdef CONFIG_PLC_MODBUS
+    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
 void send_command_task(void *pvParameters);
+    #endif
+#endif
 int GetFileData(uint8_t *data, int size);
 int GetTaskNum(uint16_t *tasknum);
 int GetTaskPitch(uint16_t *taskpitch);

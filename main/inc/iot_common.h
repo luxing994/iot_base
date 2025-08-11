@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMASC0378"
+#define DEVID        "AMAJQ0180"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -73,6 +73,14 @@ extern EventGroupHandle_t xEventGroup3;
 #define FXPLCDEVTYPEID    "FXPLC"
 #define LSPLCDEVTYPEID    "LSPLC"
 #define HLPLCDEVTYPEID    "HLPLC"
+#define MDPLCDEVTYPEID    "MDPLC"
+
+#define PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI 0
+#define PLC_DATA_TYPE_SHORT                      1
+#define PLC_DATA_TYPE_FLOAT                      2
+#define PLC_DATA_TYPE_BCD                        3
+#define PLC_DATA_TYPE_INT                        4
+#define PLC_DATA_TYPE_BIT                        5
 
 // 命令接收JSON格式
 /*

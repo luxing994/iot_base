@@ -2,6 +2,8 @@
 #include <stdlib.h>  
 #include <string.h>  
 #include <ctype.h>  
+#include <sys/socket.h>
+#include <unistd.h>
 #include "driver/uart.h"
 #include "esp_system.h"
 #include "esp_log.h"
@@ -16,10 +18,10 @@ FxPlcSerialAnsNackFrameFormat srbedatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mackdatabuff = {0};
 FxPlcSerialAnsAckFrameFormat mnackdatabuff = {0};
 FxPlcInternetAskReadFrameFormat netsdatabuff = {0};
-uint32_t netsrdatabuffaddr = 0;
-uint32_t netsrdatalen = 0;
-
-static int netdatarecvflag = 0;
+char fxrevdatabuff[128] = {0};
+uint32_t fxnetsrdatabuffaddr = 0;
+uint32_t fxnetsrdatalen = 0;
+int fxnetdatarecvflag = 0;
 
 static int MoveLeftArry(uint8_t *data, uint16_t length, uint16_t num)
 {
@@ -364,11 +366,45 @@ static int PackNetReadDataRegisterFrame(uint8_t netnum, uint8_t plcnum, uint16_t
 	return 0;
 }
 
+static int PackNetReadYRegisterFrame(uint8_t netnum, uint8_t plcnum, uint16_t ionum, uint8_t mudulenum, uint32_t address,  
+	uint16_t length, FxPlcInternetAskReadFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->sechead[0] = FX_PLC_NET_REQUIRE_START_FIRST;
+	rdata->sechead[1] = FX_PLC_NET_REQUIRE_START_SECOND;
+	rdata->netnum = netnum;
+	rdata->plcnum = plcnum;
+	rdata->ionum[0] = ionum & 0xff;
+	rdata->ionum[1] = (ionum >> 8) & 0xff;
+	rdata->modulenum = mudulenum;
+	rdata->length[0] = FX_PLC_NET_FIRST_LEN_MDATA_OB_READ & 0xff;
+	rdata->length[1] = (FX_PLC_NET_FIRST_LEN_MDATA_OB_READ >> 8) & 0xff;
+	rdata->watchtimer[0] = FX_PLC_NET_WATCHTIMER & 0xff;
+	rdata->watchtimer[1] = (FX_PLC_NET_WATCHTIMER >> 8) & 0xff;
+	rdata->instruction[0] = FX_PLC_NET_FIRST_INS_MDATA_OB_READ & 0xff;
+    rdata->instruction[1] = (FX_PLC_NET_FIRST_INS_MDATA_OB_READ >> 8) & 0xff;
+	rdata->secinstruction[0] = FX_PLC_NET_SECOND_INSTRUCTION_WORD & 0xff;
+	rdata->secinstruction[1] = (FX_PLC_NET_SECOND_INSTRUCTION_WORD >> 8) & 0xff;
+    
+	rdata->startregaddr[0] = address & 0xff;
+	rdata->startregaddr[1] = (address >> 8) & 0xff;
+	rdata->startregaddr[2] = (address >> 16) & 0xff;
+
+	rdata->regcode = FX_PLC_NET_REGISTER_Y;
+	rdata->regnum[0] = length & 0xff;
+	rdata->regnum[1] = (length >> 8) & 0xff;
+
+	return 0;
+}
+
 int GetDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
 	int ret;
-	static const char *TAG = "GET_DATA";
+	static const char *TAG = "FX_GET_DATA";
 
 	while (curData != PLC_STX) {
 		ret = UART_ReadBufferBytes(&curData, 1);
@@ -399,7 +435,7 @@ int GetSerialDataFromFxPlc(void)
 {
 	uint8_t curData = 0;
 	int ret, i;
-	static const char *TAG = "GET_SERIAL_DATA";
+	static const char *TAG = "FX_GET_SERIAL_DATA";
 	uint8_t dataArry[4] = {0};
 
 	while ((curData != PLC_STX) && (curData != PLC_NAK)) {
@@ -450,7 +486,7 @@ int GetSerialDataFromFxPlc(void)
 		// 		// return -1;
 		// 	}
 		// }
-		if ((g_fxplcdataformat == 1) || (g_fxplcdataformat == 5)) {
+		if ((g_fxplcdataformat == PLC_DATA_TYPE_SHORT) || (g_fxplcdataformat == PLC_DATA_TYPE_BIT)) {
 			ret = UART_ReadBufferBytes(dataArry, 4);
 			if (ret != 0) {
 				return -1;
@@ -458,10 +494,10 @@ int GetSerialDataFromFxPlc(void)
 
 			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 			if (ret != 0) {
-				ESP_LOGE(TAG, "fx buffer error: %d", ret);
+				ESP_LOGE(TAG, "buffer error: %d", ret);
 				return -1;
 			}
-		} else if ((g_fxplcdataformat == 2) || (g_fxplcdataformat == 4)) {
+		} else if ((g_fxplcdataformat == PLC_DATA_TYPE_FLOAT) || (g_fxplcdataformat == PLC_DATA_TYPE_INT)) {
 			for (i = 0; i < 2; i++) {
 				ret = UART_ReadBufferBytes(dataArry, 4);
 				if (ret != 0) {
@@ -470,7 +506,7 @@ int GetSerialDataFromFxPlc(void)
 
 				ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
 				if (ret != 0) {
-					ESP_LOGE(TAG, "fx buffer error: %d", ret);
+					ESP_LOGE(TAG, "buffer error: %d", ret);
 					return -1;
 				}
 			}
@@ -487,9 +523,9 @@ int GetSerialDataFromFxPlc(void)
 
 void FX_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype)
 {
-    netdatarecvflag = 1;
-	netsrdatabuffaddr = dataaddr;
-	netsrdatalen = len;
+    fxnetdatarecvflag = 1;
+	fxnetsrdatabuffaddr = dataaddr;
+	fxnetsrdatalen = len;
 	g_fxplccount = frnum;
 	g_fxplcdataformat = datatype;
 }
@@ -499,16 +535,16 @@ int GetNetDataFromFxPlc(void)
 	uint16_t datalen;
 	int16_t tdata;
 	uint8_t* data = NULL;
-	static const char *TAG = "GET_NET_DATA";
+	static const char *TAG = "FX_GET_NET_DATA";
 	int i, ret;
 
-	if (netdatarecvflag != 1 || netsrdatabuffaddr == NULL || netsrdatalen == 0) {
+	if (fxnetdatarecvflag != 1 || fxnetsrdatabuffaddr == NULL || fxnetsrdatalen == 0) {
 		return -1;
 	}
 
-	data = (uint8_t *)netsrdatabuffaddr;
+	data = (uint8_t *)fxnetsrdatabuffaddr;
 
-	if (netsrdatalen < FX_PLC_NET_RESPONSE_FRAME_MIN_SIZE) {
+	if (fxnetsrdatalen < FX_PLC_NET_RESPONSE_FRAME_MIN_SIZE) {
 		return -1;
 	}
 
@@ -517,21 +553,21 @@ int GetNetDataFromFxPlc(void)
 	}
 
 	datalen = (data[8] << 8 | data[7]) - 2;
-	if (netsrdatalen != sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + datalen) {
+	if (fxnetsrdatalen != sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + datalen) {
 		return -1;
 	}
 	
 	for (i = 0; i < datalen / 2; i++) {
-		tdata = (data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i + 1] << 8) | \
-		data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i];
+		tdata = (data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i * 2 + 1] << 8) | \
+		data[sizeof(FxPlcInternetAskReadBackFrameFormat) - 4 + i * 2];
 		ret = FXPLC_WriteBufferBytes(&tdata, sizeof(tdata));
 		if (ret != 0) {
-			ESP_LOGE(TAG, "fx buffer error: %d", ret);
+			ESP_LOGE(TAG, "buffer error: %d", ret);
 			return -1;
 		}
 	}
 
-	netdatarecvflag = 0;
+	fxnetdatarecvflag = 0;
 
 	return 0;
 }
@@ -563,7 +599,7 @@ void ReadSingleDataRegister(uint16_t address, uint16_t frnum)   // RS232
 	PackReadDataRegisterFrame(address, 2, &rdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&rdatabuff, sizeof(FxPlcReadFrameFormat));
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 1;
+	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
     vTaskDelay(20);
 }
 
@@ -572,7 +608,7 @@ void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeo
 	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 1, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 1;
+	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
     vTaskDelay(20);
 }
 
@@ -581,7 +617,7 @@ void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeo
 	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 2, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 4;
+	g_fxplcdataformat = PLC_DATA_TYPE_INT;
     vTaskDelay(20);
 }
 
@@ -590,7 +626,7 @@ void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t 
 	PackSerialReadDataRegisterFrame(PLC_TYPE_D, plcnum, pcnum, timeout, address, 2, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 2;
+	g_fxplcdataformat = PLC_DATA_TYPE_FLOAT;
     vTaskDelay(20);
 }
 
@@ -599,7 +635,16 @@ void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t time
 	PackSerialReadDataRegisterFrame(PLC_TYPE_Y, plcnum, pcnum, timeout, address, 1, &srdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
-	g_fxplcdataformat = 5;
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
+    vTaskDelay(20);
+}
+
+void SerialReadSingleMDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
+{
+	PackSerialReadDataRegisterFrame(PLC_TYPE_M, plcnum, pcnum, timeout, address, 1, &srdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
     vTaskDelay(20);
 }
 
@@ -640,4 +685,94 @@ void FX_PackNetReadSingleDataRegister(uint32_t address, uint16_t frnum)
 {
 	PackNetReadDataRegisterFrame(FX_PLC_NET_NET_NUMBER, FX_PLC_NET_PLC_NUMBER, FX_PLC_NET_IO_NUMBER, \
 		FX_PLC_NET_MODULE_NUMBER, address, 1, &netsdatabuff);
+}
+
+void FX_PackNetReadDoubleDataRegister(uint32_t address, uint16_t frnum)
+{
+	PackNetReadDataRegisterFrame(FX_PLC_NET_NET_NUMBER, FX_PLC_NET_PLC_NUMBER, FX_PLC_NET_IO_NUMBER, \
+		FX_PLC_NET_MODULE_NUMBER, address, 2, &netsdatabuff);
+}
+
+void FX_PackNetReadSingleYDataRegister(uint32_t address, uint16_t frnum)
+{
+	PackNetReadYRegisterFrame(FX_PLC_NET_NET_NUMBER, FX_PLC_NET_PLC_NUMBER, FX_PLC_NET_IO_NUMBER, \
+		FX_PLC_NET_MODULE_NUMBER, address, 1, &netsdatabuff);
+}
+
+void FX_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
+{
+    int i, err;
+	static const char *TAG = "FX_NET_SINGLE_DATA";
+    
+    FX_PackNetReadSingleDataRegister(address, frnum);
+
+    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
+    if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+    }
+
+    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
+    // Error occurred during receiving
+    if (len < 0) {
+        ESP_LOGE(TAG, "recv failed: errno %d", errno);
+        // break;
+    }
+    // Data received
+    else {
+        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
+        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_SHORT);
+    }
+    vTaskDelay(20);
+}
+
+void FX_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
+{
+    int i, err;
+	static const char *TAG = "FX_NET_DOUBLE_DATA";
+    
+    FX_PackNetReadDoubleDataRegister(address, frnum);
+    
+    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
+    if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+    }
+
+    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
+    // Error occurred during receiving
+    if (len < 0) {
+        ESP_LOGE(TAG, "recv failed: errno %d", errno);
+        // break;
+    }
+    // Data received
+    else {
+        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
+        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_INT);
+    }
+    vTaskDelay(20);
+}
+
+void FX_NetReadSingleYDataRegister(int sock, uint32_t address, uint16_t frnum)
+{
+    int i, err;
+	static const char *TAG = "FX_NET_SINGLE_YDATA";
+    
+    FX_PackNetReadSingleYDataRegister(address, frnum);
+    
+    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
+    if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+    }
+
+    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
+    // Error occurred during receiving
+    if (len < 0) {
+        ESP_LOGE(TAG, "recv failed: errno %d", errno);
+        // break;
+    }
+    // Data received
+    else {
+        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
+        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_BIT);
+    }
+    vTaskDelay(20);
 }
