@@ -74,6 +74,139 @@ static int PPIPackReadByteDataRegisterFrame(uint32_t address, uint8_t length, Pp
 	return 0;
 }
 
+static int PPIPackReadWordDataRegisterFrame(uint32_t address, uint8_t length, PpiPlcReadCommandFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->fstart = PPI_PLC_SD;
+	rdata->length = PPI_PLC_READ_COM_LEN;
+	rdata->rlength = PPI_PLC_READ_COM_LEN;
+    rdata->sstart = PPI_PLC_SD;
+    rdata->directaddr = PPI_PLC_DA;
+    rdata->sourceaddr = PPI_PLC_SA;
+    rdata->funccode = PPI_PLC_FC_READ_COM;
+    rdata->identify = PPI_PLC_IP;
+    rdata->remotecontrol = PPI_PLC_RC;
+    rdata->identify1 = PPI_PLC_RI;
+    rdata->identify2 = PPI_PLC_RI;
+    rdata->protocoldata = PPI_PLC_PD;
+    rdata->unitpara = PPI_PLC_UP;
+    rdata->paralength1 = PPI_PLC_PL1;
+    rdata->paralength2 = PPI_PLC_PL2;
+    rdata->datalength1 = PPI_PLC_DL1;
+    rdata->datalength2 = PPI_PLC_DL2;
+    rdata->mode = PPI_PLC_MOD_READ;
+    rdata->valueaddrnum = PPI_PLC_AN;
+    rdata->pend1 = PPI_PLC_PEND1;
+    rdata->pend2 = PPI_PLC_PEND2;
+    rdata->defid = PPI_PLC_DI;
+    rdata->dataunit = PPI_PLC_DU_WORD;
+    rdata->pend3 = PPI_PLC_PEND3;
+    rdata->datalen = length;
+    rdata->pend4 = PPI_PLC_PEND4;
+    rdata->regtype1 = PPI_PLC_RT1_V;
+    rdata->regtype2 = PPI_PLC_RT2_V;
+
+    rdata->dataaddr[2] = (address * 8) & 0xff;
+    rdata->dataaddr[1] = ((address * 8) >> 8) & 0xff;
+    rdata->dataaddr[0] = ((address * 8) >> 16) & 0xff;
+    rdata->checkcode = CalSumCheckDataLow((uint8_t *)(&(rdata->directaddr)), PPI_PLC_READ_COM_LEN);
+    rdata->end = PPI_PLC_EC;
+
+	return 0;
+}
+
+static int PPIPackReadDWordDataRegisterFrame(uint32_t address, uint8_t length, PpiPlcReadCommandFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->fstart = PPI_PLC_SD;
+	rdata->length = PPI_PLC_READ_COM_LEN;
+	rdata->rlength = PPI_PLC_READ_COM_LEN;
+    rdata->sstart = PPI_PLC_SD;
+    rdata->directaddr = PPI_PLC_DA;
+    rdata->sourceaddr = PPI_PLC_SA;
+    rdata->funccode = PPI_PLC_FC_READ_COM;
+    rdata->identify = PPI_PLC_IP;
+    rdata->remotecontrol = PPI_PLC_RC;
+    rdata->identify1 = PPI_PLC_RI;
+    rdata->identify2 = PPI_PLC_RI;
+    rdata->protocoldata = PPI_PLC_PD;
+    rdata->unitpara = PPI_PLC_UP;
+    rdata->paralength1 = PPI_PLC_PL1;
+    rdata->paralength2 = PPI_PLC_PL2;
+    rdata->datalength1 = PPI_PLC_DL1;
+    rdata->datalength2 = PPI_PLC_DL2;
+    rdata->mode = PPI_PLC_MOD_READ;
+    rdata->valueaddrnum = PPI_PLC_AN;
+    rdata->pend1 = PPI_PLC_PEND1;
+    rdata->pend2 = PPI_PLC_PEND2;
+    rdata->defid = PPI_PLC_DI;
+    rdata->dataunit = PPI_PLC_DU_DWORD;
+    rdata->pend3 = PPI_PLC_PEND3;
+    rdata->datalen = length;
+    rdata->pend4 = PPI_PLC_PEND4;
+    rdata->regtype1 = PPI_PLC_RT1_V;
+    rdata->regtype2 = PPI_PLC_RT2_V;
+
+    rdata->dataaddr[2] = (address * 8) & 0xff;
+    rdata->dataaddr[1] = ((address * 8) >> 8) & 0xff;
+    rdata->dataaddr[0] = ((address * 8) >> 16) & 0xff;
+    rdata->checkcode = CalSumCheckDataLow((uint8_t *)(&(rdata->directaddr)), PPI_PLC_READ_COM_LEN);
+    rdata->end = PPI_PLC_EC;
+
+	return 0;
+}
+
+static int PPIPackReadBitDataRegisterFrame(uint32_t address, uint8_t bit, uint8_t length, PpiPlcReadCommandFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->fstart = PPI_PLC_SD;
+	rdata->length = PPI_PLC_READ_COM_LEN;
+	rdata->rlength = PPI_PLC_READ_COM_LEN;
+    rdata->sstart = PPI_PLC_SD;
+    rdata->directaddr = PPI_PLC_DA;
+    rdata->sourceaddr = PPI_PLC_SA;
+    rdata->funccode = PPI_PLC_FC_READ_COM;
+    rdata->identify = PPI_PLC_IP;
+    rdata->remotecontrol = PPI_PLC_RC;
+    rdata->identify1 = PPI_PLC_RI;
+    rdata->identify2 = PPI_PLC_RI;
+    rdata->protocoldata = PPI_PLC_PD;
+    rdata->unitpara = PPI_PLC_UP;
+    rdata->paralength1 = PPI_PLC_PL1;
+    rdata->paralength2 = PPI_PLC_PL2;
+    rdata->datalength1 = PPI_PLC_DL1;
+    rdata->datalength2 = PPI_PLC_DL2;
+    rdata->mode = PPI_PLC_MOD_READ;
+    rdata->valueaddrnum = PPI_PLC_AN;
+    rdata->pend1 = PPI_PLC_PEND1;
+    rdata->pend2 = PPI_PLC_PEND2;
+    rdata->defid = PPI_PLC_DI;
+    rdata->dataunit = PPI_PLC_DU_BIT;
+    rdata->pend3 = PPI_PLC_PEND3;
+    rdata->datalen = length;
+    rdata->pend4 = PPI_PLC_PEND4;
+    rdata->regtype1 = PPI_PLC_RT1_V;
+    rdata->regtype2 = PPI_PLC_RT2_V;
+
+    address = address * 8 + bit;
+    rdata->dataaddr[2] = address & 0xff;
+    rdata->dataaddr[1] = (address>> 8) & 0xff;
+    rdata->dataaddr[0] = (address>> 16) & 0xff;
+    rdata->checkcode = CalSumCheckDataLow((uint8_t *)(&(rdata->directaddr)), PPI_PLC_READ_COM_LEN);
+    rdata->end = PPI_PLC_EC;
+
+	return 0;
+}
+
 static int PPIPackReadBitOutputFrame(uint32_t address, uint8_t bit, uint8_t length, PpiPlcReadCommandFrameFormat* rdata)
 {
 	if (rdata == NULL) {
@@ -108,6 +241,51 @@ static int PPIPackReadBitOutputFrame(uint32_t address, uint8_t bit, uint8_t leng
     rdata->pend4 = PPI_PLC_PEND4;
     rdata->regtype1 = PPI_PLC_RT1_OTHER;
     rdata->regtype2 = PPI_PLC_RT2_Q;
+    
+    address = address * 8 + bit;
+    rdata->dataaddr[2] = address & 0xff;
+    rdata->dataaddr[1] = (address>> 8) & 0xff;
+    rdata->dataaddr[0] = (address>> 16) & 0xff;
+    rdata->checkcode = CalSumCheckDataLow((uint8_t *)(&(rdata->directaddr)), PPI_PLC_READ_COM_LEN);
+    rdata->end = PPI_PLC_EC;
+
+	return 0;
+}
+
+static int PPIPackReadBitMDataFrame(uint32_t address, uint8_t bit, uint8_t length, PpiPlcReadCommandFrameFormat* rdata)
+{
+	if (rdata == NULL) {
+		return -1;
+	}
+
+	rdata->fstart = PPI_PLC_SD;
+	rdata->length = PPI_PLC_READ_COM_LEN;
+	rdata->rlength = PPI_PLC_READ_COM_LEN;
+    rdata->sstart = PPI_PLC_SD;
+    rdata->directaddr = PPI_PLC_DA;
+    rdata->sourceaddr = PPI_PLC_SA;
+    rdata->funccode = PPI_PLC_FC_READ_COM;
+    rdata->identify = PPI_PLC_IP;
+    rdata->remotecontrol = PPI_PLC_RC;
+    rdata->identify1 = PPI_PLC_RI;
+    rdata->identify2 = PPI_PLC_RI;
+    rdata->protocoldata = PPI_PLC_PD;
+    rdata->unitpara = PPI_PLC_UP;
+    rdata->paralength1 = PPI_PLC_PL1;
+    rdata->paralength2 = PPI_PLC_PL2;
+    rdata->datalength1 = PPI_PLC_DL1;
+    rdata->datalength2 = PPI_PLC_DL2;
+    rdata->mode = PPI_PLC_MOD_READ;
+    rdata->valueaddrnum = PPI_PLC_AN;
+    rdata->pend1 = PPI_PLC_PEND1;
+    rdata->pend2 = PPI_PLC_PEND2;
+    rdata->defid = PPI_PLC_DI;
+    rdata->dataunit = PPI_PLC_DU_BIT;
+    rdata->pend3 = PPI_PLC_PEND3;
+    rdata->datalen = length;
+    rdata->pend4 = PPI_PLC_PEND4;
+    rdata->regtype1 = PPI_PLC_RT1_OTHER;
+    rdata->regtype2 = PPI_PLC_RT2_M;
     
     address = address * 8 + bit;
     rdata->dataaddr[2] = address & 0xff;
@@ -164,6 +342,23 @@ static int PPIPackReadBitInputFrame(uint32_t address, uint8_t bit, uint8_t lengt
 	return 0;
 }
 
+void PPIReadBitDataRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
+{
+	uint8_t rdata;
+
+    PPIPackReadBitDataRegisterFrame(address, bit, length, &ppircdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
+    vTaskDelay(10);
+    if (g_confirmflag == 1) {
+        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
+        g_confirmflag = 0;
+    }
+    vTaskDelay(10);
+}
+
 void PPIReadByteDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 {
 	uint8_t rdata;
@@ -172,6 +367,57 @@ void PPIReadByteDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
+    vTaskDelay(10);
+    if (g_confirmflag == 1) {
+        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
+        g_confirmflag = 0;
+    }
+    vTaskDelay(10);
+}
+
+void PPIReadShortDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
+{
+	uint8_t rdata;
+
+    PPIPackReadWordDataRegisterFrame(address, length, &ppircdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
+    vTaskDelay(10);
+    if (g_confirmflag == 1) {
+        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
+        g_confirmflag = 0;
+    }
+    vTaskDelay(10);
+}
+
+void PPIReadSIntDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
+{
+	uint8_t rdata;
+
+    PPIPackReadWordDataRegisterFrame(address, length, &ppircdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_INT;
+    vTaskDelay(10);
+    if (g_confirmflag == 1) {
+        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
+        g_confirmflag = 0;
+    }
+    vTaskDelay(10);
+}
+
+void PPIReadFloatDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
+{
+	uint8_t rdata;
+
+    PPIPackReadDWordDataRegisterFrame(address, length, &ppircdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_FLOAT;
     vTaskDelay(10);
     if (g_confirmflag == 1) {
         PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
@@ -203,6 +449,23 @@ void PPIReadBitInputRegister(uint32_t address, uint8_t bit, uint8_t length, uint
 	uint8_t rdata;
 
     PPIPackReadBitInputFrame(address, bit, length, &ppircdatabuff);
+	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
+	g_fxplccount = frnum;
+	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
+    vTaskDelay(10);
+    if (g_confirmflag == 1) {
+        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
+        g_confirmflag = 0;
+    }
+    vTaskDelay(10);
+}
+
+void PPIReadBitMDataRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
+{
+	uint8_t rdata;
+
+    PPIPackReadBitMDataFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_BIT;

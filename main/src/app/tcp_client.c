@@ -27,6 +27,7 @@
 #include "tcp_server.h"
 #include "fx_plc_protocol.h"
 #include "lx_modbus_tcp_master.h"
+#include "lx_s7comm.h"
 #include "ota_task.h"
 
 
@@ -299,6 +300,7 @@ void tcp_client2_task(void *pvParameters)
     TickType_t xLastWakeTime1, xLastWakeTime2;
     const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
+    uint16_t pdu_len = 0; // 定义并初始化 pdu_len
     
     while (1) {
         vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
@@ -321,6 +323,17 @@ void tcp_client2_task(void *pvParameters)
         struct sockaddr_storage dest_addr = { 0 };
         ESP_ERROR_CHECK(get_addr_from_stdin(PORT2, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
+
+#if (defined CONFIG_PLC_PPI)
+        // 连接到 PLC 并初始化 S7 通信
+        int sock = s7_connect(host_ip, &pdu_len);
+        if (sock < 0) {
+            ESP_LOGE(TAG, "Failed to setup communication with S7 PLC");
+            goto end;  // 如果连接失败，重新尝试
+        }
+
+        ESP_LOGI(TAG, "Successfully connected to S7 PLC");
+#else
         sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
@@ -334,7 +347,7 @@ void tcp_client2_task(void *pvParameters)
             goto end;
         }
         ESP_LOGI(TAG, "Successfully connected");
-    
+#endif
         while (1) {
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
 #if defined(CONFIG_PLC_FX)
@@ -351,6 +364,30 @@ void tcp_client2_task(void *pvParameters)
 #if defined(CONFIG_PLC_MODBUS)
             MODBUS_NetReadFloatRegister(sock, 1, 0);
 #endif
+
+#if (defined CONFIG_PLC_PPI)
+            S7_NetReadBitQRegister(sock, 0, 2, 1);         // 运行显示
+            S7_NetReadBitMRegister(sock, 2, 0, 2);         // 启动
+            S7_NetReadBitMRegister(sock, 2, 3, 3);         // 故障复位
+            S7_NetReadBitDataRegister(sock, 3315, 1, 4);   // 电源输入故障
+            S7_NetReadBitDataRegister(sock, 3315, 2, 5);   // 设备超温
+            S7_NetReadBitDataRegister(sock, 3315, 3, 6);   // 输出过电压
+            S7_NetReadBitDataRegister(sock, 3315, 4, 7);   // 输出过电流
+            S7_NetReadBitDataRegister(sock, 3315, 5, 8);   // IGBT保护
+            S7_NetReadBitDataRegister(sock, 3315, 6, 9);   // 输出低电压
+            S7_NetReadBitDataRegister(sock, 3315, 7, 10);   // 风扇变频故障
+            S7_NetReadBitDataRegister(sock, 3316, 1, 11);   // 故障显示
+            S7_NetReadBitMRegister(sock, 0, 7, 12);         // 急停
+            S7_NetReadFloatDataRegister(sock, 210, 13);     // 实时电压
+            S7_NetReadFloatDataRegister(sock, 214, 14);     // 实时电流
+            S7_NetReadFloatDataRegister(sock, 280, 15);     // 设备温度
+            S7_NetReadFloatDataRegister(sock, 534, 16);     // 点解AH
+            S7_NetReadFloatDataRegister(sock, 1648, 17);     // 电压给定
+            S7_NetReadFloatDataRegister(sock, 1848, 18);     // 电流给定
+            S7_NetReadIntDataRegister(sock, 900, 19);        // 批号
+            S7_NetReadSingleDataRegister(sock, 520, 20);     // 电解时间H
+            S7_NetReadSingleDataRegister(sock, 522, 21);     // 电解时间M
+#endif
         }
         end:
         if (sock != -1) {
@@ -361,6 +398,71 @@ void tcp_client2_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
+
+// void tcp_client2_task(void *pvParameters)
+// {
+//     const char *TAG = "tcp client2";
+//     char host_ip[] = CONFIG_EXAMPLE_IPV4_ADDR1;
+//     TickType_t xLastWakeTime1, xLastWakeTime2;
+//     const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
+//     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
+
+//     uint16_t pdu_len = 0; // 定义并初始化 pdu_len
+
+//     while (1) {
+//         vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
+
+//         // 连接到 PLC 并初始化 S7 通信
+//         int sock = s7_connect(host_ip, &pdu_len);
+//         if (sock < 0) {
+//             ESP_LOGE(TAG, "Failed to setup communication with S7 PLC");
+//             continue;  // 如果连接失败，重新尝试
+//         }
+
+//         ESP_LOGI(TAG, "Successfully connected to S7 PLC");
+
+//         // ----------- 循环读取数据 -----------
+//         while (1) {
+//             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
+
+//             // // 通过 S7comm 读取数据
+//             // uint8_t bit_value = 0;
+//             // if (s7_read_bit(sock, pdu_len, 0x83, 0, 0x0000, 0, &bit_value) == 0) {
+//             //     ESP_LOGI(TAG, "M0.0 = %d", bit_value);
+//             // }
+//             S7_NetReadBitQRegister(sock, 0, 2, 1);         // 运行显示
+//             S7_NetReadBitMRegister(sock, 2, 0, 2);         // 启动
+//             S7_NetReadBitMRegister(sock, 2, 3, 3);         // 故障复位
+//             S7_NetReadBitDataRegister(sock, 3315, 1, 4);   // 电源输入故障
+//             S7_NetReadBitDataRegister(sock, 3315, 2, 5);   // 设备超温
+//             S7_NetReadBitDataRegister(sock, 3315, 3, 6);   // 输出过电压
+//             S7_NetReadBitDataRegister(sock, 3315, 4, 7);   // 输出过电流
+//             S7_NetReadBitDataRegister(sock, 3315, 5, 8);   // IGBT保护
+//             S7_NetReadBitDataRegister(sock, 3315, 6, 9);   // 输出低电压
+//             S7_NetReadBitDataRegister(sock, 3315, 7, 10);   // 风扇变频故障
+//             S7_NetReadBitDataRegister(sock, 3316, 1, 11);   // 故障显示
+//             S7_NetReadBitMRegister(sock, 0, 7, 12);         // 急停
+//             S7_NetReadFloatDataRegister(sock, 210, 13);     // 实时电压
+//             S7_NetReadFloatDataRegister(sock, 214, 14);     // 实时电流
+//             S7_NetReadFloatDataRegister(sock, 280, 15);     // 设备温度
+//             S7_NetReadFloatDataRegister(sock, 534, 16);     // 点解AH
+//             S7_NetReadFloatDataRegister(sock, 1648, 17);     // 电压给定
+//             S7_NetReadFloatDataRegister(sock, 1848, 18);     // 电流给定
+//             S7_NetReadIntDataRegister(sock, 900, 19);        // 批号
+//             S7_NetReadSingleDataRegister(sock, 520, 20);     // 电解时间H
+//             S7_NetReadSingleDataRegister(sock, 522, 21);     // 电解时间M
+//         }
+
+//         // 连接关闭
+//         if (sock != -1) {
+//             ESP_LOGE(TAG, "Shutting down socket...");
+//             shutdown(sock, 0);
+//             close(sock);  // 关闭 TCP 连接
+//         }
+//     }
+
+//     vTaskDelete(NULL);
+// }
 #endif
 
 

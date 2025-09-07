@@ -24,6 +24,7 @@
 #include "sensor.h"
 #include "fx_plc_protocol.h"
 #include "lx_modbus_tcp_master.h"
+#include "lx_s7comm.h"
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
 #include "ppi_plc_protocol.h"
@@ -170,16 +171,16 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
                 } else { 
                     if (g_fxplccount == 1 || g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4) {    // 温度和压力都除10再输出，注意g_fxplccount在此处已经-1
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -237,16 +238,16 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
                     "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
                     "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
                 } else {
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
@@ -271,18 +272,38 @@ void ParseOpCode(char *str, uint8_t op)
         case MODBUSPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_fxplccount);
             if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT) {
-#if defined(CONFIG_PLC_NETWORK)
                 FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
                 fdata = *((float *)&idata);
-#endif
+
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.3f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata);
+            } else if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
+                idata = rdata[1] << 8 | rdata[0];
+                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
+
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    idata);
+            } else if (g_fxplcdataformat == PLC_DATA_TYPE_INT) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
+                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    idata);
             }
             break;
         }
@@ -511,21 +532,57 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata[0]);
-            }
-            /*
-            else if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
-                for (i = 0 ; i < 4; i++) {
-                    FXPLC_ReadBufferBytes((uint8_t *)&rdata[(i + 2) % 4], 1);
-                } 
-                (void)sscanf(rdata, "%x", &idata);
+            } else if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
+                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
+#if defined(CONFIG_PLC_RS485)
+                idata = rdata[0] << 8 | rdata[1];
+#endif
+
+#if defined(CONFIG_PLC_NETWORK)
+                idata = rdata[1] << 8 | rdata[0];
+#endif
+
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                     "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
-                g_datapos += 2;
-            }*/
+            } else if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
+#if defined(CONFIG_PLC_RS485)
+                idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
+#endif
+
+#if defined(CONFIG_PLC_NETWORK)
+                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
+#endif
+                fdata = *((float *)&idata);
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    fdata);
+            } else if (g_fxplcdataformat == PLC_DATA_TYPE_INT) {
+                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
+#if defined(CONFIG_PLC_RS485)
+                idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
+#endif
+
+#if defined(CONFIG_PLC_NETWORK)
+                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
+#endif
+                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
+                    idata);
+            }
             break;
         }
         case TEMPCONTROLDATA: {
@@ -688,8 +745,7 @@ void tx_task(void *arg)
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17 | BIT_18 | BIT_19 | BIT_20, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_14) != 0) {
 #ifdef CONFIG_PLC_FX
-            SerialWriteSingleFloatDataRegister(0, 255, 10, 512, g_setsnrefillingmachine.setchargeamount); //  设置加注量
-            // SerialReadSingleFloatDataRegister(0, 255, 10, 512, 10);
+            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount); //  设置加注量
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
@@ -783,7 +839,13 @@ void rx_task(void *arg)
 #endif
 
 #ifdef CONFIG_PLC_PPI
+    #ifdef CONFIG_PLC_RS485
         ret = GetSerialWordDataFromPpiPlc();
+    #endif
+
+    #ifdef CONFIG_PLC_NETWORK
+        ret = GetNetDataFromS7PlcNet();
+    #endif
 #endif
 
 #ifdef CONFIG_PLC_LS_LOAD

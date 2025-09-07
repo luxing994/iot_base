@@ -876,7 +876,7 @@ static void do_retransmit(const int sock)
 
             timestart = GetMilliTimeNow();
 #ifdef CONFIG_PLC_FX
-            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.perfusionvolume) {
+            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetcharegemount) {
                 err = send(sock, "true", strlen("true"), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -1174,27 +1174,28 @@ void send_data_task(void *pvParameters)
             SerialReadSingleDataRegister(0, 255, 10, 7974, 7);       //  单班产量
             SerialReadSingleDataRegister(0, 255, 10, 7982, 8);       //  总产量
             SerialReadSingleDataRegister(0, 255, 10, 112, 9);        //  测试结果:4=真空合格 10=真空不合格 52：充注合格
+            SerialReadSingleFloatDataRegister(0, 255, 10, 16, 10);   //  实际设定灌注量
         #endif
 
         #ifdef CONFIG_OTHER_DEVICE
             // 弯管机
-            // SerialReadSingleYDataRegister(0, 255, 10, 62, 1);        // 报警状态
-            // SerialReadSingleYDataRegister(0, 255, 10, 63, 2);        // 自动运行
-            // SerialReadSingleYDataRegister(0, 255, 10, 64, 3);        // 停止
-            // SerialReadDoubleDataRegister(0, 255, 10, 166, 4);        // 当前产量
-            // SerialReadDoubleDataRegister(0, 255, 10, 168, 5);        // 产量设定
-            // SerialReadDoubleDataRegister(0, 255, 10, 170, 6);        // 总产量
-            // SerialReadSingleDataRegister(0, 255, 10, 112, 7);         // 每分钟循环次数
+            SerialReadSingleYDataRegister(0, 255, 10, 30, 1);        // 报警状态
+            SerialReadSingleYDataRegister(0, 255, 10, 31, 2);        // 自动运行
+            SerialReadSingleYDataRegister(0, 255, 10, 32, 3);        // 停止
+            SerialReadDoubleDataRegister(0, 255, 10, 214, 4);        // 当前产量
+            SerialReadDoubleDataRegister(0, 255, 10, 216, 5);        // 产量设定
+            SerialReadDoubleDataRegister(0, 255, 10, 218, 6);        // 总产量
+            SerialReadDoubleDataRegister(0, 255, 10, 94, 7);         // 每分钟循环次数
 
             // 高速冲床（换热车间）
-            SerialReadSingleYDataRegister(0, 255, 10, 94, 1);        // 正常运行状态
-            SerialReadSingleYDataRegister(0, 255, 10, 93, 2);        // 暂停状态
-            SerialReadSingleYDataRegister(0, 255, 10, 92, 3);        // 异常停止状态
-            SerialReadSingleDataRegister(0, 255, 10, 214, 4);        // 白班生产时间
-            SerialReadSingleDataRegister(0, 255, 10, 215, 5);        // 晚班生产时间
-            SerialReadDoubleDataRegister(0, 255, 10, 30, 6);         // 总累计冲次
-            SerialReadSingleDataRegister(0, 255, 10, 10, 7);         // 实时冲速 
-            SerialReadSingleDataRegister(0, 255, 10, 101, 8);        // 当前累积生产数量
+            // SerialReadSingleYDataRegister(0, 255, 10, 94, 1);        // 正常运行状态
+            // SerialReadSingleYDataRegister(0, 255, 10, 93, 2);        // 暂停状态
+            // SerialReadSingleYDataRegister(0, 255, 10, 92, 3);        // 异常停止状态
+            // SerialReadSingleDataRegister(0, 255, 10, 214, 4);        // 白班生产时间
+            // SerialReadSingleDataRegister(0, 255, 10, 215, 5);        // 晚班生产时间
+            // SerialReadDoubleDataRegister(0, 255, 10, 30, 6);         // 总累计冲次
+            // SerialReadSingleDataRegister(0, 255, 10, 10, 7);         // 实时冲速 
+            // SerialReadSingleDataRegister(0, 255, 10, 101, 8);        // 当前累积生产数量
 
             // 双两管无削开料机
             // SerialReadSingleDataRegister(0, 255, 10, 8340, 1);        // 位置（自动1）
@@ -1358,13 +1359,40 @@ void send_data_task(void *pvParameters)
 #endif 
 
 #ifdef CONFIG_PLC_PPI
-            // PPIReadByteDataRegister(100, 1, 0);
+            // PPIReadBitOutputRegister(0, 2, 1, 1);
+            // PPIReadBitMDataRegister(2, 0, 1, 2);
+            // PPIReadBitMDataRegister(2, 3, 1, 3);
+            // PPIReadBitDataRegister(3315, 1, 1, 4);
+            // PPIReadBitDataRegister(3315, 2, 1, 5);
+            // PPIReadBitDataRegister(3315, 3, 1, 6);
+            // PPIReadBitDataRegister(3315, 4, 1, 7);
+            // PPIReadBitDataRegister(3315, 5, 1, 8);
+            // PPIReadBitDataRegister(3315, 6, 1, 9);
+            // PPIReadBitDataRegister(3315, 7, 1, 10);
+            // PPIReadBitDataRegister(3316, 1, 1, 11);
+            // PPIReadBitMDataRegister(0, 7, 1, 12);
+            // PPIReadFloatDataRegister(210, 1, 13);
+            // PPIReadFloatDataRegister(214, 1, 14);
+            // PPIReadFloatDataRegister(280, 1, 15);
+            // PPIReadFloatDataRegister(534, 1, 16);
+            // PPIReadFloatDataRegister(1648, 1, 17);
+            // PPIReadFloatDataRegister(1848, 1, 18);
+            // PPIReadFloatDataRegister(900, 1, 19);
+            // PPIReadFloatDataRegister(100, 1, 20);
+
+            PPIReadByteDataRegister(120, 1, 1);
             // PPIReadByteDataRegister(101, 1, 2);
             // PPIReadByteDataRegister(102, 1, 3);
-            PPIReadBitInputRegister(1, 7, 1, 0);
-            PPIReadBitInputRegister(2, 3, 1, 1);
-            PPIReadBitOutputRegister(1, 6, 1, 2);
-            PPIReadBitOutputRegister(2, 0, 1, 3);
+            // PPIReadBitInputRegister(1, 7, 1, 1);
+            PPIReadBitInputRegister(2, 3, 1, 2);
+            // PPIReadBitOutputRegister(1, 6, 1, 3);
+            // PPIReadBitOutputRegister(2, 0, 1, 4);
+            PPIReadBitMDataRegister(2, 3, 1, 3);
+
+            PPIReadBitDataRegister(3315, 1, 1, 4);
+
+            PPIReadFloatDataRegister(100, 1, 5);
+            PPIReadShortDataRegister(520, 1, 6);
 #endif
 
 #ifdef CONFIG_TESTER_76T

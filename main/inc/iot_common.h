@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMAJQ0180"
+#define DEVID        "AMASC0376"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -192,6 +192,7 @@ typedef struct {
     int singleproduction;
     int totalproduction;
     int result;
+    float realsetcharegemount;
 } SNCaclReFillingMachine;
 
 // 生能1车间冷媒灌注机数据格式
