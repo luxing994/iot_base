@@ -52,8 +52,8 @@ void LSLoadReadSingleDataRegister(uint32_t address, uint16_t frnum)
 {
 	LSLoadPackReadWordDataRegisterFrame(address, 1, &lsloadsdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&lsloadsdatabuff, sizeof(LsLoadCommandFrameFormat));
-	g_fxplccount = frnum;
-	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
+	g_lsplccount = frnum;
+	g_lsplcdataformat = PLC_DATA_TYPE_SHORT;
     vTaskDelay(30);
 }
 
@@ -114,7 +114,7 @@ void DBSReadData(void)
 {
 	uint8_t addr = DBS_ADDRESS;
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&addr, sizeof(uint8_t));
-	g_fxplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
+	g_lsplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
 }
 
 int DBSGetData(void)
@@ -169,7 +169,7 @@ void TRReadData(void)
 	trsenddatabuff.commmand = TR_REQUIRE_CODE;
 	trsenddatabuff.check = CalFCS(&trsenddatabuff, sizeof(TrSendFrameFormat) - 1);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&trsenddatabuff, sizeof(TrSendFrameFormat));
-	g_fxplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
+	g_lsplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
 }
 
 int TRGetData(void)

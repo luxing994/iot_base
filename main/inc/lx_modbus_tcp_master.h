@@ -22,6 +22,8 @@
 #define MODBUS_ERR_FUNC_MISMATCH  -4
 #define MODBUS_ERR_DATA_MISMATCH  -5
 
+#define MODBUS_READ_DATA_TIME     30
+
 // 16位寄存器读取
 int modbus_tcp_read_holding_registers(int sock, uint16_t trans_id,
                                       uint8_t unit_id, uint16_t start_addr,

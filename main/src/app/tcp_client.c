@@ -41,8 +41,7 @@
 
 #define PORT CONFIG_EXAMPLE_PORT     // read data com
 #define PORT1 CONFIG_EXAMPLE_PORT1   // init data com
-#define PORT2 CONFIG_EXAMPLE_PORT2   // init data com
-#define PORT3 8768   // OTA
+#define OTA_PORT 8768   // OTA
 
 #define CLIENT_RECONNECT_INTERVAL  5 // second
 #define HEART_BEAT_INTERVAL        1 // second
@@ -288,15 +287,15 @@ void tcp_client1_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-#if defined(CONFIG_PLC_NETWORK)
-void tcp_client2_task(void *pvParameters)
+#if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
+void tcp_modbus_client_task(void *pvParameters)
 {
     int addr_family = 0;
     int ip_protocol = 0;
     int sock, i = 0;
     uint32_t recvp;
-    char host_ip[] = CONFIG_EXAMPLE_IPV4_ADDR1;
-    const char *TAG = "tcp client2";
+    char host_ip[] = CONFIG_PLC_MODBUS_IPV4_ADDR;
+    const char *TAG = "tcp modbus client";
     TickType_t xLastWakeTime1, xLastWakeTime2;
     const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
@@ -308,38 +307,28 @@ void tcp_client2_task(void *pvParameters)
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
         dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(PORT2);
+        dest_addr.sin_port = htons(CONFIG_PLC_MODBUS_TCP_PORT);
         addr_family = AF_INET;
         ip_protocol = IPPROTO_IP;
 #elif defined(CONFIG_EXAMPLE_IPV6)
         struct sockaddr_in6 dest_addr = { 0 };
         inet6_aton(host_ip, &dest_addr.sin6_addr);
         dest_addr.sin6_family = AF_INET6;
-        dest_addr.sin6_port = htons(PORT2);
+        dest_addr.sin6_port = htons(CONFIG_PLC_MODBUS_TCP_PORT);
         dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
         addr_family = AF_INET6;
         ip_protocol = IPPROTO_IPV6;
 #elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
         struct sockaddr_storage dest_addr = { 0 };
-        ESP_ERROR_CHECK(get_addr_from_stdin(PORT2, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
+        ESP_ERROR_CHECK(get_addr_from_stdin(CONFIG_PLC_MODBUS_TCP_PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
 
-#if (defined CONFIG_PLC_PPI)
-        // 连接到 PLC 并初始化 S7 通信
-        int sock = s7_connect(host_ip, &pdu_len);
-        if (sock < 0) {
-            ESP_LOGE(TAG, "Failed to setup communication with S7 PLC");
-            goto end;  // 如果连接失败，重新尝试
-        }
-
-        ESP_LOGI(TAG, "Successfully connected to S7 PLC");
-#else
         sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
         }
-        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT2);
+        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, CONFIG_PLC_MODBUS_TCP_PORT);
 
         int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {
@@ -347,10 +336,87 @@ void tcp_client2_task(void *pvParameters)
             goto end;
         }
         ESP_LOGI(TAG, "Successfully connected");
-#endif
+
         while (1) {
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
-#if defined(CONFIG_PLC_FX)
+            
+            // 电解炉控制柜
+            MODBUS_NetReadFloatRegister(sock, 5, 22);       // 11#工作室真空度
+            MODBUS_NetReadFloatRegister(sock, 7, 23);       // 11#收集室真空度
+            MODBUS_NetReadFloatRegister(sock, 13, 24);      // 11#工作室压力值
+            MODBUS_NetReadFloatRegister(sock, 15, 25);      // 11#收集室压力值
+            MODBUS_NetReadFloatRegister(sock, 19, 26);      // 11#炉体水温
+
+            MODBUS_NetReadFloatRegister(sock, 1, 27);       // 12#工作室真空度
+            MODBUS_NetReadFloatRegister(sock, 3, 28);       // 12#收集室真空度
+            MODBUS_NetReadFloatRegister(sock, 9, 29);       // 12#工作室压力值
+            MODBUS_NetReadFloatRegister(sock, 11, 30);      // 12#收集室压力值
+            MODBUS_NetReadFloatRegister(sock, 17, 31);     // 12#炉体水温
+        }
+        end:
+        if (sock != -1) {
+            ESP_LOGE(TAG, "Shutting down socket and restarting...");
+            shutdown(sock, 0);
+            close(sock);
+        }
+    }
+    vTaskDelete(NULL);
+}
+#endif
+
+#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
+void tcp_fx_client_task(void *pvParameters)
+{
+    int addr_family = 0;
+    int ip_protocol = 0;
+    int sock, i = 0;
+    uint32_t recvp;
+    char host_ip[] = CONFIG_PLC_FX_IPV4_ADDR;
+    const char *TAG = "tcp fx client";
+    TickType_t xLastWakeTime1, xLastWakeTime2;
+    const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
+    const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
+    uint16_t pdu_len = 0; // 定义并初始化 pdu_len
+    
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
+#if defined(CONFIG_EXAMPLE_IPV4)
+        struct sockaddr_in dest_addr;
+        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+        dest_addr.sin_family = AF_INET;
+        dest_addr.sin_port = htons(CONFIG_PLC_FX_TCP_PORT);
+        addr_family = AF_INET;
+        ip_protocol = IPPROTO_IP;
+#elif defined(CONFIG_EXAMPLE_IPV6)
+        struct sockaddr_in6 dest_addr = { 0 };
+        inet6_aton(host_ip, &dest_addr.sin6_addr);
+        dest_addr.sin6_family = AF_INET6;
+        dest_addr.sin6_port = htons(CONFIG_PLC_FX_TCP_PORT);
+        dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
+        addr_family = AF_INET6;
+        ip_protocol = IPPROTO_IPV6;
+#elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
+        struct sockaddr_storage dest_addr = { 0 };
+        ESP_ERROR_CHECK(get_addr_from_stdin(CONFIG_PLC_FX_TCP_PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
+#endif
+
+        sock = socket(addr_family, SOCK_STREAM, ip_protocol);
+        if (sock < 0) {
+            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+            break;
+        }
+        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, CONFIG_PLC_FX_TCP_PORT);
+
+        int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
+        if (err != 0) {
+            ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+            goto end;
+        }
+        ESP_LOGI(TAG, "Successfully connected");
+
+        while (1) {
+            vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
+
             FX_NetReadSingleYDataRegister(sock, 94, 1);        // 正常运行状态
             FX_NetReadSingleYDataRegister(sock, 93, 2);        // 暂停状态
             FX_NetReadSingleYDataRegister(sock, 92, 3);        // 异常停止状态
@@ -359,13 +425,67 @@ void tcp_client2_task(void *pvParameters)
             FX_NetReadDoubleDataRegister(sock, 30, 6);         // 总累计冲次
             FX_NetReadSingleDataRegister(sock, 10, 7);         // 实时冲速 
             FX_NetReadSingleDataRegister(sock, 101, 8);        // 当前累积生产数量
+        }
+        end:
+        if (sock != -1) {
+            ESP_LOGE(TAG, "Shutting down socket and restarting...");
+            shutdown(sock, 0);
+            close(sock);
+        }
+    }
+    vTaskDelete(NULL);
+}
 #endif
 
-#if defined(CONFIG_PLC_MODBUS)
-            MODBUS_NetReadFloatRegister(sock, 1, 0);
+#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
+void tcp_ppi_client_task(void *pvParameters)
+{
+    int addr_family = 0;
+    int ip_protocol = 0;
+    int sock, i = 0;
+    uint32_t recvp;
+    char host_ip[] = CONFIG_PLC_PPI_IPV4_ADDR;
+    const char *TAG = "tcp ppi client";
+    TickType_t xLastWakeTime1, xLastWakeTime2;
+    const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
+    const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
+    uint16_t pdu_len = 0; // 定义并初始化 pdu_len
+    
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
+#if defined(CONFIG_EXAMPLE_IPV4)
+        struct sockaddr_in dest_addr;
+        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+        dest_addr.sin_family = AF_INET;
+        dest_addr.sin_port = htons(CONFIG_PLC_PPI_TCP_PORT);
+        addr_family = AF_INET;
+        ip_protocol = IPPROTO_IP;
+#elif defined(CONFIG_EXAMPLE_IPV6)
+        struct sockaddr_in6 dest_addr = { 0 };
+        inet6_aton(host_ip, &dest_addr.sin6_addr);
+        dest_addr.sin6_family = AF_INET6;
+        dest_addr.sin6_port = htons(CONFIG_PLC_PPI_TCP_PORT);
+        dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
+        addr_family = AF_INET6;
+        ip_protocol = IPPROTO_IPV6;
+#elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
+        struct sockaddr_storage dest_addr = { 0 };
+        ESP_ERROR_CHECK(get_addr_from_stdin(CONFIG_PLC_PPI_TCP_PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
 
-#if (defined CONFIG_PLC_PPI)
+        // 连接到 PLC 并初始化 S7 通信
+        int sock = s7_connect(host_ip, &pdu_len);
+        if (sock < 0) {
+            ESP_LOGE(TAG, "Failed to setup communication with S7 PLC");
+            goto end;  // 如果连接失败，重新尝试
+        }
+
+        ESP_LOGI(TAG, "Successfully connected to S7 PLC");
+
+        while (1) {
+            vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
+        #ifdef CONFIG_PLC_PPI_ELECTROLYSIS_DEVICE
+            // 电解炉电解柜
             S7_NetReadBitQRegister(sock, 0, 2, 1);         // 运行显示
             S7_NetReadBitMRegister(sock, 2, 0, 2);         // 启动
             S7_NetReadBitMRegister(sock, 2, 3, 3);         // 故障复位
@@ -387,7 +507,31 @@ void tcp_client2_task(void *pvParameters)
             S7_NetReadIntDataRegister(sock, 900, 19);        // 批号
             S7_NetReadSingleDataRegister(sock, 520, 20);     // 电解时间H
             S7_NetReadSingleDataRegister(sock, 522, 21);     // 电解时间M
-#endif
+        #endif
+        
+        #ifdef CONFIG_PLC_PPI_CONTROLLER_DEVICE
+            // 电解炉控制柜PLC
+            S7_NetReadBitQRegister(sock, 8, 3, 1);              // 前置阀1开到位指示
+            S7_NetReadBitQRegister(sock, 8, 4, 2);              // 前置阀1关到位指示
+            S7_NetReadBitQRegister(sock, 8, 5, 3);              // 前置阀2开到位指示
+            S7_NetReadBitQRegister(sock, 8, 6, 4);              // 前置阀2关到位指示
+            S7_NetReadBitQRegister(sock, 0, 7, 5);              // 旁通阀输出
+            S7_NetReadBitQRegister(sock, 8, 7, 6);              // 粗抽阀1（左）开到位指示
+            S7_NetReadBitQRegister(sock, 9, 0, 7);              // 粗抽阀1（左）关到位指示
+            S7_NetReadBitQRegister(sock, 9, 1, 8);              // 粗抽阀2（左）开到位指示
+            S7_NetReadBitQRegister(sock, 9, 2, 9);              // 粗抽阀2（左）关到位指示
+            S7_NetReadBitQRegister(sock, 9, 3, 10);             // 粗抽阀1（右）开到位指示
+            S7_NetReadBitQRegister(sock, 9, 4, 11);             // 粗抽阀1（右）关到位指示
+            S7_NetReadBitQRegister(sock, 9, 5, 12);             // 粗抽阀2（右）开到位指示
+            S7_NetReadBitQRegister(sock, 9, 6, 13);             // 粗抽阀2（右）关到位指示
+            S7_NetReadBitQRegister(sock, 0, 0, 14);             // H-150滑阀泵输出
+            S7_NetReadBitQRegister(sock, 0, 1, 15);             // ZJP-1200罗茨泵输出
+            S7_NetReadBitIRegister(sock, 9, 0, 17);             // 插板阀开启到位(左)
+            S7_NetReadBitIRegister(sock, 9, 1, 18);             // 插板阀关闭到位(左)
+            S7_NetReadBitIRegister(sock, 9, 2, 19);             // 插板阀开启到位(右)
+            S7_NetReadBitIRegister(sock, 9, 3, 20);             // 插板阀关闭到位(右)
+            S7_NetReadFloatDataRegister(sock, 100, 22);         // 冷却水压力
+        #endif
         }
         end:
         if (sock != -1) {
@@ -398,71 +542,6 @@ void tcp_client2_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
-
-// void tcp_client2_task(void *pvParameters)
-// {
-//     const char *TAG = "tcp client2";
-//     char host_ip[] = CONFIG_EXAMPLE_IPV4_ADDR1;
-//     TickType_t xLastWakeTime1, xLastWakeTime2;
-//     const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
-//     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
-
-//     uint16_t pdu_len = 0; // 定义并初始化 pdu_len
-
-//     while (1) {
-//         vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
-
-//         // 连接到 PLC 并初始化 S7 通信
-//         int sock = s7_connect(host_ip, &pdu_len);
-//         if (sock < 0) {
-//             ESP_LOGE(TAG, "Failed to setup communication with S7 PLC");
-//             continue;  // 如果连接失败，重新尝试
-//         }
-
-//         ESP_LOGI(TAG, "Successfully connected to S7 PLC");
-
-//         // ----------- 循环读取数据 -----------
-//         while (1) {
-//             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
-
-//             // // 通过 S7comm 读取数据
-//             // uint8_t bit_value = 0;
-//             // if (s7_read_bit(sock, pdu_len, 0x83, 0, 0x0000, 0, &bit_value) == 0) {
-//             //     ESP_LOGI(TAG, "M0.0 = %d", bit_value);
-//             // }
-//             S7_NetReadBitQRegister(sock, 0, 2, 1);         // 运行显示
-//             S7_NetReadBitMRegister(sock, 2, 0, 2);         // 启动
-//             S7_NetReadBitMRegister(sock, 2, 3, 3);         // 故障复位
-//             S7_NetReadBitDataRegister(sock, 3315, 1, 4);   // 电源输入故障
-//             S7_NetReadBitDataRegister(sock, 3315, 2, 5);   // 设备超温
-//             S7_NetReadBitDataRegister(sock, 3315, 3, 6);   // 输出过电压
-//             S7_NetReadBitDataRegister(sock, 3315, 4, 7);   // 输出过电流
-//             S7_NetReadBitDataRegister(sock, 3315, 5, 8);   // IGBT保护
-//             S7_NetReadBitDataRegister(sock, 3315, 6, 9);   // 输出低电压
-//             S7_NetReadBitDataRegister(sock, 3315, 7, 10);   // 风扇变频故障
-//             S7_NetReadBitDataRegister(sock, 3316, 1, 11);   // 故障显示
-//             S7_NetReadBitMRegister(sock, 0, 7, 12);         // 急停
-//             S7_NetReadFloatDataRegister(sock, 210, 13);     // 实时电压
-//             S7_NetReadFloatDataRegister(sock, 214, 14);     // 实时电流
-//             S7_NetReadFloatDataRegister(sock, 280, 15);     // 设备温度
-//             S7_NetReadFloatDataRegister(sock, 534, 16);     // 点解AH
-//             S7_NetReadFloatDataRegister(sock, 1648, 17);     // 电压给定
-//             S7_NetReadFloatDataRegister(sock, 1848, 18);     // 电流给定
-//             S7_NetReadIntDataRegister(sock, 900, 19);        // 批号
-//             S7_NetReadSingleDataRegister(sock, 520, 20);     // 电解时间H
-//             S7_NetReadSingleDataRegister(sock, 522, 21);     // 电解时间M
-//         }
-
-//         // 连接关闭
-//         if (sock != -1) {
-//             ESP_LOGE(TAG, "Shutting down socket...");
-//             shutdown(sock, 0);
-//             close(sock);  // 关闭 TCP 连接
-//         }
-//     }
-
-//     vTaskDelete(NULL);
-// }
 #endif
 
 
@@ -484,28 +563,28 @@ void tcp_client3_task(void *pvParameters)
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
         dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(PORT3);
+        dest_addr.sin_port = htons(OTA_PORT);
         addr_family = AF_INET;
         ip_protocol = IPPROTO_IP;
 #elif defined(CONFIG_EXAMPLE_IPV6)
         struct sockaddr_in6 dest_addr = { 0 };
         inet6_aton(host_ip, &dest_addr.sin6_addr);
         dest_addr.sin6_family = AF_INET6;
-        dest_addr.sin6_port = htons(PORT3);
+        dest_addr.sin6_port = htons(OTA_PORT);
         dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(EXAMPLE_INTERFACE);
         addr_family = AF_INET6;
         ip_protocol = IPPROTO_IPV6;
 #elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
         struct sockaddr_storage dest_addr = { 0 };
-        ESP_ERROR_CHECK(get_addr_from_stdin(PORT3, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
+        ESP_ERROR_CHECK(get_addr_from_stdin(OTA_PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
         ota_tcp_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (ota_tcp_sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
         }
-        // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT3);
-        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT3);
+        // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, OTA_PORT);
+        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, OTA_PORT);
 
         int err = connect(ota_tcp_sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0) {

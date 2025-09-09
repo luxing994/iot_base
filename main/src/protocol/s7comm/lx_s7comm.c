@@ -7,22 +7,6 @@
 #include "esp_log.h"
 #include "iot_common.h"
 
-// -------------------------- 定义常量和宏 --------------------------
-
-#define S7_TCP_PORT 102                      // S7comm 使用的 TCP 端口
-#define TPKT_VERSION 0x03                    // TPKT 协议版本
-#define COTP_CR_PDU_TYPE 0xE0                // COTP Connection Request (CR) 类型
-#define COTP_CC_PDU_TYPE 0xD0                // COTP Confirm (CC) 类型
-#define S7_PROTOCOL_ID 0x32                  // S7 协议 ID
-#define S7_COMMUNICATION_FUNCTION 0x01       // S7 Setup Communication 功能码
-#define S7_READ_VAR_FUNCTION 0x04            // S7 ReadVar 功能码
-
-#define S7_JOB_TYPE 0x01                     // ROSCTR：Job (0x01)
-#define S7_REDUNDANCY 0x00                   // 冗余字段，通常为 0
-#define S7_PDU_REF 0x00                      // PDU 引用字段
-#define S7_PARAM_LENGTH 0x0E                 // 参数长度（14 字节）
-#define S7_DATA_LENGTH 0x00                  // 数据长度（初始化时为 0）
-#define COTP_TPDU_SIZE 0x0A                  // COTP TPDU size code (1024字节)
 #define MAX_PDU_SIZE 1024                   // 最大 PDU 大小
 
 static const char *TAG = "S7COMM";
@@ -36,8 +20,8 @@ static void S7_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum
     s7netdatarecvflag = 1;
 	s7netsrdatabuffaddr = dataaddr;
 	s7netsrdatalen = len;
-	g_fxplccount = frnum;
-	g_fxplcdataformat = datatype;
+	g_ppiplccount = frnum;
+	g_ppiplcdataformat = datatype;
 }
 
 // -------------------------- 发送和接收数据的工具函数 --------------------------
@@ -529,13 +513,13 @@ int GetNetDataFromS7PlcNet(void)
 	}
 
 	data = (uint8_t *)s7netsrdatabuffaddr;
-    if (g_fxplcdataformat == PLC_DATA_TYPE_BIT || g_fxplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
+    if (g_ppiplcdataformat == PLC_DATA_TYPE_BIT || g_ppiplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
         ret = FXPLC_WriteBufferBytes(&data[0], 1);
         if (ret != 0) {
             ESP_LOGE(TAG, "buffer error: %d", ret);
             return -1;
         }
-    } else if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
+    } else if (g_ppiplcdataformat == PLC_DATA_TYPE_SHORT) {
         for (i = 0; i < s7netsrdatalen * 2; i++) {
             ret = FXPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
@@ -543,7 +527,7 @@ int GetNetDataFromS7PlcNet(void)
                 return -1;
             }
         }
-    } else if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT || g_fxplcdataformat == PLC_DATA_TYPE_INT) {
+    } else if (g_ppiplcdataformat == PLC_DATA_TYPE_FLOAT || g_ppiplcdataformat == PLC_DATA_TYPE_INT) {
         for (i = 0; i < s7netsrdatalen * 4; i++) {
             ret = FXPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
@@ -597,14 +581,14 @@ void S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
 void S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
     int i, err;
-    uint16_t read_regs;
+    uint32_t read_regs;
     static const char *TAG = "S7_READ_SINGLE_DATA";
 
     err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
     if (err == 0) {
-        ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
+        ESP_LOGI(TAG, "Read 32-bit regs: %u", read_regs);
     } else {
-        ESP_LOGE(TAG, "Read 16-bit regs failed: %d", err);
+        ESP_LOGE(TAG, "Read 32-bit regs failed: %d", err);
         // break;
     }
     
@@ -615,14 +599,14 @@ void S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum)
 void S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
     int i, err;
-    uint16_t read_regs;
+    uint32_t read_regs;
     static const char *TAG = "S7_READ_SINGLE_DATA";
 
     err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
     if (err == 0) {
-        ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
+        ESP_LOGI(TAG, "Read 32-bit regs: %f", *((float *)&read_regs));
     } else {
-        ESP_LOGE(TAG, "Read 16-bit regs failed: %d", err);
+        ESP_LOGE(TAG, "Read 32-bit regs failed: %d", err);
         // break;
     }
     
@@ -647,6 +631,25 @@ void S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint
     S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
     vTaskDelay(S7_READ_DATA_TIME);
 }
+
+void S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+{
+    int i, err;
+    uint8_t read_regs;
+    static const char *TAG = "S7_READ_SINGLE_DATA";
+
+    err = s7_read_bit(sock, S7_DATA_AREA_INPUT, address, bitoffset, &read_regs);
+    if (err == 0) {
+        ESP_LOGI(TAG, "Read bit regs: %u", read_regs);
+    } else {
+        ESP_LOGE(TAG, "Read bit regs failed: %d", err);
+        // break;
+    }
+    
+    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
+    vTaskDelay(S7_READ_DATA_TIME);
+}
+
 
 void S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
 {

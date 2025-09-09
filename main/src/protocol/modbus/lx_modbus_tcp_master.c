@@ -16,8 +16,8 @@ static void MODBUS_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t f
     mdnetdatarecvflag = 1;
 	mdnetsrdatabuffaddr = dataaddr;
 	mdnetsrdatalen = len;
-	g_fxplccount = frnum;
-	g_fxplcdataformat = datatype;
+	g_modbusplccount = frnum;
+	g_modbusplcdataformat = datatype;
 }
 
 // 发送并接收，返回接收长度或负值错误
@@ -188,7 +188,7 @@ int GetNetDataFromModbusPlc(void)
 	}
 
 	data = (uint8_t *)mdnetsrdatabuffaddr;
-    if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
+    if (g_modbusplcdataformat == PLC_DATA_TYPE_SHORT) {
         for (i = 0; i < mdnetsrdatalen * 2; i++) {
             ret = FXPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
@@ -196,7 +196,7 @@ int GetNetDataFromModbusPlc(void)
                 return -1;
             }
         }
-    } else if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT || g_fxplcdataformat == PLC_DATA_TYPE_INT) {
+    } else if (g_modbusplcdataformat == PLC_DATA_TYPE_FLOAT || g_modbusplcdataformat == PLC_DATA_TYPE_INT) {
         for (i = 0; i < mdnetsrdatalen * 4; i++) {
             ret = FXPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
@@ -227,7 +227,7 @@ void MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum
     g_trans_id = (g_trans_id + 1) & 0xFFFF;
     
     MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_SHORT);
-    vTaskDelay(20);
+    vTaskDelay(MODBUS_READ_DATA_TIME);
 }
 
 void MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
@@ -246,7 +246,7 @@ void MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum
     g_trans_id = (g_trans_id + 1) & 0xFFFF;
 
     MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_INT);
-    vTaskDelay(20);
+    vTaskDelay(MODBUS_READ_DATA_TIME);
 }
 
 void MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
@@ -257,7 +257,7 @@ void MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
 
     err = modbus_tcp_read_holding_registers_32(sock, g_trans_id, 1, address, 1, &read_regs, 1);
     if (err == MODBUS_OK) {
-        ESP_LOGI(TAG, "Read 32-bit regs: %f", (float)read_regs);
+        ESP_LOGI(TAG, "Read 32-bit regs: %f", *((float *)(&read_regs)));
     } else {
         ESP_LOGE(TAG, "Modbus 32-bit read failed: %d", err);
         // break;
@@ -266,5 +266,5 @@ void MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
     g_trans_id = (g_trans_id + 1) & 0xFFFF;
     
     MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_FLOAT);
-    vTaskDelay(20);
+    vTaskDelay(MODBUS_READ_DATA_TIME);
 }

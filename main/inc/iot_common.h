@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "AMASC0376"
+#define DEVID        "CRDJG001"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -230,6 +230,15 @@ extern ElectroFactoryData electroData;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
 extern int g_fxplcbitpos;
+extern int g_modbusplccount;
+extern int g_modbusplcdataformat;
+extern int g_ppiplccount;
+extern int g_ppiplcdataformat;
+extern int g_hostlinkplccount;
+extern int g_hostlinkplcdataformat;
+extern int g_hostlinkplcbitpos;
+extern int g_lsplccount;
+extern int g_lsplcdataformat;
 extern uint64_t g_baseTime;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);

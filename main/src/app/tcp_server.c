@@ -875,7 +875,7 @@ static void do_retransmit(const int sock)
             }
 
             timestart = GetMilliTimeNow();
-#ifdef CONFIG_PLC_FX
+#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
             if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetcharegemount) {
                 err = send(sock, "true", strlen("true"), 0);
                 if (err < 0) {
@@ -884,7 +884,7 @@ static void do_retransmit(const int sock)
             }
 #endif
 
-#ifdef CONFIG_PLC_HOSTLINK
+#ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
             // while (GetMilliTimeNow() - timestart < 10000) {
             //     vTaskDelayUntil(&xLastWakeTime, xFrequency);
             if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
@@ -1141,17 +1141,16 @@ void send_data_task(void *pvParameters)
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         if (g_devStartFlushFlag == 0) {
         } else {
-#ifdef CONFIG_PLC_FX
-    #ifdef CONFIG_PLC_RS232
+#ifdef CONFIG_PLC_FX_CONNECT_RS232
             ReadSingleDataRegister(8000, 1);
-    #endif
+#endif
 
-    #ifdef CONFIG_PLC_RS485
-        #ifdef CONFIG_RY_LINE
+#ifdef CONFIG_PLC_FX_CONNECT_RS485
+        #ifdef CONFIG_PLC_FX_RY_LINE
             SerialReadSingleDataRegister(0, 255, 10, 232, 1); // 日跃PLC产量累加值寄存器
         #endif
 
-        #ifdef CONFIG_XF_CONTROLER
+        #ifdef CONFIG_PLC_FX_XF_CONTROLLER
             SerialReadSingleDataRegister(0, 255, 10, 180, 1);    //  行车总时间
             SerialReadSingleDataRegister(0, 255, 10, 181, 2);    //  行车设定时间
             SerialReadSingleDataRegister(0, 255, 10, 171, 3);    //  一车运行时间
@@ -1164,7 +1163,7 @@ void send_data_task(void *pvParameters)
             SerialReadSingleDataRegister(0, 255, 10, 650, 10);    //  四车工位数值
         #endif
 
-        #ifdef CONFIG_SN_CACLREFILMAC
+        #ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
             SerialReadSingleFloatDataRegister(0, 255, 10, 164, 1);   //  系统真空
             SerialReadSingleDataRegister(0, 255, 10, 31, 2);         //  冷媒温度（A系统）
             SerialReadSingleDataRegister(0, 255, 10, 32, 3);         //  冷媒温度（B系统）
@@ -1177,7 +1176,7 @@ void send_data_task(void *pvParameters)
             SerialReadSingleFloatDataRegister(0, 255, 10, 16, 10);   //  实际设定灌注量
         #endif
 
-        #ifdef CONFIG_OTHER_DEVICE
+        #ifdef CONFIG_PLC_FX_OTHER_DEVICE
             // 弯管机
             SerialReadSingleYDataRegister(0, 255, 10, 30, 1);        // 报警状态
             SerialReadSingleYDataRegister(0, 255, 10, 31, 2);        // 自动运行
@@ -1292,56 +1291,54 @@ void send_data_task(void *pvParameters)
             // SerialReadSingleFloatDataRegister(0, 255, 10, 2520, 13);       // 扩口当前位置（2号）
             // SerialReadSingleFloatDataRegister(0, 255, 10, 8350, 14);       // 送料当前位置（2号）
         #endif
-    #endif
 #endif
 
-#ifdef CONFIG_PLC_LS_LOAD
-    #ifdef CONFIG_PLC_RS232
+
+#ifdef CONFIG_PLC_LS_LOAD_CONNECT_RS232
             // for (i = 0; i < 5120; i++) {
             //     LSLoadReadSingleDataRegister(i, i);
             // }
             DBSReadData();
             // TRReadData();
-    #endif
-
-    #ifdef CONFIG_PLC_RS485
-            //  LS PLC 485 use modbus RTU protocol
-    #endif
 #endif
 
-#ifdef CONFIG_PLC_HOSTLINK
-    #ifdef CONFIG_SN_CACLREFILMAC
+#ifdef CONFIG_PLC_LS_LOAD_CONNECT_RS485
+            //  LS PLC 485 use modbus RTU protocol
+#endif
+
+#if (defined CONFIG_PLC_HOSTLINK_CONNECT_RS485 || CONFIG_PLC_HOSTLINK_CONNECT_RS232)
+    #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
             // 冷媒灌注机
-            // HLReadSingleDataRegister(8101, 1);    // A模式选择
-            // HLReadSingleDataRegister(8501, 2);    // B模式选择
-            // HLReadBCDDataRegister(8824, 3);       // A检测时间
-            // HLReadBCDDataRegister(8844, 4);       // B检测时间
-            // HLReadFloatDataRegister(8820, 5);     // A抽空上限
-            // HLReadFloatDataRegister(8840, 6);     // B抽空上限
-            // HLReadFloatDataRegister(8822, 7);     // A抽空下限
-            // HLReadFloatDataRegister(8842, 8);     // B抽空下限
-            // HLReadFloatDataRegister(19704, 9);    // A充注压力
-            // HLReadFloatDataRegister(19724, 10);   // B充注压力
-            // HLReadFloatDataRegister(19746, 11);   // A真空度
-            // HLReadFloatDataRegister(19766, 12);   // B真空度
-            // HLReadFloatDataRegister(8828, 13);    // A设定量
-            // HLReadFloatDataRegister(8848, 14);    // B设定量
-            // HLReadFloatDataRegister(8182, 15);    // A百分比
-            // HLReadFloatDataRegister(8582, 16);    // B百分比
-            // HLReadFloatDataRegister(8194, 17);    // A充注速度
-            // HLReadFloatDataRegister(8594, 18);    // B充注速度
-            // HLReadFloatDataRegister(8180, 19);    // A充注量
-            // HLReadFloatDataRegister(8580, 20);    // B充注量
-            // HLReadSingleDataRegister(8102, 21);   // A工作状态
-            // HLReadSingleDataRegister(8502, 22);   // B工作状态
-            // HLReadFloatDataRegister(8104, 23);    // A充注时间
-            // HLReadFloatDataRegister(8504, 24);    // B充注时间
-            // HLReadSingleDataRegister(8940, 25);   // 结果判定
-            // HLReadFloatDataRegister(8150, 26);    // A充注设定值
-            // HLReadFloatDataRegister(8550, 27);    // B充注设定值
+            HLReadSingleDataRegister(8101, 1);    // A模式选择
+            HLReadSingleDataRegister(8501, 2);    // B模式选择
+            HLReadBCDDataRegister(8824, 3);       // A检测时间
+            HLReadBCDDataRegister(8844, 4);       // B检测时间
+            HLReadFloatDataRegister(8820, 5);     // A抽空上限
+            HLReadFloatDataRegister(8840, 6);     // B抽空上限
+            HLReadFloatDataRegister(8822, 7);     // A抽空下限
+            HLReadFloatDataRegister(8842, 8);     // B抽空下限
+            HLReadFloatDataRegister(19704, 9);    // A充注压力
+            HLReadFloatDataRegister(19724, 10);   // B充注压力
+            HLReadFloatDataRegister(19746, 11);   // A真空度
+            HLReadFloatDataRegister(19766, 12);   // B真空度
+            HLReadFloatDataRegister(8828, 13);    // A设定量
+            HLReadFloatDataRegister(8848, 14);    // B设定量
+            HLReadFloatDataRegister(8182, 15);    // A百分比
+            HLReadFloatDataRegister(8582, 16);    // B百分比
+            HLReadFloatDataRegister(8194, 17);    // A充注速度
+            HLReadFloatDataRegister(8594, 18);    // B充注速度
+            HLReadFloatDataRegister(8180, 19);    // A充注量
+            HLReadFloatDataRegister(8580, 20);    // B充注量
+            HLReadSingleDataRegister(8102, 21);   // A工作状态
+            HLReadSingleDataRegister(8502, 22);   // B工作状态
+            HLReadFloatDataRegister(8104, 23);    // A充注时间
+            HLReadFloatDataRegister(8504, 24);    // B充注时间
+            HLReadSingleDataRegister(8940, 25);   // 结果判定
+            HLReadFloatDataRegister(8150, 26);    // A充注设定值
+            HLReadFloatDataRegister(8550, 27);    // B充注设定值
     #endif
             
-    #ifdef CONFIG_OTHER_DEVICE
+    #ifdef CONFIG_PLC_HOSTLINK_OTHER_DEVICE
             // 高速冲床
             // HLReadSingleDataRegister(12, 1);         // 总累计冲次
             // HLReadSingleDataRegister(101, 2);        // 当班累计生产数量
@@ -1358,7 +1355,7 @@ void send_data_task(void *pvParameters)
     #endif
 #endif 
 
-#ifdef CONFIG_PLC_PPI
+#ifdef CONFIG_PLC_PPI_CONNECT_RS485
             // PPIReadBitOutputRegister(0, 2, 1, 1);
             // PPIReadBitMDataRegister(2, 0, 1, 2);
             // PPIReadBitMDataRegister(2, 3, 1, 3);
@@ -1408,18 +1405,15 @@ void send_data_task(void *pvParameters)
             AINUO_TTesterReadCurrentGroup();
 #endif
 
-#ifdef CONFIG_PLC_MODBUS
-    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
+#if (defined CONFIG_PLC_MODBUS_CONNECT_RS232 || CONFIG_PLC_MODBUS_CONNECT_RS485) 
             master_operation_func(NULL);
-    #endif
 #endif
         }
     }
     vTaskDelete(NULL);
 }
 
-#ifdef CONFIG_PLC_MODBUS
-    #if (defined CONFIG_PLC_RS232 || CONFIG_PLC_RS485) 
+#if (defined CONFIG_PLC_MODBUS_CONNECT_RS232 || CONFIG_PLC_MODBUS_CONNECT_RS485) 
 void send_command_task(void *pvParameters)
 {
     const char *TAG = "SEND_COMMAND_TASK";
@@ -1436,5 +1430,4 @@ void send_command_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
-    #endif
 #endif

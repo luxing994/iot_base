@@ -103,93 +103,350 @@ endmenu
 
 menu "PLC Communication Configuration"
 
-choice PLC_PRO_MODE
-    prompt "PLC protocol"
-    help
-        Selection of PLC protocol.
+menuconfig PLC_PROTOCOLS_ENABLED
+    bool "Enable PLC protocols"
+    default y
 
-    config PLC_FX
-        bool "fx protocol"
-        if PLC_FX   
-            choice DEVICE_TYPE
-                prompt "Select fx device type"
+if PLC_PROTOCOLS_ENABLED
 
-            config RY_LINE
-                bool "ry line machine"
+# ---------------- FX (Mitsubishi MC) ----------------
+config PLC_FX
+    bool "Mitsubishi FX (MC)"
+    default n
 
-            config XF_CONTROLER
-                bool "xf controler"
+if PLC_FX
 
-            config SN_CACLREFILMAC
-                bool "sn cacl refilling machine"
-
-            config OTHER_DEVICE
-                bool "common fx device"
-            endchoice
-        endif
-
-    config PLC_LS_LOAD
-        bool "ls load protocol"
-
-    config PLC_HOSTLINK
-        bool "hostlink protocol"
-        if PLC_HOSTLINK   
-            choice DEVICE_TYPE
-                prompt "Select fx device type"
-
-            config RY_LINE
-                bool "ry line machine"
-
-            config XF_CONTROLER
-                bool "xf controler"
-
-            config SN_CACLREFILMAC
-                bool "sn cacl refilling machine"
-
-            config OTHER_DEVICE
-                bool "common hostlink device"
-            endchoice
-        endif
-
-    config PLC_PPI
-        bool "ppi protocol"
-
-    config PLC_MODBUS
-        bool "modbus protocol"
-    
-    config TESTER_76T
-        bool "tester 76t protocol"
-
-    config TESTER_AINUO
-        bool "tester ainuo protocol"
+choice PLC_FX_DEVICE_TYPE
+    prompt "FX device type"
+    default PLC_FX_OTHER_DEVICE
+config PLC_FX_RY_LINE
+    bool "RY line machine"
+config PLC_FX_XF_CONTROLLER
+    bool "XF controller"            
+config PLC_FX_SN_CACLREFILMAC
+    bool "SN cacl refilling machine"
+config PLC_FX_OTHER_DEVICE
+    bool "Common FX device"
 endchoice
 
-choice PLC_CONNECT_MODE
-    prompt "PLC connect mode"
-
-    config PLC_RS232
-        bool "rs232(program port)"
-
-    config PLC_RS485
-        bool "rs485(serial port)"
-    
-    config PLC_NETWORK
-        bool "wired network port"
-    if PLC_NETWORK
-        config EXAMPLE_IPV4_ADDR1
-            string "IPV4 Address1"
-            default "169.254.221.82"
-            help
-                The PLC server IP configaration.
-        
-        config EXAMPLE_PORT2
-            int "Port2"
-            range 0 65535
-            default 8765
-            help
-                The PLC server port.
-    endif 
-
+choice PLC_FX_CONNECT_MODE
+    prompt "FX connect mode"
+    default PLC_FX_CONNECT_RS485
+config PLC_FX_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config PLC_FX_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config PLC_FX_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
 endchoice
 
+config PLC_FX_IPV4_ADDR
+    string "FX IPv4 address"
+    default "169.254.221.82"
+    depends on PLC_FX_CONNECT_NETWORK
+
+config PLC_FX_TCP_PORT
+    int "FX TCP port"
+    range 0 65535
+    default 8765
+    depends on PLC_FX_CONNECT_NETWORK
+
+endif # PLC_FX
+
+
+# ---------------- Omron HostLink ----------------
+config PLC_HOSTLINK
+    bool "Omron HostLink"
+    default n
+
+if PLC_HOSTLINK
+
+choice PLC_HOSTLINK_DEVICE_TYPE
+    prompt "HostLink device type"
+    default PLC_HOSTLINK_OTHER_DEVICE
+config PLC_HOSTLINK_SN_CACLREFILMAC
+    bool "SN cacl refilling machine"
+config PLC_HOSTLINK_OTHER_DEVICE
+    bool "Common HostLink device"
+endchoice
+
+choice PLC_HOSTLINK_CONNECT_MODE
+    prompt "HostLink connect mode"
+    default PLC_HOSTLINK_CONNECT_RS232
+config PLC_HOSTLINK_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config PLC_HOSTLINK_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config PLC_HOSTLINK_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config PLC_HOSTLINK_IPV4_ADDR
+    string "HostLink IPv4 address"
+    default "169.254.221.83"
+    depends on PLC_HOSTLINK_CONNECT_NETWORK
+
+config PLC_HOSTLINK_TCP_PORT
+    int "HostLink TCP port"
+    range 0 65535
+    default 9600
+    depends on PLC_HOSTLINK_CONNECT_NETWORK
+
+endif # PLC_HOSTLINK
+
+# ---------------- LS Plc ----------------
+config PLC_LS_LOAD
+    bool "LS Load protocol"
+    default n
+
+if PLC_LS_LOAD
+
+choice PLC_LS_LOAD_DEVICE_TYPE
+    prompt "LS device type"
+    default PLC_LS_LOAD_OTHER_DEVICE
+config PLC_LS_LOAD_OTHER_DEVICE
+    bool "Common LS device"
+endchoice
+
+choice PLC_LS_LOAD_CONNECT_MODE
+    prompt "LS connect mode"
+    default PLC_LS_LOAD_CONNECT_RS232
+config PLC_LS_LOAD_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config PLC_LS_LOAD_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config PLC_LS_LOAD_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config PLC_LS_LOAD_IPV4_ADDR
+    string "LS IPv4 address"
+    default "169.254.221.83"
+    depends on PLC_LS_LOAD_CONNECT_NETWORK
+
+config PLC_LS_LOAD_TCP_PORT
+    int "LS TCP port"
+    range 0 65535
+    default 9600
+    depends on PLC_LS_LOAD_CONNECT_NETWORK
+
+endif # PLC_LS_LOAD
+
+# ---------------- Siemens PPI ----------------
+config PLC_PPI
+    bool "Siemens PPI"
+    default n
+
+if PLC_PPI
+
+choice PLC_PPI_DEVICE_TYPE
+    prompt "PPI device type"
+    default PLC_PPI_OTHER_DEVICE
+config PLC_PPI_CONTROLLER_DEVICE
+    bool "Controller PPI device"
+config PLC_PPI_ELECTROLYSIS_DEVICE
+    bool "Electrolysis PPI device"
+config PLC_PPI_OTHER_DEVICE
+    bool "Common PPI device"
+endchoice
+
+choice PLC_PPI_CONNECT_MODE
+    prompt "PPI connect mode"
+    default PLC_PPI_CONNECT_RS232
+config PLC_PPI_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config PLC_PPI_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config PLC_PPI_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config PLC_PPI_IPV4_ADDR
+    string "PPi IPv4 address"
+    default "192.168.2.1"
+    depends on PLC_PPI_CONNECT_NETWORK
+
+config PLC_PPI_TCP_PORT
+    int "PPI TCP port"
+    range 0 65535
+    default 102
+    depends on PLC_PPI_CONNECT_NETWORK
+
+endif # PLC_PPI
+
+# ---------------- Modbus ----------------
+config PLC_MODBUS
+    bool "Modbus"
+default n
+
+if PLC_MODBUS
+
+choice PLC_MODBUS_DEVICE_TYPE
+    prompt "MODBUS device type"
+    default PLC_MODBUS_OTHER_DEVICE
+config PLC_MODBUS_OTHER_DEVICE
+    bool "Common MODBUS device"
+endchoice
+
+choice PLC_MODBUS_CONNECT_MODE
+    prompt "MODBUS connect mode"
+    default PLC_MODBUS_CONNECT_RS232
+config PLC_MODBUS_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config PLC_MODBUS_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config PLC_MODBUS_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config PLC_MODBUS_IPV4_ADDR
+    string "MODBUS IPv4 address"
+    default "192.168.2.192"
+    depends on PLC_MODBUS_CONNECT_NETWORK
+
+config PLC_MODBUS_TCP_PORT
+    int "MODBUS TCP port"
+    range 0 65535
+    default 502
+    depends on PLC_MODBUS_CONNECT_NETWORK
+
+endif # PLC_MODBUS
+
+# ---------------- TESTER_76T ----------------
+config TESTER_76T
+    bool "Tester 76T"
+default n
+
+if TESTER_76T
+
+choice TESTER_76T_DEVICE_TYPE
+    prompt "TESTER_76T device type"
+    default TESTER_76T_OTHER_DEVICE
+config TESTER_76T_OTHER_DEVICE
+    bool "Common TESTER_76T device"
+endchoice
+
+choice TESTER_76T_CONNECT_MODE
+    prompt "TESTER_76T connect mode"
+    default TESTER_76T_CONNECT_RS232
+config TESTER_76T_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config TESTER_76T_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config TESTER_76T_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config TESTER_76T_IPV4_ADDR
+    string "TESTER_76T IPv4 address"
+    default "169.254.221.83"
+    depends on TESTER_76T_CONNECT_NETWORK
+
+config TESTER_76T_TCP_PORT
+    int "TESTER_76T TCP port"
+    range 0 65535
+    default 9600
+    depends on TESTER_76T_CONNECT_NETWORK
+
+endif # TESTER_76T
+
+# ---------------- TESTER_AINUO ----------------
+config PLC_TESTER_AINUO
+    bool "Tester Ainuo"
+default n
+
+if TESTER_AINUO
+
+choice TESTER_AINUO_DEVICE_TYPE
+    prompt "TESTER_AINUO device type"
+    default TESTER_AINUO_OTHER_DEVICE
+config TESTER_AINUO_OTHER_DEVICE
+    bool "Common TESTER_AINUO device"
+endchoice
+
+choice TESTER_AINUO_CONNECT_MODE
+    prompt "TESTER_AINUO connect mode"
+    default TESTER_AINUO_CONNECT_RS232
+config TESTER_AINUO_CONNECT_RS232
+    bool "RS232 (program port)"
+    select APP_USE_RS232
+config TESTER_AINUO_CONNECT_RS485
+    bool "RS485 (serial port)"
+    select APP_USE_RS485
+config TESTER_AINUO_CONNECT_NETWORK
+    bool "Wired network port"
+    select APP_USE_ETH
+endchoice
+
+config TESTER_AINUO_IPV4_ADDR
+    string "TESTER_AINUO IPv4 address"
+    default "169.254.221.83"
+    depends on TESTER_AINUO_CONNECT_NETWORK
+
+config TESTER_AINUO_TCP_PORT
+    int "TESTER_AINUO TCP port"
+    range 0 65535
+    default 9600
+    depends on TESTER_AINUO_CONNECT_NETWORK
+
+endif # TESTER_AINUO
+
+
+# --------- 底层资源聚合（可选）：根据选择自动开启 UART/ETH 等 ----------
+config APP_USE_RS232
+    bool "Use RS232 driver (auto)"
+    depends on APP_USE_RS232_VISIBLE   # 只有有来源时才显示
+    default n
+      
+    config APP_USE_RS232_VISIBLE
+    bool
+    def_bool y if PLC_FX_CONNECT_RS232 || PLC_HOSTLINK_CONNECT_RS232 || \
+                    PLC_LS_LOAD_CONNECT_RS232 || PLC_PPI_CONNECT_RS232 || \
+                    PLC_MODBUS_CONNECT_RS232 || TESTER_76T_CONNECT_RS232 || \
+                    TESTER_AINUO_CONNECT_RS232
+
+config APP_USE_RS485
+    bool "Use RS485 driver (auto)"
+    depends on APP_USE_RS485_VISIBLE   # 只有有来源时才显示
+    default n
+
+config APP_USE_RS485_VISIBLE
+    bool
+    def_bool y if PLC_FX_CONNECT_RS485 || PLC_HOSTLINK_CONNECT_RS485 || \
+                    PLC_LS_LOAD_CONNECT_RS485 || PLC_PPI_CONNECT_RS485 || \
+                    PLC_MODBUS_CONNECT_RS485 || TESTER_76T_CONNECT_RS485 || \
+                    TESTER_AINUO_CONNECT_RS485
+
+config APP_USE_ETH
+    bool "Use Ethernet (auto)"
+    depends on APP_USE_ETH_VISIBLE   # 只有有来源时才显示
+    default n
+
+config APP_USE_ETH_VISIBLE
+    bool
+    def_bool y if PLC_FX_CONNECT_NETWORK || PLC_HOSTLINK_CONNECT_NETWORK || \
+                    PLC_LS_LOAD_CONNECT_NETWORK || PLC_PPI_CONNECT_NETWORK || \
+                    PLC_MODBUS_CONNECT_NETWORK || TESTER_76T_CONNECT_NETWORK || \
+                    TESTER_AINUO_CONNECT_NETWORK
+
+endif  # PLC_PROTOCOLS_ENABLED
 endmenu
+

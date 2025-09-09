@@ -5,7 +5,6 @@
 
 // -------------------------- 常量定义 --------------------------
 #define S7_TCP_PORT 102                      // S7comm 使用的 TCP 端口
-#define MODBUS_TCP_PROTOCOL_ID 0x00          // Modbus TCP 协议 ID
 #define TPKT_VERSION 0x03                    // TPKT 协议版本
 #define COTP_CR_PDU_TYPE 0xE0                // COTP Connection Request (CR) 类型
 #define COTP_CC_PDU_TYPE 0xD0                // COTP Confirm (CC) 类型
@@ -22,7 +21,7 @@
 #define S7_DATA_AREA_COUNTER  0x86    // C 区（Counter）：用于计数器（TC）
 #define S7_DATA_AREA_TIMER    0x87    // T 区（Timer）：用于定时器（TON、TOF）
 
-#define S7_READ_DATA_TIME     20
+#define S7_READ_DATA_TIME     10
 
 // -------------------------- 函数声明 --------------------------
 
@@ -39,6 +38,7 @@ int s7_connect(const char *ip, uint16_t *pdu_len);
 int GetNetDataFromS7PlcNet(void);
 void S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
 void S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
+void S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
 void S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
 void S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
 void S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum);
