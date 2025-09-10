@@ -283,7 +283,7 @@ void ParseOpCode(char *str, uint8_t op)
         case MODBUSPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_modbusplccount);
             if (g_modbusplcdataformat == PLC_DATA_TYPE_FLOAT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
                 fdata = *((float *)&idata);
@@ -295,7 +295,7 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata);
             } else if (g_modbusplcdataformat == PLC_DATA_TYPE_SHORT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
+                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 2);
                 idata = rdata[1] << 8 | rdata[0];
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
 
@@ -306,7 +306,7 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
             } else if (g_modbusplcdataformat == PLC_DATA_TYPE_INT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
                 idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
@@ -536,7 +536,7 @@ void ParseOpCode(char *str, uint8_t op)
         case PPIPLCDEMODATA: {
             (void)sprintf(frstr, "FR%03d", g_ppiplccount);
             if (g_ppiplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI || g_ppiplcdataformat == PLC_DATA_TYPE_BIT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 1);
+                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 1);
                 (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -544,7 +544,7 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     rdata[0]);
             } else if (g_ppiplcdataformat == PLC_DATA_TYPE_SHORT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
+                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 2);
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
 #if defined(CONFIG_PLC_PPI_CONNECT_RS485)
                 idata = rdata[0] << 8 | rdata[1];
@@ -561,7 +561,7 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata);
             } else if (g_ppiplcdataformat == PLC_DATA_TYPE_FLOAT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
 #if defined(CONFIG_PLC_PPI_CONNECT_RS485)
                 idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
@@ -578,7 +578,7 @@ void ParseOpCode(char *str, uint8_t op)
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata);
             } else if (g_ppiplcdataformat == PLC_DATA_TYPE_INT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
+                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                 // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
 #if defined(CONFIG_PLC_PPI_CONNECT_RS485)
                 idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
@@ -805,6 +805,7 @@ void tx_task(void *arg)
     vTaskDelete(NULL);
 }
 
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
 void rx_task(void *arg)
 {
     static const char *RX_TASK_TAG = "RX_TASK";
@@ -839,8 +840,8 @@ void rx_task(void *arg)
         ret = GetSerialWordDataFromHlPlc();
 #endif
 
-#ifdef CONFIG_PLC_PPI_CONNECT_NETWORK
-        ret = GetNetDataFromS7PlcNet();
+#ifdef CONFIG_PLC_PPI_CONNECT_RS485
+        ret = GetSerialWordDataFromPpiPlc();
 #endif
 
 #ifdef CONFIG_PLC_LS_LOAD_CONNECT_RS232
@@ -898,6 +899,7 @@ void rx_task(void *arg)
     }
     vTaskDelete(NULL);
 }
+#endif
 
 #ifdef CONFIG_PLC_MODBUS_CONNECT_NETWORK
 void rx_modbus_task(void *arg)
@@ -941,7 +943,7 @@ void rx_ppi_task(void *arg)
     esp_log_level_set(RX_PPI_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ret = GetSerialWordDataFromPpiPlc();
+        ret = GetNetDataFromS7PlcNet();
 // Parse Data
         if (ret == 0) {
             ParseOpCode(controlerppiStr, PPIPLCDEMODATA);   

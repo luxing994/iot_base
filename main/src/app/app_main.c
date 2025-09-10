@@ -45,13 +45,15 @@ void app_main(void)
 #endif
     InitSensorGpio();
     FXPLC_InitBuffer();
+    MODBUSPLC_InitBuffer();
+    PPIPLC_InitBuffer();
 
     xQueue1 = xQueueCreate(32, sizeof(char *));
     xEventGroup1 = xEventGroupCreate();
     xEventGroup2 = xEventGroupCreate();
     xEventGroup3 = xEventGroupCreate();
 
-    xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
+    // xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
 #if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
 || (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)

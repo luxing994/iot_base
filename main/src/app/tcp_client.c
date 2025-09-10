@@ -216,7 +216,6 @@ void tcp_client1_task(void *pvParameters)
  	const TickType_t xFrequency1 = CLIENT_RECONNECT_INTERVAL * 100;
     const TickType_t xFrequency2 = HEART_BEAT_INTERVAL * 100;
     
-
     while (1) {
         vTaskDelayUntil(&xLastWakeTime1, xFrequency1);
 #if defined(CONFIG_EXAMPLE_IPV4)
@@ -341,17 +340,25 @@ void tcp_modbus_client_task(void *pvParameters)
             vTaskDelayUntil(&xLastWakeTime2, xFrequency2);
             
             // 电解炉控制柜
-            MODBUS_NetReadFloatRegister(sock, 5, 22);       // 11#工作室真空度
-            MODBUS_NetReadFloatRegister(sock, 7, 23);       // 11#收集室真空度
-            MODBUS_NetReadFloatRegister(sock, 13, 24);      // 11#工作室压力值
-            MODBUS_NetReadFloatRegister(sock, 15, 25);      // 11#收集室压力值
-            MODBUS_NetReadFloatRegister(sock, 19, 26);      // 11#炉体水温
+            MODBUS_NetReadFloatRegister(sock, 5, 23);       // 11#工作室真空度
+            MODBUS_NetReadFloatRegister(sock, 7, 24);       // 11#收集室真空度
+            MODBUS_NetReadFloatRegister(sock, 13, 25);      // 11#工作室压力值
+            MODBUS_NetReadFloatRegister(sock, 15, 26);      // 11#收集室压力值
+            MODBUS_NetReadFloatRegister(sock, 19, 27);      // 11#炉体水温
 
-            MODBUS_NetReadFloatRegister(sock, 1, 27);       // 12#工作室真空度
-            MODBUS_NetReadFloatRegister(sock, 3, 28);       // 12#收集室真空度
-            MODBUS_NetReadFloatRegister(sock, 9, 29);       // 12#工作室压力值
-            MODBUS_NetReadFloatRegister(sock, 11, 30);      // 12#收集室压力值
-            MODBUS_NetReadFloatRegister(sock, 17, 31);     // 12#炉体水温
+            MODBUS_NetReadFloatRegister(sock, 1, 28);       // 12#工作室真空度
+            MODBUS_NetReadFloatRegister(sock, 3, 29);       // 12#收集室真空度
+            MODBUS_NetReadFloatRegister(sock, 9, 30);       // 12#工作室压力值
+            MODBUS_NetReadFloatRegister(sock, 11, 31);      // 12#收集室压力值
+            MODBUS_NetReadFloatRegister(sock, 17, 32);      // 12#炉体水温
+
+            // 无纸记录仪 
+            // MODBUS_NetReadFloatRegister(sock, 0x2000, 1);       // 1温区温度
+            // MODBUS_NetReadFloatRegister(sock, 0x2002, 2);       // 2温区温度
+            // MODBUS_NetReadFloatRegister(sock, 0x2004, 3);       // 3温区温度
+            // MODBUS_NetReadFloatRegister(sock, 0x2006, 4);       // 4温区温度
+            // MODBUS_NetReadFloatRegister(sock, 0x2008, 5);       // 5温区温度
+            // MODBUS_NetReadFloatRegister(sock, 0x200A, 6);       // 6温区温度
         }
         end:
         if (sock != -1) {

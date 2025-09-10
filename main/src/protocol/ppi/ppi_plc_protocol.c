@@ -546,7 +546,7 @@ int GetSerialWordDataFromPpiPlc(void)
 
     ppirescdatabuff.data = ppidataArry;
 
-    ret = FXPLC_WriteBufferBytes(ppidataArry, datalen);
+    ret = PPIPLC_WriteBufferBytes(ppidataArry, datalen);
     if (ret != 0) {
         ESP_LOGE(TAG, "fx buffer error: %d", ret);
         return -1;

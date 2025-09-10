@@ -9,6 +9,8 @@
 const uint16_t polynom = 0xA001;
 RingBuffer uart2Buffer;
 RingBuffer dataRegisterBuffer;
+RingBuffer modbusdataRegisterBuffer;
+RingBuffer ppidataRegisterBuffer;
 
 static int CharToInt(char ch)  
 {  
@@ -211,6 +213,56 @@ int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
 {
     if (RING_ReadBufferBytes(&dataRegisterBuffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int MODBUSPLC_InitBuffer(void)
+{
+    if (RING_InitBuffer(&modbusdataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int MODBUSPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_WriteBufferBytes(&modbusdataRegisterBuffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_ReadBufferBytes(&modbusdataRegisterBuffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int PPIPLC_InitBuffer(void)
+{
+    if (RING_InitBuffer(&ppidataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_WriteBufferBytes(&ppidataRegisterBuffer, data, size) != 0) {
+        return -1;
+    }
+	return 0;
+}
+
+int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
+{
+    if (RING_ReadBufferBytes(&ppidataRegisterBuffer, data, size) != 0) {
         return -1;
     }
 	return 0;

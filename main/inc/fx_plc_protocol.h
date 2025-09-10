@@ -226,8 +226,5 @@ int ReadOutputRelayData();
 int GetDataFromFxPlc(void);
 int GetSerialDataFromFxPlc(void);
 int GetNetDataFromFxPlc(void);
-int FXPLC_InitBuffer(void);
-int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
-
 
 #endif

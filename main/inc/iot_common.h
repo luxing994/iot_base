@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "CRDJG001"
+#define DEVID        "CRKZG001"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -257,5 +257,11 @@ int UART_ReadBufferBytes(uint8_t *data, uint32_t size);
 int FXPLC_InitBuffer(void);
 int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
 int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
+int MODBUSPLC_InitBuffer(void);
+int MODBUSPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
+int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
+int PPIPLC_InitBuffer(void);
+int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
+int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 
 #endif

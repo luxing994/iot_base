@@ -514,14 +514,14 @@ int GetNetDataFromS7PlcNet(void)
 
 	data = (uint8_t *)s7netsrdatabuffaddr;
     if (g_ppiplcdataformat == PLC_DATA_TYPE_BIT || g_ppiplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-        ret = FXPLC_WriteBufferBytes(&data[0], 1);
+        ret = PPIPLC_WriteBufferBytes(&data[0], 1);
         if (ret != 0) {
             ESP_LOGE(TAG, "buffer error: %d", ret);
             return -1;
         }
     } else if (g_ppiplcdataformat == PLC_DATA_TYPE_SHORT) {
         for (i = 0; i < s7netsrdatalen * 2; i++) {
-            ret = FXPLC_WriteBufferBytes(&data[i], 1);
+            ret = PPIPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
                 ESP_LOGE(TAG, "buffer error: %d", ret);
                 return -1;
@@ -529,7 +529,7 @@ int GetNetDataFromS7PlcNet(void)
         }
     } else if (g_ppiplcdataformat == PLC_DATA_TYPE_FLOAT || g_ppiplcdataformat == PLC_DATA_TYPE_INT) {
         for (i = 0; i < s7netsrdatalen * 4; i++) {
-            ret = FXPLC_WriteBufferBytes(&data[i], 1);
+            ret = PPIPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
                 ESP_LOGE(TAG, "buffer error: %d", ret);
                 return -1;

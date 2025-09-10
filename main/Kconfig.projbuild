@@ -275,7 +275,7 @@ endchoice
 
 config PLC_PPI_IPV4_ADDR
     string "PPi IPv4 address"
-    default "192.168.2.1"
+    default "192.168.1.10"
     depends on PLC_PPI_CONNECT_NETWORK
 
 config PLC_PPI_TCP_PORT

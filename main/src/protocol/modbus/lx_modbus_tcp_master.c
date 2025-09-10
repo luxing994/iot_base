@@ -77,12 +77,14 @@ int modbus_tcp_read_holding_registers_32(int sock, uint16_t trans_id,
                                          uint16_t quantity_32, uint32_t *out_data_32,
                                          int high_word_first)
 {
-    uint16_t quantity_16 = quantity_32 * 2;
+    uint16_t head_off   = start_addr & 0x1;          // 0=偶数，1=奇数
+    uint16_t aligned_sa = start_addr - head_off;     // 对齐后的起始
+    uint16_t quantity_16 = quantity_32 * 2 + head_off;
     uint16_t *tmp_buffer = malloc(sizeof(uint16_t) * quantity_16);
     if (!tmp_buffer)
         return MODBUS_ERR_SEND;
 
-    int ret = modbus_tcp_read_holding_registers(sock, trans_id, unit_id, start_addr, quantity_16, tmp_buffer);
+    int ret = modbus_tcp_read_holding_registers(sock, trans_id, unit_id, aligned_sa, quantity_16, tmp_buffer);
     if (ret != MODBUS_OK) {
         free(tmp_buffer);
         return ret;
@@ -190,7 +192,7 @@ int GetNetDataFromModbusPlc(void)
 	data = (uint8_t *)mdnetsrdatabuffaddr;
     if (g_modbusplcdataformat == PLC_DATA_TYPE_SHORT) {
         for (i = 0; i < mdnetsrdatalen * 2; i++) {
-            ret = FXPLC_WriteBufferBytes(&data[i], 1);
+            ret = MODBUSPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
                 ESP_LOGE(TAG, "buffer error: %d", ret);
                 return -1;
@@ -198,7 +200,7 @@ int GetNetDataFromModbusPlc(void)
         }
     } else if (g_modbusplcdataformat == PLC_DATA_TYPE_FLOAT || g_modbusplcdataformat == PLC_DATA_TYPE_INT) {
         for (i = 0; i < mdnetsrdatalen * 4; i++) {
-            ret = FXPLC_WriteBufferBytes(&data[i], 1);
+            ret = MODBUSPLC_WriteBufferBytes(&data[i], 1);
             if (ret != 0) {
                 ESP_LOGE(TAG, "buffer error: %d", ret);
                 return -1;
