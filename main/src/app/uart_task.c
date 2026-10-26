@@ -5,7 +5,7 @@
  *   rx_task         : 周期调用协议层解析应答，解析成功后交给 plc_report 解码上报
  *   rx_modbus_task  : Modbus TCP 读到数据后解码上报
  *   rx_ppi_task     : S7 网口读到数据后解码上报
- *   tx_task         : 处理上位机命令 / 开关量中断事件
+ *   cmd_task        : 执行上位机命令（写 PLC / 测试仪参数），上报开关量中断事件
  */
 #include <string.h>
 #include <stdlib.h>
@@ -336,16 +336,16 @@ static void ApplyTesterGroup(void)
 #endif
 }
 
-void tx_task(void *arg)
+void cmd_task(void *arg)
 {
-    static const char *TX_TASK_TAG = "TX_TASK";
+    static const char *TAG = "CMD_TASK";
     EventBits_t uxBits;
 
-    esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
+    esp_log_level_set(TAG, ESP_LOG_ERROR);
     while (1) {
         // 返回时所有等待位都会被清除，因此每一位都要独立处理（原实现用 else if，同时到达的事件会丢失）
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17,
-                                     pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+                                     pdTRUE, pdFALSE, portMAX_DELAY);
         if (uxBits & BIT_14) {
             ApplyChargeSetting();
         }

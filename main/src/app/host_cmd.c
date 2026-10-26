@@ -206,7 +206,7 @@ static const struct {
     { "PowerOff",   CmdPowerOff },
 };
 
-// 按 deviceOrderMode 识别的参数命令，解析成功后通知 tx_task 执行
+// 按 deviceOrderMode 识别的参数命令，解析成功后通知 cmd_task 执行
 static void DispatchModeCommand(const cJSON *root, const char *mode, const char *groupId)
 {
     if (strcmp(mode, "single") == 0) {

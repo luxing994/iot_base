@@ -61,6 +61,26 @@ menu "TCP Server IP Configuration"
         help
             Host port that receives online and heartbeat packets.
 
+    config IOT_OTA_PORT
+        int "OTA control port"
+        range 0 65535
+        default 8768
+        help
+            Host port of the OTA control channel (also sends heartbeats,
+            receives OTA_UPDATE / TIMESTAMP commands).
+
+    config IOT_HEARTBEAT_INTERVAL_MS
+        int "Heartbeat interval (ms)"
+        range 100 60000
+        default 1000
+
+    config IOT_RECONNECT_INTERVAL_MS
+        int "Reconnect interval (ms)"
+        range 100 60000
+        default 5000
+        help
+            Delay before reconnecting to the host or a network PLC.
+
 endmenu
 
 menu "Server Mode Configuration"
@@ -73,10 +93,27 @@ menu "Server Mode Configuration"
         help
             Local port that receives JSON commands from the host.
 
+    config IOT_ADVERTISED_PORT
+        int "Port advertised in online packet (connectPort)"
+        range 0 65535
+        default 8766
+        help
+            Value of the connectPort field in online / heartbeat packets.
+            Historically fixed to 8766; set it to the port the host actually
+            uses to connect to this device.
+
+    config IOT_FILE_SERVER
+        bool "Enable file transfer server"
+        default y
+        help
+            Listen on SERVER_PORT1 for file packets. Disable on devices that
+            do not receive files to save one task and one socket.
+
     config SERVER_PORT1
         int "File transfer port"
         range 0 65535
         default 3333
+        depends on IOT_FILE_SERVER
         help
             Local port that receives file packets from the host.
 
@@ -481,3 +518,20 @@ config APP_USE_ETH_VISIBLE
 endif  # PLC_PROTOCOLS_ENABLED
 endmenu
 
+
+menu "Debug"
+
+    config IOT_DEBUG_STACK_MONITOR
+        bool "Print task stack high water marks"
+        default n
+        help
+            Periodically log the minimum free stack (bytes) of every application
+            task, to tune stack sizes.
+
+    config IOT_DEBUG_STACK_MONITOR_INTERVAL_S
+        int "Stack monitor interval (s)"
+        range 5 3600
+        default 30
+        depends on IOT_DEBUG_STACK_MONITOR
+
+endmenu

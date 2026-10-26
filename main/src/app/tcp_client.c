@@ -38,11 +38,11 @@
 
 #define PORT     CONFIG_EXAMPLE_PORT     // 数据上报
 #define PORT1    CONFIG_EXAMPLE_PORT1    // 上线 / 心跳
-#define OTA_PORT 8768                    // OTA 控制通道
+#define OTA_PORT CONFIG_IOT_OTA_PORT     // OTA 控制通道
 
-#define CONNECT_PORT_STR        "8766"  // 上线包中告知上位机的本机命令端口
-#define CLIENT_RECONNECT_MS     5000
-#define HEART_BEAT_MS           1000
+#define CONNECT_PORT            CONFIG_IOT_ADVERTISED_PORT   // 上线包 connectPort 字段
+#define CLIENT_RECONNECT_MS     CONFIG_IOT_RECONNECT_INTERVAL_MS
+#define HEART_BEAT_MS           CONFIG_IOT_HEARTBEAT_INTERVAL_MS
 #define PLC_POLL_INTERVAL_MS    1000
 #define JSON_BUF_SIZE           1024
 
@@ -100,11 +100,11 @@ static void PackLinkData(char *buf, size_t size, const char *orderId, const char
 {
     (void)snprintf(buf, size, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"
             "    \"devStatus\":\"\",\n    \"devTypeId\":\"%s\",\n    \"orderName\":\"%s\",\n"
-            "    \"orderId\":\"%s\",\n    \"devIP\":\"%s\",\n    \"connectPort\":\"%s\",\n"
+            "    \"orderId\":\"%s\",\n    \"devIP\":\"%s\",\n    \"connectPort\":\"%d\",\n"
             "    \"value\":\"NULL\",\n    \"timeStamp\":\"%lld\",\n    \"isAnswer\":\"%s\",\n"
             "    \"expand\":\"NULL\"};;**##",
-            DEVID, "Hello", DEVNAME, DEVTYPEID, ORDERNAME, orderId, mcu_ip, CONNECT_PORT_STR,
-            GetMilliTimeNow(), isAnswer);
+            DEVID, "Hello", DEVNAME, DEVTYPEID, ORDERNAME, orderId, mcu_ip, CONNECT_PORT,
+            (long long)GetMilliTimeNow(), isAnswer);
 }
 
 // 发送全部数据（send 可能只发出一部分）
@@ -186,7 +186,7 @@ void tcp_client_task(void *pvParameters)
         }
 
         while (1) {
-            if (xQueueReceive(xQueue1, &msg, pdMS_TO_TICKS(1000)) != pdPASS) {
+            if (xQueueReceive(xQueue1, &msg, portMAX_DELAY) != pdPASS) {
                 continue;
             }
             ESP_LOGI(TAG, "Read data %s\n", msg);

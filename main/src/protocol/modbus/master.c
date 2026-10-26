@@ -335,8 +335,8 @@ void master_operation_func(void *arg)
     uint16_t highword = 0;
     uint16_t lowword = 0;
 
-    // 每次调用只轮询一遍所有 CID，周期由调用方 send_data_task 控制。
-    // 原实现在这里 for(;;) 死循环，会永久阻塞 send_data_task；且 err 一旦变成
+    // 每次调用只轮询一遍所有 CID，周期由调用方 plc_poll_task 控制。
+    // 原实现在这里 for(;;) 死循环，会永久阻塞轮询任务；且 err 一旦变成
     // ESP_ERR_NOT_FOUND 就再也不会进入内层循环
     {
         // Read all found characteristics from slave(s)

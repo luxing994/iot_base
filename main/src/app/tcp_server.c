@@ -20,7 +20,9 @@
 #include "file_transfer.h"
 
 #define PORT                CONFIG_SERVER_PORT      // 命令端口
+#ifdef CONFIG_IOT_FILE_SERVER
 #define PORT1               CONFIG_SERVER_PORT1     // 文件端口
+#endif
 #define KEEPALIVE_IDLE      CONFIG_EXAMPLE_KEEPALIVE_IDLE
 #define KEEPALIVE_INTERVAL  CONFIG_EXAMPLE_KEEPALIVE_INTERVAL
 #define KEEPALIVE_COUNT     CONFIG_EXAMPLE_KEEPALIVE_COUNT
@@ -233,6 +235,8 @@ void tcp_server_task(void *pvParameters)
 
 /* ------------------------------------------------------------- 文件端口 */
 
+#ifdef CONFIG_IOT_FILE_SERVER
+
 static void HandleFileConnection(int sock, const char *tag)
 {
     char buf[FILE_RX_BUF_SIZE + 1];
@@ -256,3 +260,4 @@ void tcp_server1_task(void *pvParameters)
 {
     TcpServerLoop((int)pvParameters, PORT1, "tcp_server1", HandleFileConnection);
 }
+#endif /* CONFIG_IOT_FILE_SERVER */

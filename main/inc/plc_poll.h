@@ -4,7 +4,7 @@
 #include "sdkconfig.h"
 
 /* 串口 PLC / 测试仪 / Modbus RTU 周期轮询任务 */
-void send_data_task(void *pvParameters);
+void plc_poll_task(void *pvParameters);
 
 #if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)
 /* 处理上位机 PowerOn / PowerOff 命令（Modbus RTU 空开） */

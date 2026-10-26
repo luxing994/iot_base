@@ -2,7 +2,7 @@
  * 设备寄存器点表与轮询任务
  *
  * 每种现场设备要读哪些寄存器、对应哪个数据点编号（FRnnn）都集中在这里：
- *   send_data_task      串口 PLC / 测试仪 / Modbus RTU，每秒轮询一次
+ *   plc_poll_task       串口 PLC / 测试仪 / Modbus RTU，每秒轮询一次
  *   PlcPoll_xxxNet()    网口 PLC，由 tcp_client.c 中的连接任务每秒调用一次
  *
  * 新增一台设备：在 Kconfig 中增加 device type，然后在对应位置按
@@ -30,7 +30,7 @@
 
 /* ============================================================ 串口 / Modbus RTU */
 
-void send_data_task(void *pvParameters)
+void plc_poll_task(void *pvParameters)
 {
     TickType_t xLastWakeTime;
     const TickType_t xFrequency = pdMS_TO_TICKS(1000);
@@ -320,7 +320,7 @@ void send_command_task(void *pvParameters)
     EventBits_t uxBits;
     while (1) {
     
-        uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+        uxBits = xEventGroupWaitBits(xEventGroup3, BIT_0 | BIT_1, pdTRUE, pdFALSE, portMAX_DELAY);
         if ((uxBits & BIT_0) != 0) {
             master_send_switch_func(1);     // 1:ON   0:OFF
         } else if ((uxBits & BIT_1) != 0) {

@@ -32,6 +32,7 @@ void rx_modbus_task(void *arg);
 void rx_ppi_task(void *arg);
 #endif
 
-void tx_task(void *arg);
+// 执行上位机命令（host_cmd 置事件位）并上报开关量中断事件
+void cmd_task(void *arg);
 
 #endif
