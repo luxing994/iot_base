@@ -16,7 +16,6 @@ void tcp_ppi_client_task(void *pvParameters);
 #endif
 
 void tcp_client3_task(void *pvParameters);
-void heart_beat_task(void *pvParameters);
 char* GetStaIp(void);
 
 #endif

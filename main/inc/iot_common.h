@@ -15,6 +15,10 @@ extern EventGroupHandle_t xEventGroup3;
 #define UART_BUFF_SIZE 1024
 #define FXPLC_BUFF_SIZE 1024
 
+// 上报队列：元素为 char *（堆上的 JSON 副本），消费者负责 free
+#define IOT_MSG_QUEUE_LEN      32
+#define IOT_MSG_QUEUE_TIMEOUT  pdMS_TO_TICKS(100)
+
 #define BIT_0	( 1 << 0 )
 #define BIT_1	( 1 << 1 )
 #define BIT_2	( 1 << 2 )
@@ -113,34 +117,33 @@ struct ConfigData {
     uint8_t mode;
 };
 
+// 命令字段统一用定长数组保存副本，不再指向 cJSON 树（原实现解析后从不释放 cJSON，
+// 且字段缺失时为 NULL，会导致 strcmp/atoll 空指针）
+#define CMD_STR_LEN        48
+#define CMD_SHORT_STR_LEN  16
+#define CMD_PARA_GROUPS    9
+#define CMD_PARA_ITEMS     20
+
 typedef struct {
-    char *type;
-    char *value;
+    char type[CMD_SHORT_STR_LEN];
+    char value[CMD_SHORT_STR_LEN];
 } parametersData;
 
 typedef struct {
-    char *devId;
-    char *devName;
-    char *devTypeId;
-    char *orderId;
-    char *orderName;
-} ReturnJsonData;
-
-typedef struct {
-    char *devId;
-    char *devName;
-    char *devTypeId;
-    char *deviceOrderFile;
-    char *deviceOrderMode;
-    char *groupId;
-    char *deviceOrderWay;
-    char *orderDate;
-    char *orderId;
-    char *orderName;
-    char *parameterType;
-    parametersData paradata[9][20];
-    char *responseType;
-    char *timeStamp;
+    char devId[CMD_STR_LEN];
+    char devName[CMD_STR_LEN];
+    char devTypeId[CMD_STR_LEN];
+    char deviceOrderFile[CMD_STR_LEN];
+    char deviceOrderMode[CMD_SHORT_STR_LEN];
+    char groupId[CMD_SHORT_STR_LEN];
+    char deviceOrderWay[CMD_SHORT_STR_LEN];
+    char orderDate[CMD_STR_LEN];
+    char orderId[CMD_STR_LEN];
+    char orderName[CMD_STR_LEN];
+    char parameterType[CMD_STR_LEN];
+    parametersData paradata[CMD_PARA_GROUPS][CMD_PARA_ITEMS];
+    char responseType[CMD_SHORT_STR_LEN];
+    char timeStamp[CMD_STR_LEN];
 } CommandJsonData;
 
 // 电镀厂温控仪表、整流机和冷冻机数据
@@ -185,7 +188,7 @@ typedef struct {
 
 // 生能1-4车间冷媒灌注机设置数据格式
 typedef struct {
-    char *select;
+    char select[CMD_SHORT_STR_LEN];
     float setchargeamount;
 } SNSetCaclReFillingMachine;
 
@@ -274,5 +277,6 @@ int PPIPLC_InitBuffer(void);
 int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
 int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 int get_random_range_freq(int min_val, int max_val);
+int IOT_PostMessage(const char *msg);
 
 #endif

@@ -409,7 +409,7 @@ CONFIG_PLC_FX_CONNECT_RS485=y
 # CONFIG_PLC_PPI is not set
 # CONFIG_PLC_MODBUS is not set
 # CONFIG_TESTER_76T is not set
-# CONFIG_PLC_TESTER_AINUO is not set
+# CONFIG_TESTER_AINUO is not set
 CONFIG_APP_USE_RS485=y
 CONFIG_APP_USE_RS485_VISIBLE=y
 # end of PLC Communication Configuration

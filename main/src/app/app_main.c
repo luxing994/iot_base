@@ -44,6 +44,12 @@ void app_main(void)
 || (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)
     uart_init();
 #endif
+    // 队列和事件组必须先于 GPIO 中断创建：中断回调里会直接置 xEventGroup1 的位
+    xQueue1 = xQueueCreate(IOT_MSG_QUEUE_LEN, sizeof(char *));
+    xEventGroup1 = xEventGroupCreate();
+    xEventGroup2 = xEventGroupCreate();
+    xEventGroup3 = xEventGroupCreate();
+
     InitSensorGpio();
 #ifdef CONFIG_SENSOR_MAX6675
     MAX6675_Init();
@@ -52,12 +58,11 @@ void app_main(void)
     MODBUSPLC_InitBuffer();
     PPIPLC_InitBuffer();
 
-    xQueue1 = xQueueCreate(32, sizeof(char *));
-    xEventGroup1 = xEventGroupCreate();
-    xEventGroup2 = xEventGroupCreate();
-    xEventGroup3 = xEventGroupCreate();
-
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
+   || (defined CONFIG_PLC_MODBUS_CONNECT_RS232) || (defined CONFIG_PLC_MODBUS_CONNECT_RS485)
+    // 与 uart_task.c 中 rx_task 的编译条件保持一致，否则只选网口协议时链接失败
     xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
+#endif
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
 #if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
 || (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)

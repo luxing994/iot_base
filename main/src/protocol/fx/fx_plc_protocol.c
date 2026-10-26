@@ -523,11 +523,12 @@ int GetSerialDataFromFxPlc(void)
 
 void FX_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype)
 {
-    fxnetdatarecvflag = 1;
+	// 先写数据和元信息，最后置标志位，避免接收任务读到旧地址/长度
 	fxnetsrdatabuffaddr = dataaddr;
 	fxnetsrdatalen = len;
 	g_fxplccount = frnum;
 	g_fxplcdataformat = datatype;
+	fxnetdatarecvflag = 1;
 }
 
 int GetNetDataFromFxPlc(void)
@@ -699,80 +700,45 @@ void FX_PackNetReadSingleYDataRegister(uint32_t address, uint16_t frnum)
 		FX_PLC_NET_MODULE_NUMBER, address, 1, &netsdatabuff);
 }
 
-void FX_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
+// 发送已打包好的 netsdatabuff 并接收应答。
+// 返回 -1 表示 socket 已失效（发送失败或对端关闭），调用方应重连；返回 0 表示本次交互完成
+static int FX_NetTransact(int sock, uint16_t frnum, uint8_t datatype)
 {
-    int i, err;
-	static const char *TAG = "FX_NET_SINGLE_DATA";
-    
-    FX_PackNetReadSingleDataRegister(address, frnum);
+	static const char *TAG = "FX_NET";
+	int ret = 0;
 
-    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
-    if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-    }
+	if (send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0) < 0) {
+		ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+		return -1;
+	}
 
-    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
-    // Error occurred during receiving
-    if (len < 0) {
-        ESP_LOGE(TAG, "recv failed: errno %d", errno);
-        // break;
-    }
-    // Data received
-    else {
-        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
-        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_SHORT);
-    }
-    vTaskDelay(20);
+	int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
+	if (len <= 0) {
+		ESP_LOGE(TAG, "recv failed: len %d errno %d", len, errno);
+		ret = -1;
+	} else {
+		fxrevdatabuff[len] = 0;
+		FX_NetDataRecvNotice((uint32_t)fxrevdatabuff, len, frnum, datatype);
+	}
+	vTaskDelay(FX_PLC_READ_DELAY_TIME);
+
+	return ret;
 }
 
-void FX_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
+int FX_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-	static const char *TAG = "FX_NET_DOUBLE_DATA";
-    
-    FX_PackNetReadDoubleDataRegister(address, frnum);
-    
-    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
-    if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-    }
-
-    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
-    // Error occurred during receiving
-    if (len < 0) {
-        ESP_LOGE(TAG, "recv failed: errno %d", errno);
-        // break;
-    }
-    // Data received
-    else {
-        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
-        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_INT);
-    }
-    vTaskDelay(20);
+	FX_PackNetReadSingleDataRegister(address, frnum);
+	return FX_NetTransact(sock, frnum, PLC_DATA_TYPE_SHORT);
 }
 
-void FX_NetReadSingleYDataRegister(int sock, uint32_t address, uint16_t frnum)
+int FX_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-	static const char *TAG = "FX_NET_SINGLE_YDATA";
-    
-    FX_PackNetReadSingleYDataRegister(address, frnum);
-    
-    err = send(sock, (uint8_t *)&netsdatabuff, sizeof(netsdatabuff), 0);
-    if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-    }
+	FX_PackNetReadDoubleDataRegister(address, frnum);
+	return FX_NetTransact(sock, frnum, PLC_DATA_TYPE_INT);
+}
 
-    int len = recv(sock, fxrevdatabuff, sizeof(fxrevdatabuff) - 1, 0);
-    // Error occurred during receiving
-    if (len < 0) {
-        ESP_LOGE(TAG, "recv failed: errno %d", errno);
-        // break;
-    }
-    // Data received
-    else {
-        fxrevdatabuff[len] = 0; // Null-terminate whatever we received and treat like a string
-        FX_NetDataRecvNotice(&fxrevdatabuff, len, frnum, PLC_DATA_TYPE_BIT);
-    }
-    vTaskDelay(20);
+int FX_NetReadSingleYDataRegister(int sock, uint32_t address, uint16_t frnum)
+{
+	FX_PackNetReadSingleYDataRegister(address, frnum);
+	return FX_NetTransact(sock, frnum, PLC_DATA_TYPE_BIT);
 }

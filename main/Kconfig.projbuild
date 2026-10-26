@@ -402,7 +402,7 @@ config TESTER_76T_TCP_PORT
 endif # TESTER_76T
 
 # ---------------- TESTER_AINUO ----------------
-config PLC_TESTER_AINUO
+config TESTER_AINUO
     bool "Tester Ainuo"
 default n
 

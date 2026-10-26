@@ -1,18 +1,32 @@
+#include <string.h>
+#include <stdlib.h>
+#include <strings.h>
 #include "ota_task.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "lwip/sockets.h"
 #include "root_cert.h"
 
-extern int ota_tcp_sock;  // 你跟上位机的 TCP 控制通道
+extern int ota_tcp_sock;  // 与上位机的 TCP 控制通道（断线时为 -1）
 
 static const char *TAG = "OTA_TASK";
 static int64_t total_len = 0;
 static int64_t written = 0;
-uint8_t errbuf[120] = {0};
+static uint8_t errbuf[120] = {0};
+static volatile bool s_ota_running = false;
 
-esp_err_t http_event_cb(esp_http_client_event_t *evt)
+// 控制通道断开时不发送
+static void OtaReport(const void *data, size_t len)
+{
+    int sock = ota_tcp_sock;
+    if (sock >= 0) {
+        send(sock, data, len, 0);
+    }
+}
+
+static esp_err_t http_event_cb(esp_http_client_event_t *evt)
 {
     switch (evt->event_id) {
     case HTTP_EVENT_ON_HEADER: {
@@ -29,7 +43,7 @@ esp_err_t http_event_cb(esp_http_client_event_t *evt)
             int percent = (int)(written * 100 / total_len);
             char buf[32];
             int len = snprintf(buf, sizeof(buf), "OTA_PROGRESS:%d\r\n", percent);
-            send(ota_tcp_sock, buf, len, 0);
+            OtaReport(buf, len);
         }
         break;
     }
@@ -42,6 +56,18 @@ esp_err_t http_event_cb(esp_http_client_event_t *evt)
 void ota_task(void *pvParameter)
 {
     const char *ota_url = (const char *)pvParameter;
+
+    // 同一时间只允许一个 OTA 任务（重复下发命令时直接丢弃）
+    if (s_ota_running) {
+        ESP_LOGW(TAG, "OTA already running, ignore: %s", ota_url);
+        free((void *)ota_url);
+        vTaskDelete(NULL);
+        return;
+    }
+    s_ota_running = true;
+    total_len = 0;   // 原实现不复位，第二次 OTA 的进度会错误
+    written = 0;
+
     ESP_LOGI(TAG, "STARTING OTA DOWNLOAD: %s", ota_url);
 
     // 配置 HTTPS OTA，若使用 HTTP 则用 esp_http_client_config_t + esp_ota_*
@@ -59,16 +85,17 @@ void ota_task(void *pvParameter)
     esp_err_t ret = esp_https_ota(&config);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "OTA UPDATE SUCCEEDED, SYSTEM REBOOT");
-        send(ota_tcp_sock, "OTA_COMPLETE:OK\r\n", strlen("OTA_COMPLETE:OK\r\n"), 0);
+        OtaReport("OTA_COMPLETE:OK\r\n", strlen("OTA_COMPLETE:OK\r\n"));
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_restart();  // 切换到新固件
     } else {
         ESP_LOGE(TAG, "OTA UPDATE FAILED: %s", esp_err_to_name(ret));
         int l = snprintf((char *)errbuf, sizeof(errbuf), "OTA_ERROR:%s\r\n", esp_err_to_name(ret));
-        send(ota_tcp_sock, errbuf, l, 0);
+        OtaReport(errbuf, l);
     }
 
     // 清理：如果不重启，需要删除任务并释放 URL 内存
     free((void*)ota_url);
+    s_ota_running = false;
     vTaskDelete(NULL);
 }

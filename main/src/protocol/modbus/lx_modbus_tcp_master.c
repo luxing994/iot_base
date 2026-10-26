@@ -10,14 +10,23 @@ uint32_t mdnetsrdatabuffaddr = 0;
 uint32_t mdnetsrdatalen = 0;
 int mdnetdatarecvflag = 0;
 uint16_t g_trans_id = 0;
+// 读到的寄存器值放在模块静态区，接收任务稍后从这里取（原实现传的是读函数的栈变量地址）
+static uint8_t s_mdreadbuf[4];
 
-static void MODBUS_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype)
+static void MODBUS_NetDataRecvNotice(const void *data, uint32_t size, uint32_t len, uint16_t frnum, uint8_t datatype)
 {
-    mdnetdatarecvflag = 1;
-	mdnetsrdatabuffaddr = dataaddr;
+	memcpy(s_mdreadbuf, data, size);
+	mdnetsrdatabuffaddr = (uint32_t)s_mdreadbuf;
 	mdnetsrdatalen = len;
 	g_modbusplccount = frnum;
 	g_modbusplcdataformat = datatype;
+	mdnetdatarecvflag = 1;
+}
+
+// 发送/接收失败说明 socket 已失效，需要重连；其余错误（应答异常）只丢弃本次数据
+static int MODBUS_IsLinkError(int err)
+{
+    return (err == MODBUS_ERR_SEND) || (err == MODBUS_ERR_RECV);
 }
 
 // 发送并接收，返回接收长度或负值错误
@@ -213,60 +222,60 @@ int GetNetDataFromModbusPlc(void)
 	return 0;
 }
 
-void MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
+// 以下读函数：返回 -1 表示链路失效需重连，返回 0 表示本次交互结束（成功或仅数据异常）
+int MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint16_t read_regs;
+    int err;
+    uint16_t read_regs = 0;
     static const char *TAG = "MODBUS_READ_SINGLE_DATA";
 
     err = modbus_tcp_read_holding_registers(sock, g_trans_id, 1, address, 1, &read_regs);
+    g_trans_id = (g_trans_id + 1) & 0xFFFF;
     if (err == MODBUS_OK) {
         ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
+        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_SHORT);
     } else {
         ESP_LOGE(TAG, "Modbus 16-bit read failed: %d", err);
-        // break;
     }
-    g_trans_id = (g_trans_id + 1) & 0xFFFF;
-    
-    MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_SHORT);
     vTaskDelay(MODBUS_READ_DATA_TIME);
+
+    return MODBUS_IsLinkError(err) ? -1 : 0;
 }
 
-void MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
+int MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint32_t read_regs;
+    int err;
+    uint32_t read_regs = 0;
     static const char *TAG = "MODBUS_READ_DOUBLE_DATA";
 
     err = modbus_tcp_read_holding_registers_32(sock, g_trans_id, 1, address, 1, &read_regs, 1);
-    if (err == MODBUS_OK) {
-        ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Modbus 16-bit read failed: %d", err);
-        // break;
-    }
     g_trans_id = (g_trans_id + 1) & 0xFFFF;
-
-    MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_INT);
+    if (err == MODBUS_OK) {
+        ESP_LOGI(TAG, "Read 32-bit regs: %u", read_regs);
+        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_INT);
+    } else {
+        ESP_LOGE(TAG, "Modbus 32-bit read failed: %d", err);
+    }
     vTaskDelay(MODBUS_READ_DATA_TIME);
+
+    return MODBUS_IsLinkError(err) ? -1 : 0;
 }
 
-void MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
+int MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint32_t read_regs;
+    int err;
+    uint32_t read_regs = 0;
     static const char *TAG = "MODBUS_READ_FLOAT_DATA";
 
     err = modbus_tcp_read_holding_registers_32(sock, g_trans_id, 1, address, 1, &read_regs, 1);
+    g_trans_id = (g_trans_id + 1) & 0xFFFF;
     if (err == MODBUS_OK) {
         ESP_LOGI(TAG, "Read 32-bit regs: %f", *((float *)(&read_regs)));
+        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_FLOAT);
     } else {
         ESP_LOGE(TAG, "Modbus 32-bit read failed: %d", err);
-        // break;
     }
-
-    g_trans_id = (g_trans_id + 1) & 0xFFFF;
-    
-    MODBUS_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_FLOAT);
     vTaskDelay(MODBUS_READ_DATA_TIME);
+
+    return MODBUS_IsLinkError(err) ? -1 : 0;
 }

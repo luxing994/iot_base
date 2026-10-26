@@ -1,5 +1,6 @@
 #include "ringbuffer.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int RING_InitBuffer(RingBuffer *ptr, int size)
@@ -48,7 +49,7 @@ int RING_WriteBufferBytes(RingBuffer *ptr, uint8_t *data, uint32_t length)
 
 static int RING_ReadBufferByte(RingBuffer *ptr, uint8_t *data)
 {
-    if ((ptr->front == ptr->rear) || (ptr == NULL) || (data == NULL)) {
+    if ((ptr == NULL) || (data == NULL) || (ptr->front == ptr->rear)) {
         return -1;
     }
 

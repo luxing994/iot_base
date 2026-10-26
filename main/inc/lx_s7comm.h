@@ -34,14 +34,14 @@
  * @param pdu_len 协商的 PDU 长度
  * @return int 成功时返回连接的 socket，失败时返回 -1
  */
-int s7_connect(const char *ip, uint16_t *pdu_len);
+int s7_connect(const char *ip, uint16_t port, uint16_t *pdu_len);
 int GetNetDataFromS7PlcNet(void);
-void S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
-void S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
-void S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
-void S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
-void S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
-void S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum);
-void S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum);
+int S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
+int S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
+int S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
+int S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum);
+int S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
+int S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum);
+int S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum);
 
 #endif // S7COMM_ESP32_H

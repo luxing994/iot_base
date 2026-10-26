@@ -16,7 +16,7 @@ int GetTaskSpeed(uint16_t *taskspeed);
 int GetTaskCount(uint16_t *taskcount);
 int GetTaskTime(uint16_t *tasktime);
 int GetMode(uint8_t *mode);
-int GetGroupIdFromRecvJsonData();
-CommandJsonData GetCommandJsonData();
+int GetGroupIdFromRecvJsonData(void);
+const CommandJsonData *GetCommandJsonData(void);
 
 #endif

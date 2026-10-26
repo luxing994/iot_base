@@ -10,7 +10,7 @@
 #include "t_tester_protocol.h"
 #include "iot_common.h"
 #include "tcp_client.h"
-#include "time.h"
+#include "iot_time.h"
 
 AINUOTTesterGroundingPara ainuogroudingtestdata = {0};
 AINUOTTesterInsulationPara ainuoinsulationtestdata = {0};

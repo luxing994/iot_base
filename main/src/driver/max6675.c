@@ -9,7 +9,7 @@
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "iot_common.h"
-#include "time.h"
+#include "iot_time.h"
 #include "tcp_client.h"
 #include "max6675.h"
 
@@ -110,7 +110,6 @@ void max6675_task(void *pvParameters)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xFrequency = pdMS_TO_TICKS(250);
-    char *p = max6675_txbuf;
 
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -132,7 +131,7 @@ void max6675_task(void *pvParameters)
             DEVID, DEVID, DEVNAME, TEMPDEVTYPEID, MDPLCDEVTYPEID, GetStaIp(),
             INITORDERID, "temperature", DEVTIMEMODE, GetMilliTimeNow(), temp);
 
-        if (xQueueSend(xQueue1, &p, 0) != pdPASS) {
+        if (IOT_PostMessage(max6675_txbuf) != 0) {
             ESP_LOGW(TAG, "queue full, drop data");
         }
     }

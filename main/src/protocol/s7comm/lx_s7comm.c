@@ -15,13 +15,17 @@ uint32_t s7netsrdatabuffaddr = 0;
 uint32_t s7netsrdatalen = 0;
 int s7netdatarecvflag = 0;
 
-static void S7_NetDataRecvNotice(uint32_t dataaddr, uint32_t len, uint16_t frnum, uint8_t datatype)
+// 读到的数据放在模块静态区，接收任务稍后从这里取（原实现传的是读函数的栈变量地址）
+static uint8_t s_s7readbuf[4];
+
+static void S7_NetDataRecvNotice(const void *data, uint32_t size, uint32_t len, uint16_t frnum, uint8_t datatype)
 {
-    s7netdatarecvflag = 1;
-	s7netsrdatabuffaddr = dataaddr;
+	memcpy(s_s7readbuf, data, size);
+	s7netsrdatabuffaddr = (uint32_t)s_s7readbuf;
 	s7netsrdatalen = len;
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = datatype;
+	s7netdatarecvflag = 1;
 }
 
 // -------------------------- 发送和接收数据的工具函数 --------------------------
@@ -468,7 +472,7 @@ static int s7_read_dword(int sock, uint8_t area, uint32_t address, uint32_t *out
  * @param pdu_len 协商的 PDU 长度
  * @return int 成功时返回连接的 socket，失败时返回 -1
  */
-int s7_connect(const char *ip, uint16_t *pdu_len) 
+int s7_connect(const char *ip, uint16_t port, uint16_t *pdu_len) 
 {
     struct sockaddr_in dest_addr;
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -478,7 +482,7 @@ int s7_connect(const char *ip, uint16_t *pdu_len)
 
     dest_addr.sin_addr.s_addr = inet_addr(ip);
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(S7_TCP_PORT);
+    dest_addr.sin_port = htons(port);
 
     // 尝试建立 TCP 连接
     if (connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0) {
@@ -496,8 +500,13 @@ int s7_connect(const char *ip, uint16_t *pdu_len)
 
     ESP_LOGI(TAG, "COTP connection successful");
 
-    // 设置 S7 通信参数
-    return s7_setup_comm(sock, pdu_len);
+    // 设置 S7 通信参数；失败时关闭 socket，避免每次重连泄漏一个句柄
+    if (s7_setup_comm(sock, pdu_len) < 0) {
+        close(sock);
+        return -1;
+    }
+
+    return sock;
 }
 
 int GetNetDataFromS7PlcNet(void)
@@ -542,130 +551,66 @@ int GetNetDataFromS7PlcNet(void)
 	return 0;
 }
 
-void S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+// s7_read_* 返回 -1 发送失败、-2 接收失败，这两种说明链路失效需要重连；其余为应答内容异常
+static int S7_Finish(int err, const void *data, uint32_t size, uint16_t frnum, uint8_t datatype)
 {
-    int i, err;
-    uint8_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
+    static const char *RTAG = "S7_READ";
 
-    err = s7_read_bit_for_v(sock, S7_DATA_AREA_DB, address, bitoffset, &read_regs);
     if (err == 0) {
-        ESP_LOGI(TAG, "Read bit regs: %u", read_regs);
+        S7_NetDataRecvNotice(data, size, 1, frnum, datatype);
     } else {
-        ESP_LOGE(TAG, "Read bit regs failed: %d", err);
-        // break;
+        ESP_LOGE(RTAG, "read FR%03d failed: %d", frnum, err);
     }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
     vTaskDelay(S7_READ_DATA_TIME);
+
+    return (err == -1 || err == -2) ? -1 : 0;
 }
 
-void S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
+int S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
 {
-    int i, err;
-    uint16_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_word(sock, S7_DATA_AREA_DB, address, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Read 16-bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_SHORT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint8_t read_regs = 0;
+    int err = s7_read_bit_for_v(sock, S7_DATA_AREA_DB, address, bitoffset, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
 }
 
-void S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum)
+int S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint32_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read 32-bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Read 32-bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_INT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint16_t read_regs = 0;
+    int err = s7_read_word(sock, S7_DATA_AREA_DB, address, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_SHORT);
 }
 
-void S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum)
+int S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint32_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read 32-bit regs: %f", *((float *)&read_regs));
-    } else {
-        ESP_LOGE(TAG, "Read 32-bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_FLOAT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint32_t read_regs = 0;
+    int err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_INT);
 }
 
-void S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+int S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum)
 {
-    int i, err;
-    uint8_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_bit(sock, S7_DATA_AREA_MERKER, address, bitoffset, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Read bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint32_t read_regs = 0;
+    int err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_FLOAT);
 }
 
-void S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+int S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
 {
-    int i, err;
-    uint8_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_bit(sock, S7_DATA_AREA_INPUT, address, bitoffset, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Read bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint8_t read_regs = 0;
+    int err = s7_read_bit(sock, S7_DATA_AREA_MERKER, address, bitoffset, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
 }
 
-
-void S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+int S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
 {
-    int i, err;
-    uint8_t read_regs;
-    static const char *TAG = "S7_READ_SINGLE_DATA";
-
-    err = s7_read_bit(sock, S7_DATA_AREA_OUTPUT, address, bitoffset, &read_regs);
-    if (err == 0) {
-        ESP_LOGI(TAG, "Read bit regs: %u", read_regs);
-    } else {
-        ESP_LOGE(TAG, "Read bit regs failed: %d", err);
-        // break;
-    }
-    
-    S7_NetDataRecvNotice(&read_regs, 1, frnum, PLC_DATA_TYPE_BIT);
-    vTaskDelay(S7_READ_DATA_TIME);
+    uint8_t read_regs = 0;
+    int err = s7_read_bit(sock, S7_DATA_AREA_INPUT, address, bitoffset, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
 }
 
+int S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
+{
+    uint8_t read_regs = 0;
+    int err = s7_read_bit(sock, S7_DATA_AREA_OUTPUT, address, bitoffset, &read_regs);
+    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
+}

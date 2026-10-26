@@ -335,10 +335,10 @@ void master_operation_func(void *arg)
     uint16_t highword = 0;
     uint16_t lowword = 0;
 
-    ESP_LOGI(MASTER_TAG, "Start modbus test...");
-    
-    for (;;) {
-    // for(uint16_t retry = 0; retry <= MASTER_MAX_RETRY && (!alarm_state); retry++) {
+    // 每次调用只轮询一遍所有 CID，周期由调用方 send_data_task 控制。
+    // 原实现在这里 for(;;) 死循环，会永久阻塞 send_data_task；且 err 一旦变成
+    // ESP_ERR_NOT_FOUND 就再也不会进入内层循环
+    {
         // Read all found characteristics from slave(s)
         for (uint16_t cid = 0; (err != ESP_ERR_NOT_FOUND) && cid < MASTER_MAX_CIDS; cid++)
         {
@@ -418,7 +418,6 @@ void master_operation_func(void *arg)
                 vTaskDelay(POLL_TIMEOUT_TICS); // timeout between polls
             }
         }
-        vTaskDelay(UPDATE_CIDS_TIMEOUT_TICS); //
     }
 }
 

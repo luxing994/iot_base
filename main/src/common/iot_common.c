@@ -1,11 +1,12 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
 #include "esp_log.h"
 #include "iot_common.h"
-#include "time.h"
+#include "iot_time.h"
 
 const uint16_t polynom = 0xA001;
 RingBuffer uart2Buffer;
@@ -270,10 +271,32 @@ int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
 }
 
 // 
+int IOT_PostMessage(const char *msg)
+{
+    char *copy;
+
+    if (msg == NULL || msg[0] == '\0' || xQueue1 == NULL) {
+        return -1;
+    }
+
+    // 入队的是独立副本，由 tcp_client_task 发送后 free，避免多个任务共用同一缓冲区被覆盖
+    copy = strdup(msg);
+    if (copy == NULL) {
+        return -1;
+    }
+
+    if (xQueueSend(xQueue1, &copy, IOT_MSG_QUEUE_TIMEOUT) != pdPASS) {
+        free(copy);
+        return -1;
+    }
+
+    return 0;
+}
+
 int get_random_range_freq(int min_val, int max_val)
 {
     int current_value = 0;
-    int seeded = 0;
+    static int seeded = 0;
 
     uint64_t now = GetMilliTimeNow();   // 微秒
 

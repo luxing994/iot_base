@@ -37,7 +37,7 @@
 #include <lwip/netdb.h>
 #include "cJSON.h"
 #include "ringbuffer.h"
-#include "time.h"
+#include "iot_time.h"
 
 #define PORT1                       CONFIG_SERVER_PORT1     // file data com
 #define PORT                        CONFIG_SERVER_PORT      // command com
@@ -64,6 +64,32 @@ CommandJsonData comdata = {
     .orderId = ORDERID,
     .orderName = ORDERNAME,
 };
+
+// 把 JSON 字符串字段拷贝到定长缓冲区；字段不存在或不是字符串时保持原值
+static void JsonCopyString(const cJSON *obj, const char *key, char *dst, size_t size)
+{
+    const cJSON *item = cJSON_GetObjectItem(obj, key);
+
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        strlcpy(dst, item->valuestring, size);
+    }
+}
+
+// 读取数值字段，兼容 "12.5" 字符串和 12.5 数字两种写法
+static int JsonGetNumber(const cJSON *obj, const char *key, double *out)
+{
+    const cJSON *item = cJSON_GetObjectItem(obj, key);
+
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        *out = atof(item->valuestring);
+        return 0;
+    }
+    if (cJSON_IsNumber(item)) {
+        *out = item->valuedouble;
+        return 0;
+    }
+    return -1;
+}
 
 extern TTesterSetPressurizationPara setprepara;
 extern TTesterSetGroundingPara setgroundpara;
@@ -179,73 +205,35 @@ void ParseCommandJsonData(cJSON *root)
     int ttestparacount = 0;
     int ttestparabytecount = 0;
 
-    token = cJSON_GetObjectItem(root, "devId");
-    if (token != NULL) {
-        comdata.devId = (token->valuestring);
-    }
+    double number;
 
-    token = cJSON_GetObjectItem(root, "devName");
-    if (token != NULL) {
-        comdata.devName = (token->valuestring);
-    }
+    // 每条命令都重新解析模式，避免沿用上一条命令的 deviceOrderMode
+    comdata.deviceOrderMode[0] = '\0';
+    comdata.timeStamp[0] = '\0';
 
-    token = cJSON_GetObjectItem(root, "devTypeId");
-    if (token != NULL) {
-        comdata.devTypeId = (token->valuestring);
-    }
+    JsonCopyString(root, "devId", comdata.devId, sizeof(comdata.devId));
+    JsonCopyString(root, "devName", comdata.devName, sizeof(comdata.devName));
+    JsonCopyString(root, "devTypeId", comdata.devTypeId, sizeof(comdata.devTypeId));
+    JsonCopyString(root, "deviceOrderFile", comdata.deviceOrderFile, sizeof(comdata.deviceOrderFile));
+    JsonCopyString(root, "deviceOrderMode", comdata.deviceOrderMode, sizeof(comdata.deviceOrderMode));
+    JsonCopyString(root, "groupId", comdata.groupId, sizeof(comdata.groupId));
+    JsonCopyString(root, "deviceOrderWay", comdata.deviceOrderWay, sizeof(comdata.deviceOrderWay));
+    JsonCopyString(root, "orderDate", comdata.orderDate, sizeof(comdata.orderDate));
+    JsonCopyString(root, "orderId", comdata.orderId, sizeof(comdata.orderId));
+    JsonCopyString(root, "orderName", comdata.orderName, sizeof(comdata.orderName));
+    ESP_LOGI(TAG, "groupId: %s", comdata.groupId);
 
-    token = cJSON_GetObjectItem(root, "deviceOrderFile");
-    if (token != NULL) {
-        comdata.deviceOrderFile = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "deviceOrderMode");
-    if (token != NULL) {
-        comdata.deviceOrderMode = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "groupId");
-    if (token != NULL) {
-        comdata.groupId = (token->valuestring);
-        ESP_LOGI(TAG, "groupId: %s", comdata.groupId);
-    }
-
-    token = cJSON_GetObjectItem(root, "deviceOrderWay");
-    if (token != NULL) {
-        comdata.deviceOrderWay = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "orderDate");
-    if (token != NULL) {
-        comdata.orderDate = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "orderId");
-    if (token != NULL) {
-        comdata.orderId = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "orderName");
-    if (token != NULL) {
-        comdata.orderName = (token->valuestring);
-    }
-
-    
     if (strcmp(comdata.deviceOrderMode, "single") == 0) {
-        token = cJSON_GetObjectItem(root, "parameters");
-        if (token != NULL) {
-            g_setsnrefillingmachine.setchargeamount = atof((token->valuestring));
+        if (JsonGetNumber(root, "parameters", &number) == 0) {
+            g_setsnrefillingmachine.setchargeamount = (float)number;
             ESP_LOGI(TAG, "paradatatype: %.2f", g_setsnrefillingmachine.setchargeamount);
         }
 
-        token = cJSON_GetObjectItem(root, "parameterType");
-        if (token != NULL) {
-            g_setsnrefillingmachine.select = token->valuestring;
-        }
+        JsonCopyString(root, "parameterType", g_setsnrefillingmachine.select, sizeof(g_setsnrefillingmachine.select));
     } else if (strcmp(comdata.deviceOrderMode, "group") == 0) {
         token = cJSON_GetObjectItem(root, "parameterType");
-        if (token != NULL) {
-            comdata.parameterType = (token->valuestring);
+        if (cJSON_IsString(token) && token->valuestring != NULL) {
+            strlcpy(comdata.parameterType, token->valuestring, sizeof(comdata.parameterType));
             ESP_LOGI(TAG, "paradatatype: %s", comdata.parameterType);
             TTesterGetSetParaStatus(comdata.parameterType);
             for (i = 0; i < sizeof(tterterparasetstatus) / sizeof(int); i++) {
@@ -256,7 +244,7 @@ void ParseCommandJsonData(cJSON *root)
         }
 
         token = cJSON_GetObjectItem(root, "parameters");
-        if (token != NULL) {
+        if (cJSON_IsArray(token)) {
             arraysizerow = cJSON_GetArraySize(token);
             for (i = 0; i < arraysizerow; i++) {
                 arraysize += cJSON_GetArraySize(cJSON_GetArrayItem(token, i));
@@ -284,10 +272,12 @@ void ParseCommandJsonData(cJSON *root)
                 } else {
                     row = cJSON_GetArrayItem(token, k);
                     k++;
-                    for (j = 0; j < ttestparanum[tterterparasetstatus[i]]; j++) {
-                        item =  cJSON_GetArrayItem(row, j);
-                        comdata.paradata[i][j].type = cJSON_GetObjectItem(item, "type")->valuestring;
-                        comdata.paradata[i][j].value = cJSON_GetObjectItem(item, "value")->valuestring;
+                    for (j = 0; j < ttestparanum[tterterparasetstatus[i]] && j < CMD_PARA_ITEMS; j++) {
+                        item = cJSON_GetArrayItem(row, j);
+                        comdata.paradata[i][j].type[0] = '\0';
+                        strlcpy(comdata.paradata[i][j].value, "0", sizeof(comdata.paradata[i][j].value));
+                        JsonCopyString(item, "type", comdata.paradata[i][j].type, sizeof(comdata.paradata[i][j].type));
+                        JsonCopyString(item, "value", comdata.paradata[i][j].value, sizeof(comdata.paradata[i][j].value));
                         ESP_LOGI(TAG, "paradata[%d][%d] {type: %s value: %f}", i, j, comdata.paradata[i][j].type, atof(comdata.paradata[i][j].value));
                     }
                 }
@@ -542,16 +532,9 @@ void ParseCommandJsonData(cJSON *root)
         }
     }   
 
-    token = cJSON_GetObjectItem(root, "responseType");
-    if (token != NULL) {
-        comdata.responseType = (token->valuestring);
-    }
-
-    token = cJSON_GetObjectItem(root, "timeStamp");
-    if (token != NULL) {
-        comdata.timeStamp = (token->valuestring);
-        ESP_LOGI(TAG, "timenow: %lld", atoll(comdata.timeStamp));
-    }
+    JsonCopyString(root, "responseType", comdata.responseType, sizeof(comdata.responseType));
+    JsonCopyString(root, "timeStamp", comdata.timeStamp, sizeof(comdata.timeStamp));
+    ESP_LOGI(TAG, "timenow: %lld", atoll(comdata.timeStamp));
 }
 
 int GetFileCount(uint8_t *count)
@@ -642,14 +625,17 @@ int GetMode(uint8_t *mode)
     return 0;
 }
 
-CommandJsonData GetCommandJsonData()
+// 结构体约 6KB，返回指针，避免调用方在任务栈上整体拷贝
+const CommandJsonData *GetCommandJsonData(void)
 {
-    return comdata;
+    return &comdata;
 }
 
-int GetGroupIdFromRecvJsonData()
+int GetGroupIdFromRecvJsonData(void)
 {
-    (void)sscanf(comdata.groupId, "%d", &g_snttestercurrentgroup);
+    if (sscanf(comdata.groupId, "%d", &g_snttestercurrentgroup) != 1) {
+        g_snttestercurrentgroup = 0;
+    }
     return g_snttestercurrentgroup;
 }
 
@@ -785,7 +771,7 @@ int ParseFile(char *buffer, int length)
     // 先判断是否为控制包
     if ((token != NULL) && (file.flag == 0)) {        
         ESP_LOGI("ParseFile", "File Name: %s\n", token);
-        memcpy(file.name, token, strlen(token));
+        strlcpy(file.name, token, sizeof(file.name));   // 原 memcpy 不检查长度，文件名超过 15 字节会越界
         token = strtok(NULL, delim);
         if ((token != NULL) && (file.flag == 0)) {
             ESP_LOGI("ParseFile", "File Size: %d\n", atoi(token));
@@ -801,6 +787,9 @@ int ParseFile(char *buffer, int length)
         // }
     } else {
         if (file.countsize < file.size) {
+            if (length > FILETRANSSIZE) {
+                length = FILETRANSSIZE;
+            }
             memset(file.buffer, 0, FILETRANSSIZE);
             memcpy(file.buffer, buffer, length);
             file.countsize += length;
@@ -848,9 +837,12 @@ static void do_retransmit(const int sock)
         } else {
             g_rxbuffer[len] = 0; // Null-terminate whatever is received and treat it like a string
             ESP_LOGI(TAG, "Received %d bytes: %s", len, g_rxbuffer);
-            root = cJSON_Parse(&g_rxbuffer);
+            root = cJSON_Parse(g_rxbuffer);
             if (root != NULL) {
                 ParseCommandJsonData(root);
+                // 字段已全部拷贝进 comdata，可以立即释放（原实现每条命令泄漏一棵 cJSON 树）
+                cJSON_Delete(root);
+                root = NULL;
                 // if (strcmp(comdata.devId, DEVID) == 0) {
                     if (atoll(comdata.timeStamp) > 0) {
                         CalBaseTime(atoll(comdata.timeStamp));

@@ -45,8 +45,8 @@ int modbus_tcp_write_multiple_registers(int sock, uint16_t trans_id,
                                         uint8_t unit_id, uint16_t start_addr,
                                         uint16_t quantity, const uint16_t *values);
 int GetNetDataFromModbusPlc(void);
-void MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
-void MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum);
-void MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum);
+int MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
+int MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum);
+int MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum);
 
 #endif
