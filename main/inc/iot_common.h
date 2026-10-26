@@ -178,67 +178,13 @@ typedef struct {
     AirSwitchData switchData;
 } ElectroFactoryData;
 
-typedef struct {
-    float tempzoom[6];
-} TempRecordData;
-
-typedef struct {
-    TempRecordData tempControl;
-} CRFactoryData;
-
 // 生能1-4车间冷媒灌注机设置数据格式
+// （采集数据的点表见 plc_report.c 中的 s_snBatchPoints）
 typedef struct {
     char select[CMD_SHORT_STR_LEN];
     float setchargeamount;
 } SNSetCaclReFillingMachine;
 
-// 生能2-4车间冷媒灌注机数据格式
-typedef struct {
-    float sysvacuum;
-    int atemperature;
-    int btemperature;
-    int asyspressure;
-    int bsyspressure;
-    float perfusionvolume;
-    int singleproduction;
-    int totalproduction;
-    int result;
-    float realsetcharegemount;
-} SNCaclReFillingMachine;
-
-// 生能1车间冷媒灌注机数据格式
-typedef struct {
-    int amode;
-    int bmode;
-    int atesttime;
-    int btesttime;
-    float aup;
-    float bup;
-    float adown;
-    float bdown;
-    float apressure;
-    float bpressure;
-    float avacuumdegree;
-    float bvacuumdegree;
-    float aset;
-    float bset;
-    float apercentage;
-    float bpercentage;
-    float aspeed;
-    float bspeed;
-    float achargeamount;
-    float bchargeamount;
-    int astatus;
-    int bstatus;
-    float achargetime;
-    float bchargetime;
-    int result;
-    float arealsetchargeamount;
-    float brealsetchargeamount;
-} SNHostLinkCaclReFillingMachine;
-
-extern ElectroFactoryData electroData;
-extern CRFactoryData crdata;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
 extern int g_fxplcbitpos;
@@ -251,7 +197,6 @@ extern int g_hostlinkplcdataformat;
 extern int g_hostlinkplcbitpos;
 extern int g_lsplccount;
 extern int g_lsplcdataformat;
-extern int g_crrecordplccount;
 extern uint64_t g_baseTime;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);

@@ -30,6 +30,7 @@
 #include "ainuo_tester_ascii_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
+#include "plc_report.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -103,8 +104,6 @@ extern TTesterSetCommonPara setcommonpara;
 extern int ttestparanum[10];
 extern int ttestparabytenum[10];
 extern int tterterparasetstatus[9];
-extern SNCaclReFillingMachine g_lastrefilldata;
-extern SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata;
 
 char g_rxbuffer[10240] = {0};
 uint32_t g_devStartFlushFlag = 1;
@@ -813,6 +812,32 @@ int ParseFile(char *buffer, int length)
     return 0;
 }
 
+// 冷媒灌注机：PLC 回读到的设定充注量与上位机下发值一致时，回复 "true"
+static void AckChargeAmountIfApplied(int sock)
+{
+    int frnum = 0;
+    double applied;
+
+#if defined(CONFIG_PLC_FX_SN_CACLREFILMAC)
+    frnum = 10;                                                      // FR010 实际设定灌注量
+#elif defined(CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC)
+    if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
+        frnum = 26;                                                  // FR026 A充注设定值
+    } else if (strcmp(g_setsnrefillingmachine.select, "B") == 0) {
+        frnum = 27;                                                  // FR027 B充注设定值
+    }
+#endif
+
+    if (frnum == 0 || PlcReport_GetBatchValue(frnum, &applied) != 0) {
+        return;
+    }
+    if ((float)applied == g_setsnrefillingmachine.setchargeamount) {
+        if (send(sock, "true", strlen("true"), 0) < 0) {
+            ESP_LOGE("tcp_server", "Error occurred during sending: errno %d", errno);
+        }
+    }
+}
+
 static void do_retransmit(const int sock)
 {
     int len, i, err;
@@ -867,38 +892,7 @@ static void do_retransmit(const int sock)
                 // }
             }
 
-            timestart = GetMilliTimeNow();
-#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-            if (g_setsnrefillingmachine.setchargeamount == g_lastrefilldata.realsetcharegemount) {
-                err = send(sock, "true", strlen("true"), 0);
-                if (err < 0) {
-                    ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                }
-            }
-#endif
-
-#ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-            // while (GetMilliTimeNow() - timestart < 10000) {
-            //     vTaskDelayUntil(&xLastWakeTime, xFrequency);
-            if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
-                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.arealsetchargeamount) {
-                    err = send(sock, "true", strlen("true"), 0);
-                    if (err < 0) {
-                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                    }
-                }
-            } else if (strcmp(g_setsnrefillingmachine.select, "B") == 0) {
-                if (g_setsnrefillingmachine.setchargeamount == g_lasthostlinkrefilldata.brealsetchargeamount) {
-                    err = send(sock, "true", strlen("true"), 0);
-                    if (err < 0) {
-                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                    }
-                }
-            }
-                
-               
-            // }
-#endif   
+            AckChargeAmountIfApplied(sock);
         }
     } while (len > 0);
  

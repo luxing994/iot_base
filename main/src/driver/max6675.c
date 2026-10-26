@@ -12,6 +12,7 @@
 #include "iot_time.h"
 #include "tcp_client.h"
 #include "max6675.h"
+#include "iot_report.h"
 
 #define TAG "MAX6675"
 
@@ -104,35 +105,35 @@ static float TempFilter(float new_val)
     return x;
 }
 
-static char max6675_txbuf[512];
-
 void max6675_task(void *pvParameters)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xFrequency = pdMS_TO_TICKS(250);
+    char value[48];       // 足够容纳任意 float 的 "%.2f" 输出
+    // 温度报文使用固定的设备标识，不跟随上位机命令
+    const IotValueMsg msg = {
+        .devNumber = DEVID,
+        .devId = DEVID,
+        .devName = DEVNAME,
+        .devTypeId = TEMPDEVTYPEID,
+        .devTypeName = MDPLCDEVTYPEID,
+        .orderId = INITORDERID,
+        .orderName = "temperature",
+        .value = value,
+    };
 
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
         float temp = TempFilter(MAX6675_ReadTemp());
-        // float temp = MAX6675_ReadTemp();
-
         if (temp < 0.0f) {
             continue;
         }
 
         ESP_LOGI(TAG, "temperature: %.2f C", temp);
-
-        (void)snprintf(max6675_txbuf, sizeof(max6675_txbuf),
-            "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"
-            "    \"devTypeId\":\"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-            "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-            "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##",
-            DEVID, DEVID, DEVNAME, TEMPDEVTYPEID, MDPLCDEVTYPEID, GetStaIp(),
-            INITORDERID, "temperature", DEVTIMEMODE, GetMilliTimeNow(), temp);
-
-        if (IOT_PostMessage(max6675_txbuf) != 0) {
-            ESP_LOGW(TAG, "queue full, drop data");
+        snprintf(value, sizeof(value), "%.2f", temp);
+        if (IotReport_SendValueMsg(&msg) != 0) {
+            ESP_LOGW(TAG, "report failed, drop data");
         }
     }
 }

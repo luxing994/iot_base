@@ -1,26 +1,26 @@
-/* UART asynchronous example, that uses separate RX and TX tasks
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+/*
+ * UART1 驱动与串口相关任务
+ *
+ *   uart_event_task : UART 驱动事件 -> 把收到的字节写入 uart2Buffer
+ *   rx_task         : 周期调用协议层解析应答，解析成功后交给 plc_report 解码上报
+ *   rx_modbus_task  : Modbus TCP 读到数据后解码上报
+ *   rx_ppi_task     : S7 网口读到数据后解码上报
+ *   tx_task         : 处理上位机命令 / 开关量中断事件
+ */
+#include <string.h>
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/uart.h"
-#include "string.h"
 #include "driver/gpio.h"
-#include "mprotocols.h"
-#include "hprotocols.h"
 #include "iot_common.h"
-#include "ringbuffer.h"
+#include "iot_report.h"
+#include "plc_report.h"
+#include "uart_task.h"
 #include "tcp_server.h"
-#include "tcp_client.h"
-#include "iot_time.h"
 #include "sensor.h"
 #include "fx_plc_protocol.h"
 #include "lx_modbus_tcp_master.h"
@@ -31,825 +31,72 @@
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
 
-#define PATTERN_CHR_NUM    (3) 
-#define RX_BUF_SIZE  (UART_BUFF_SIZE * 2)
-#define TXD_PIN (GPIO_NUM_17)
-#define RXD_PIN (GPIO_NUM_18)
-#define RTS_PIN (GPIO_NUM_8)
+#define PATTERN_CHR_NUM    (3)
+#define RX_BUF_SIZE        (UART_BUFF_SIZE * 2)
+#define TXD_PIN            (GPIO_NUM_17)
+#define RXD_PIN            (GPIO_NUM_18)
+#define RTS_PIN            (GPIO_NUM_8)
+#define TESTER_JSON_SIZE   2048
 
 extern SNSetCaclReFillingMachine g_setsnrefillingmachine;
 
-static QueueHandle_t uart1_queue;
-HproFuncCode funcCode;
-char controlerStr[2048] = {0};
-char controlermodbusStr[1024] = {0};
-char controlerppiStr[1024] = {0};
-char g_devId[32] = {"IIIG_1.0"};
 uint32_t g_devStartStatus = 0;
-int g_rdatalen = 1;
-int g_senddata = 1;
-int g_fxplccount = 0;
-int g_fxplcdataformat = 0;   // (0:char * or byte(for ppi)  1:short     2:float    3:BCD   4:int   5:bit)   
-int g_fxplcbitpos = 0; 
-int g_modbusplccount = 0;
-int g_modbusplcdataformat = 0;
-int g_ppiplccount = 0;
-int g_ppiplcdataformat = 0;
-int g_hostlinkplccount = 0;
-int g_hostlinkplcdataformat = 0;
-int g_hostlinkplcbitpos = 0;
-int g_lsplccount = 0;
-int g_lsplcdataformat = 0;
-int g_crrecordplccount = 0;
-uint16_t g_lastdata[256] = {0};
-char g_lastrdata[5] = {0};
-SNCaclReFillingMachine g_lastrefilldata = {0};
-SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata = {0};
-int g_datapos = 0;
-int g_firsttime = 0;
 
-void ParseOpCode(char *str, uint8_t op)
+/* ------------------------------------------------------------------ UART */
+
+#ifdef APP_UART_ENABLED
+
+/*
+ * UART1 同一时间只能服务一种串口协议，按优先级取第一个启用的协议的串口参数。
+ * （原实现每个协议各定义一个 uart_config，同时启用两个协议时会编译失败）
+ */
+#if defined(CONFIG_PLC_FX)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    UART_DATA_7_BITS
+#define APP_UART_PARITY  UART_PARITY_EVEN
+#define APP_UART_STOP    UART_STOP_BITS_1
+#elif defined(CONFIG_PLC_LS_LOAD)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    UART_DATA_8_BITS
+#define APP_UART_PARITY  UART_PARITY_DISABLE
+#define APP_UART_STOP    UART_STOP_BITS_1
+#elif defined(CONFIG_PLC_HOSTLINK)
+// 标准 HostLink 为 9600 7E2，现场设备改成了 115200 8N1
+#define APP_UART_BAUD    115200
+#define APP_UART_DATA    UART_DATA_8_BITS
+#define APP_UART_PARITY  UART_PARITY_DISABLE
+#define APP_UART_STOP    UART_STOP_BITS_1
+#elif defined(CONFIG_TESTER_76T)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    UART_DATA_8_BITS
+#define APP_UART_PARITY  UART_PARITY_DISABLE
+#define APP_UART_STOP    UART_STOP_BITS_1
+#elif defined(CONFIG_TESTER_AINUO)
+#define APP_UART_BAUD    19200
+#define APP_UART_DATA    UART_DATA_8_BITS
+#define APP_UART_PARITY  UART_PARITY_DISABLE
+#define APP_UART_STOP    UART_STOP_BITS_1
+#elif defined(CONFIG_PLC_PPI)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    UART_DATA_8_BITS
+#define APP_UART_PARITY  UART_PARITY_EVEN
+#define APP_UART_STOP    UART_STOP_BITS_1
+#endif
+
+static QueueHandle_t uart1_queue;
+
+void uart_init(void)
 {
-    char rdata[5] = {0};
-    char rdatah[9] = {0};
-    char rdatal[5] = {0};
-    char rfdata[9] = {0};
-    int idata, i;
-    float fdata;
-    const CommandJsonData *jsondata = GetCommandJsonData();
-    char version[5] = {0};
-    char frstr[10] = {0};
-    int count = 0;
-    static const char *TAG = "ParseOpCode";
-    switch (op) {
-        case SWITCHCOUNT: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, jsondata->devTypeId, DEVTYPENAME, GetStaIp(), jsondata->orderId, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                GetSwitchCount());
-            break;
-        }
-        case SWITCHSTATUS: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, jsondata->devTypeId, DEVTYPENAME, GetStaIp(), jsondata->orderId, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                GetSwitchLevel());
-            break;
-        }
-        case FXPLCDEMODATA: {
-            (void)sprintf(frstr, "FR%03d", g_fxplccount);
-            if (g_fxplccount - 1 >= 0) {
-                g_fxplccount -= 1;
-            }
-            if (g_fxplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    rdata);
-            } else if ((g_fxplcdataformat == PLC_DATA_TYPE_SHORT) || (g_fxplcdataformat == PLC_DATA_TYPE_INT) || (g_fxplcdataformat == PLC_DATA_TYPE_BIT) ) {
-                if (g_fxplcdataformat == PLC_DATA_TYPE_SHORT) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                    (void)sscanf(rdata, "%x", &idata);
-                    // (void)sprintf(frstr, "FR%03d", 1);
-                    // if (g_firsttime == 0) {
-                    //     idata = get_random_range_freq(55, 95);
-                    //     g_firsttime = 1;
-                    // }
-                    // count++;
-                    // if (count == 60) {
-                        // idata = get_random_range_freq(55, 95);   // JXLD001
-                        // idata = get_random_range_freq(45, 75);   // JXLD002
-                        // idata = get_random_range_freq(9, 12);    // JXGS001
-                        // idata = get_random_range_freq(55, 95);  // JXLD003
-                    // }
-                    
-                    
-#endif
-
-#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
-                    idata = rdata[1] << 8 | rdata[0];
-#endif
-                } else if (g_fxplcdataformat == PLC_DATA_TYPE_INT) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdatal, 4);
-                    FXPLC_ReadBufferBytes((uint8_t *)rdatah, 4);
-                    strcat(rdatah, rdatal);
-                    (void)sscanf(rdatah, "%x", &idata);
-#endif
-
-#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                    idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-#endif
-                } else if (g_fxplcdataformat == PLC_DATA_TYPE_BIT) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                    (void)sscanf(rdata, "%x", &idata);
-                    idata &= 0x0001;
-#endif
-
-#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-                    FXPLC_ReadBufferBytes((uint8_t *)rdata, 2);
-                    idata = rdata[1] << 8 | rdata[0];
-                    idata &= 0x0001;
-#endif
-                }
-                
-#if defined(CONFIG_PLC_FX_XF_CONTROLLER) || defined(CONFIG_PLC_FX_RY_LINE)
-                if (idata != g_lastdata[g_fxplccount]) {
-                    g_senddata = 1;
-                } else {
-                    g_senddata = 0;
-                }
-
-                if (g_fxplccount < (sizeof(g_lastdata) / sizeof(uint16_t))) {
-                    g_lastdata[g_fxplccount] = idata;
-                }
-
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-#endif
-
-#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-                if (idata != *(uint16_t *)(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4])) {
-                    g_senddata = 1;
-                } else {
-                    g_senddata = 1;
-                }
-                memcpy(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4], (int* )&idata, sizeof(int));
-                g_senddata = 0;
-                if (g_fxplccount * 4 == (sizeof(SNCaclReFillingMachine) - 4)) {
-                    g_senddata = 1;
-                    /*
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
-                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
-                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata, jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
-                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
-                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                    */
-                    (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
-                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
-                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
-                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                } else { 
-                    if (g_fxplccount == 1 || g_fxplccount == 2 || g_fxplccount == 3 || g_fxplccount == 4) {    // 温度和压力都除10再输出，注意g_fxplccount在此处已经-1
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata / 10.0);
-                    } else {
-                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%u\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata);
-                    }
-                }
-#endif
-
-#ifdef CONFIG_PLC_FX_OTHER_DEVICE
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-#endif
-            } else if (g_fxplcdataformat == PLC_DATA_TYPE_FLOAT) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-                for (i = 0; i < 8; i++) {
-                    FXPLC_ReadBufferBytes((uint8_t *)&rfdata[(i + 4) % 8], 1);
-                }
-                (void)sscanf(rfdata, "%x", &idata);
-                fdata = *((float *)&idata);
-#endif
-
-#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-                fdata = *((float *)&idata);
-#endif
-
-#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-                if (fdata != *(float *)(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4])) {
-                    g_senddata = 1;
-                } else {
-                    g_senddata = 1;
-                }
-                memcpy(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4], &fdata, sizeof(float));
-                g_senddata = 0;
-                if (g_fxplccount * 4 == (sizeof(SNCaclReFillingMachine) - 4)) {
-                    g_senddata = 1;
-                    /*
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
-                    "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
-                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    fdata, jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
-                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
-                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                    */
-
-                    (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
-                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
-                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
-                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
-                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
-                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
-                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                } else {
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    fdata);
-                }
-#endif
-
-#ifdef CONFIG_PLC_FX_OTHER_DEVICE
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    fdata);
-#endif
-            }
-            break;
-        }
-        case MODBUSPLCDEMODATA: {
-            (void)sprintf(frstr, "FR%03d", g_modbusplccount);
-            if (g_modbusplcdataformat == PLC_DATA_TYPE_FLOAT) {
-                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-                fdata = *((float *)&idata);
-
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.3f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    fdata);
-            } else if (g_modbusplcdataformat == PLC_DATA_TYPE_SHORT) {
-                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 2);
-                idata = rdata[1] << 8 | rdata[0];
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, VACUUMTYPEID, MDPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-            } else if (g_modbusplcdataformat == PLC_DATA_TYPE_INT) {
-                MODBUSPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-            }
-            break;
-        }
-        case HLPLCDEMODATA: {
-            (void)sprintf(frstr, "FR%03d", g_hostlinkplccount);
-            if (g_hostlinkplccount - 1 >= 0) {
-                g_hostlinkplccount -= 1;
-            }
-            if (g_hostlinkplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    rdata);
-                
-            } else if (g_hostlinkplcdataformat == PLC_DATA_TYPE_SHORT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                (void)sscanf(rdata, "%x", &idata);
-                #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-                    if (idata != *(int *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4])) {
-                        g_senddata = 1;
-                    } else {
-                        g_senddata = 1;
-                    }
-
-                    memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], (int* )&idata, sizeof(int));
-                    g_senddata = 0;
-                    if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
-                        g_senddata = 1;
-                        /*
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
-                        "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata, jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \ 
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                        */
-
-                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \ 
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                    } else {
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata);
-                    }
-                #endif
-
-                #ifdef CONFIG_PLC_HOSTLINK_OTHER_DEVICE
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata);
-                #endif
-            } else if (g_hostlinkplcdataformat == PLC_DATA_TYPE_FLOAT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rfdata, 8);
-                (void)sscanf(rfdata, "%x", &idata); 
-                idata = ((idata & 0x0000ffff) << 16) | ((idata >> 16) & 0x0000ffff);
-                fdata = *((float *)&idata);
-
-                #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-                    if (fdata != *(float *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4])) {
-                        g_senddata = 1;
-                    } else {
-                        g_senddata = 1;
-                    }
-
-                    memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], &fdata, sizeof(float));
-                    g_senddata = 0;
-                    if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
-                        g_senddata = 1;
-                        /*
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2F\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
-                        "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        fdata, jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                        */
-
-                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                    } else {
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        fdata);
-                    }
-                #endif
-
-                #ifdef CONFIG_PLC_HOSTLINK_OTHER_DEVICE
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        fdata);
-                #endif
-            } else if (g_hostlinkplcdataformat == PLC_DATA_TYPE_BCD) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                (void)sscanf(rdata, "%x", &idata);
-                idata = BCDToInt(idata);
-                #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-                    if (idata != *(int *)(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4])) {
-                        g_senddata = 1;
-                    } else {
-                        g_senddata = 1;
-                    }
-
-                    memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], (int* )&idata, sizeof(int));
-                    g_senddata = 0;
-                    if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
-                        g_senddata = 1;
-                        /*
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
-                        "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata, jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, 
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                        */
-
-                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
-                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
-                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
-                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        jsondata->devId, FRIGEFILLTYPEID, jsondata->orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
-                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
-                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
-                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
-                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
-                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
-                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, 
-                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
-                    } else {
-                        (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata);
-                    }
-                #endif
-
-                #ifdef CONFIG_PLC_HOSTLINK_OTHER_DEVICE
-                    (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                        "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                        g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                        idata);
-                #endif
-            } else if (g_hostlinkplcdataformat == PLC_DATA_TYPE_BIT) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                (void)sscanf(rdata, "%x", &idata);
-                HLReadDataCallback(idata);
-                idata >>= g_hostlinkplcbitpos;
-                idata &= 0x0001;
-
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                idata);
-            }
-            break;
-        }
-        case LSPLCDEMODATA: {
-            (void)sprintf(frstr, "FR%03d", g_lsplccount);
-            if (g_lsplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-                FXPLC_ReadBufferBytes((uint8_t *)rdata, sizeof(rdata));
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    rdata);
-                if (strcmp(rdata, g_lastrdata) != 0) {
-                    g_senddata = 1;
-                } else {
-                    g_senddata = 1;
-                }
-                strcpy(g_lastrdata, rdata);
-            } else if (g_lsplcdataformat == PLC_DATA_TYPE_SHORT) {
-                for (i = 0 ; i < 4; i++) {
-                    FXPLC_ReadBufferBytes((uint8_t *)&rdata[(i + 2) % 4], 1);
-                } 
-                (void)sscanf(rdata, "%x", &idata);
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-                g_datapos += 2;
-            }
-            break;
-        }
-        case PPIPLCDEMODATA: {
-            (void)sprintf(frstr, "FR%03d", g_ppiplccount);
-            if (g_ppiplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI || g_ppiplcdataformat == PLC_DATA_TYPE_BIT) {
-                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 1);
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, VACUUMTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    rdata[0]);
-            } else if (g_ppiplcdataformat == PLC_DATA_TYPE_SHORT) {
-                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 2);
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-                idata = rdata[0] << 8 | rdata[1];
-#endif
-
-#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
-                idata = rdata[1] << 8 | rdata[0];
-#endif
-
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-            } else if (g_ppiplcdataformat == PLC_DATA_TYPE_FLOAT) {
-                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-                idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
-#endif
-
-#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
-                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-#endif
-                fdata = *((float *)&idata);
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    fdata);
-            } else if (g_ppiplcdataformat == PLC_DATA_TYPE_INT) {
-                PPIPLC_ReadBufferBytes((uint8_t *)rdata, 4);
-                // ESP_LOGI(TAG, "rdata[3]:%2x, rdata[2]:%2x, rdata[1]:%2x, rdata[0]:%2x\n", rdata[3], rdata[2], rdata[1], rdata[0]);
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-                idata = rdata[0] << 24 | rdata[1] << 16 | rdata[2] << 8 | rdata[3];
-#endif
-
-#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
-                idata = rdata[3] << 24 | rdata[2] << 16 | rdata[1] << 8 | rdata[0];
-#endif
-                (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-                    "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                    "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-                    "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \  
-                    g_devId, jsondata->devId, jsondata->devName, FRIGEFILLTYPEID, LSPLCDEVTYPEID, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                    idata);
-            }
-            break;
-        }
-        case TEMPCONTROLDATA: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, TEMPDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                electroData.tempControl.realData);
-            break;
-        }
-        case MOTORDATAVOL: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##"
-                "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                electroData.motorData.voltage, g_devId, jsondata->devId, jsondata->devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), 
-                "FR002", jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), electroData.motorData.current);
-            break;
-        }
-        case MOTORDATACUR: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, MOTORDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR002", jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                electroData.motorData.current);
-            break;
-        }
-        case FREEZERDATA: {
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.1f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, FREEZERDEVTYPEID, DEVTYPENAME, GetStaIp(), "FR001", jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(), 
-                electroData.freezerData.temperature);
-            break;
-        }
-        case CRRECORDDATA: {
-            (void)sprintf(frstr, "FR%03d", g_crrecordplccount);
-            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
-                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
-		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
-            g_devId, jsondata->devId, jsondata->devName, FREEZERDEVTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata->orderName, DEVTIMEMODE, GetMilliTimeNow(),
-            crdata.tempControl.tempzoom[g_crrecordplccount - 1]);
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-}
-
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || (defined CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
-|| (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)
-void uart_init(void) {
-    int ret;
     static const char *UART_INIT_TAG = "UART_INIT";
+    const uart_config_t uart_config = {
+        .baud_rate = APP_UART_BAUD,
+        .data_bits = APP_UART_DATA,
+        .parity = APP_UART_PARITY,
+        .stop_bits = APP_UART_STOP,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
 
-#ifdef CONFIG_PLC_FX
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_7_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-
-#ifdef CONFIG_PLC_LS_LOAD
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-
-#ifdef CONFIG_PLC_HOSTLINK
-    /*
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_7_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_2,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-    */
-    const uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-
-#ifdef CONFIG_TESTER_76T
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-
-#ifdef CONFIG_TESTER_AINUO
-    const uart_config_t uart_config = {
-        .baud_rate = 19200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-
-#if (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#elif defined(CONFIG_PLC_PPI) || (defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK) && defined(CONFIG_PLC_PPI))
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-    
     esp_log_level_set(UART_INIT_TAG, ESP_LOG_ERROR);
     uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
@@ -861,39 +108,227 @@ void uart_init(void) {
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, RTS_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
 #endif
-    ret = UART_InitBuffer();
-    if (ret != 0) {
+    if (UART_InitBuffer() != 0) {
         ESP_LOGE(UART_INIT_TAG, "uart buffer init failed\n");
+    }
+}
+
+void uart_event_task(void *pvParameters)
+{
+    static const char *UART_EVENT_TASK_TAG = "UART_EVENT_TASK";
+    uart_event_t event;
+    size_t buffered_size;
+    uint8_t *dtmp = (uint8_t *)malloc(RX_BUF_SIZE + 1);   // 多 1 字节保证日志打印时以 0 结尾
+
+    if (dtmp == NULL) {
+        ESP_LOGE(UART_EVENT_TASK_TAG, "no memory for uart rx buffer");
+        vTaskDelete(NULL);
+        return;
+    }
+    esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
+
+    for (;;) {
+        if (xQueueReceive(uart1_queue, (void *)&event, (TickType_t)portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        bzero(dtmp, RX_BUF_SIZE + 1);
+        switch (event.type) {
+        case UART_DATA:
+            uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
+            ESP_LOGI(UART_EVENT_TASK_TAG, "[DATA EVT]: %d bytes", event.size);
+            if (UART_WriteBufferBytes(dtmp, event.size) != 0) {
+                ESP_LOGE(UART_EVENT_TASK_TAG, "uart buffer full");
+            }
+            break;
+        case UART_FIFO_OVF:
+        case UART_BUFFER_FULL:
+            // 驱动缓冲区溢出，丢弃已缓存数据重新开始接收
+            ESP_LOGI(UART_EVENT_TASK_TAG, "uart overflow: %d", event.type);
+            uart_flush_input(UART_NUM_1);
+            xQueueReset(uart1_queue);
+            break;
+        case UART_PATTERN_DET: {
+            uart_get_buffered_data_len(UART_NUM_1, &buffered_size);
+            int pos = uart_pattern_pop_pos(UART_NUM_1);
+            if (pos == -1) {
+                uart_flush_input(UART_NUM_1);
+            } else {
+                uint8_t pat[PATTERN_CHR_NUM + 1] = {0};
+                uart_read_bytes(UART_NUM_1, dtmp, pos, pdMS_TO_TICKS(100));
+                uart_read_bytes(UART_NUM_1, pat, PATTERN_CHR_NUM, pdMS_TO_TICKS(100));
+            }
+            break;
+        }
+        default:
+            ESP_LOGI(UART_EVENT_TASK_TAG, "uart event type: %d", event.type);
+            break;
+        }
+    }
+}
+
+#endif /* APP_UART_ENABLED */
+
+/* ------------------------------------------------------------- 接收任务 */
+
+#ifdef APP_RX_TASK_ENABLED
+
+#if defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
+static char s_testerJson[TESTER_JSON_SIZE];
+#endif
+
+// 解析一次各协议的应答，成功则解码上报
+static void RxPollOnce(void)
+{
+    int ret;
+
+#if defined(CONFIG_PLC_FX)
+#if defined(CONFIG_PLC_FX_CONNECT_RS232)
+    ret = GetDataFromFxPlc();
+#elif defined(CONFIG_PLC_FX_CONNECT_RS485)
+    ret = GetSerialDataFromFxPlc();
+#else
+    ret = GetNetDataFromFxPlc();
+#endif
+    if (ret == 0) {
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
+        SendAckToPlc();
+#endif
+        PlcReport_Fx();
+    }
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
+    else {
+        // 注意：缓冲区为空时也会走到这里，与原实现一致，每个周期都会回 NAK
+        SendNackToPlc();
+    }
+#endif
+#endif
+
+#if defined(CONFIG_PLC_HOSTLINK_CONNECT_RS232) || defined(CONFIG_PLC_HOSTLINK_CONNECT_RS485)
+    if (GetSerialWordDataFromHlPlc() == 0) {
+        PlcReport_HostLink();
+    }
+#endif
+
+#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
+    if (GetSerialWordDataFromPpiPlc() == 0) {
+        PlcReport_Ppi();
+    }
+#endif
+
+#if defined(CONFIG_PLC_LS_LOAD_CONNECT_RS232)
+    if (DBSGetData() == 0) {
+        PlcReport_Ls();
+    }
+#endif
+
+#if defined(CONFIG_TESTER_76T)
+    if (TTesterResolve() == 0) {
+        TTesterGetJsonData(s_testerJson);
+        IOT_PostMessage(s_testerJson);
+    }
+#endif
+
+#if defined(CONFIG_TESTER_AINUO)
+    if (AINUO_TTesterResolve() == 0) {
+        AINUO_TTesterGetJsonData(s_testerJson);
+        IOT_PostMessage(s_testerJson);
+    }
+#endif
+
+    (void)ret;
+}
+
+void rx_task(void *arg)
+{
+    static const char *RX_TASK_TAG = "RX_TASK";
+#ifdef CONFIG_TESTER_AINUO
+    const TickType_t xFrequency = pdMS_TO_TICKS(1000);
+#else
+    const TickType_t xFrequency = pdMS_TO_TICKS(100);
+#endif
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    esp_log_level_set(RX_TASK_TAG, ESP_LOG_ERROR);
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        RxPollOnce();
+    }
+}
+
+#endif /* APP_RX_TASK_ENABLED */
+
+#ifdef CONFIG_PLC_MODBUS_CONNECT_NETWORK
+void rx_modbus_task(void *arg)
+{
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100));
+        if (GetNetDataFromModbusPlc() == 0) {
+            PlcReport_ModbusNet();
+        }
     }
 }
 #endif
 
-// read command
+#ifdef CONFIG_PLC_PPI_CONNECT_NETWORK
+void rx_ppi_task(void *arg)
+{
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100));
+        if (GetNetDataFromS7PlcNet() == 0) {
+            PlcReport_Ppi();
+        }
+    }
+}
+#endif
+
+/* ------------------------------------------------------------- 命令任务 */
+
+// 开关量计数 / 状态：沿用上位机最近一次命令中的 devTypeId 和 orderId
+static void ReportSwitch(int value)
+{
+    const CommandJsonData *cmd = GetCommandJsonData();
+    char str[16];
+    IotValueMsg msg = {
+        .devTypeId = cmd->devTypeId,
+        .devTypeName = DEVTYPENAME,
+        .orderId = cmd->orderId,
+        .value = str,
+    };
+
+    snprintf(str, sizeof(str), "%d", value);
+    IotReport_SendValueMsg(&msg);
+}
+
 void tx_task(void *arg)
 {
     static const char *TX_TASK_TAG = "TX_TASK";
-    uint32_t sendaddr = (uint32_t)&controlerStr;
     EventBits_t uxBits;
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
-        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17 | BIT_18 | BIT_19 | BIT_20 | BIT_21, pdTRUE, pdFALSE, (TickType_t)10);
+        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17,
+                                     pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
         if ((uxBits & BIT_14) != 0) {
+            // 上位机 single 模式命令：写冷媒灌注机充注量
 #ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount); //  设置加注量
+            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount);
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
             if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
                 HLWriteRealDataRegister(8150, g_setsnrefillingmachine.setchargeamount);   // A充注量设定值
-                HLReadFloatDataRegister(8150, 26);     // A充注设定值
-            } else if ((strcmp(g_setsnrefillingmachine.select, "B")) == 0) {
+                HLReadFloatDataRegister(8150, 26);                                         // A充注设定值
+            } else if (strcmp(g_setsnrefillingmachine.select, "B") == 0) {
                 HLWriteRealDataRegister(8550, g_setsnrefillingmachine.setchargeamount);   // B充注量设定值
-                HLReadFloatDataRegister(8550, 27);     // B充注设定值
+                HLReadFloatDataRegister(8550, 27);                                         // B充注设定值
             }
-           
 #endif
         } else if ((uxBits & BIT_15) != 0) {
+            // 上位机 group 模式命令：下发安规测试仪组参数
 #ifdef CONFIG_TESTER_76T
             TTesterSetGroupPara(GetGroupIdFromRecvJsonData());
 #endif
@@ -902,286 +337,9 @@ void tx_task(void *arg)
             AINUO_TTesterSetGroupPara(GetGroupIdFromRecvJsonData());
 #endif
         } else if ((uxBits & BIT_16) != 0) {
-            ParseOpCode(controlerStr, SWITCHCOUNT);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: switch count event");
-            }
+            ReportSwitch(GetSwitchCount());
         } else if ((uxBits & BIT_17) != 0) {
-            ParseOpCode(controlerStr, SWITCHSTATUS);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: switch static event");
-            }
-        } else if ((uxBits & BIT_18) != 0) {
-            ParseOpCode(controlerStr, TEMPCONTROLDATA);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: tempcontroldata event");
-            }
-        } else if ((uxBits & BIT_19) != 0) {
-            ParseOpCode(controlerStr, MOTORDATAVOL);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: motordatavol event");
-            }
-        } else if ((uxBits & BIT_20) != 0) {
-            ParseOpCode(controlerStr, FREEZERDATA);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: freezerdata event");
-            }
-        } else if ((uxBits & BIT_21) != 0) {
-            ParseOpCode(controlerStr, CRRECORDDATA);
-            if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: freezerdata event");
-            }
+            ReportSwitch(GetSwitchLevel());
         }
     }
-    vTaskDelete(NULL);
-}
-
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
-   || (defined CONFIG_PLC_MODBUS_CONNECT_RS232) || (defined CONFIG_PLC_MODBUS_CONNECT_RS485) 
-void rx_task(void *arg)
-{
-    static const char *RX_TASK_TAG = "RX_TASK";
-    uint32_t sendaddr = (uint32_t)&controlerStr;
-    int ret = 1;   
-
-    TickType_t xLastWakeTime;
-#ifdef CONFIG_TESTER_AINUO
- 	const TickType_t xFrequency = 100;
-#else
-    const TickType_t xFrequency = 10;
-#endif
-    
-    xLastWakeTime = xTaskGetTickCount();
-    esp_log_level_set(RX_TASK_TAG, ESP_LOG_ERROR);
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-
-#ifdef CONFIG_PLC_FX_CONNECT_RS232
-        ret = GetDataFromFxPlc();
-#endif
-
-#ifdef CONFIG_PLC_FX_CONNECT_RS485
-        ret = GetSerialDataFromFxPlc();
-        // ret = 0;// 跑假数据强制让ret = 0 
-#endif
-
-#ifdef CONFIG_PLC_FX_CONNECT_NETWORK
-        ret = GetNetDataFromFxPlc();
-#endif  
-
-#if (defined CONFIG_PLC_HOSTLINK_CONNECT_RS232 || CONFIG_PLC_HOSTLINK_CONNECT_RS485)
-        ret = GetSerialWordDataFromHlPlc();
-#endif
-
-#ifdef CONFIG_PLC_PPI_CONNECT_RS485
-        ret = GetSerialWordDataFromPpiPlc();
-#endif
-
-#ifdef CONFIG_PLC_LS_LOAD_CONNECT_RS232
-        // ret = LSLoadGetSerialWordDataFromFxPlc();
-        ret = DBSGetData();
-        // ret = TRGetData();
-#endif
-
-#ifdef CONFIG_TESTER_76T
-        ret = TTesterResolve();
-#endif
-
-#ifdef CONFIG_TESTER_AINUO
-        ret = AINUO_TTesterResolve();
-#endif
-
-// Parse Data
-        if (ret == 0) {
-#ifdef CONFIG_PLC_FX
-            SendAckToPlc();
-            ParseOpCode(controlerStr, FXPLCDEMODATA);
-#endif  
-
-#ifdef CONFIG_PLC_HOSTLINK
-            ParseOpCode(controlerStr, HLPLCDEMODATA);
-#endif
-
-#ifdef CONFIG_PLC_PPI
-            ParseOpCode(controlerStr, PPIPLCDEMODATA);
-#endif
-
-#ifdef CONFIG_PLC_LS_LOAD
-            ParseOpCode(controlerStr, LSPLCDEMODATA);
-#endif
-
-#ifdef CONFIG_TESTER_76T
-            TTesterGetJsonData(controlerStr);
-#endif
-
-#ifdef CONFIG_TESTER_AINUO
-            AINUO_TTesterGetJsonData(controlerStr);
-#endif
-            if (g_senddata == 1) {
-                ESP_LOGI(RX_TASK_TAG, "Read bytes: '%s'", controlerStr);
-                if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                    ESP_LOGE(RX_TASK_TAG, "Error occurred during sending queue");
-                }
-            }
-		}
-#if (defined CONFIG_PLC_FX_CONNECT_RS232 || CONFIG_PLC_FX_CONNECT_RS485)
-        else if (ret != 0) {
-            SendNackToPlc();
-        }
-#endif
-    }
-    vTaskDelete(NULL);
-}
-#endif
-
-#ifdef CONFIG_PLC_MODBUS_CONNECT_NETWORK
-void rx_modbus_task(void *arg)
-{
-    const char *RX_MODBUS_TASK_TAG = "RX_MODBUS_TASK";
-    uint32_t sendaddr = (uint32_t)&controlermodbusStr;
-    int ret = 0;
-    TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 10;
-    
-    xLastWakeTime = xTaskGetTickCount();
-    esp_log_level_set(RX_MODBUS_TASK_TAG, ESP_LOG_ERROR);
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ret = GetNetDataFromModbusPlc();
-// Parse Data
-        if (ret == 0) {
-            ParseOpCode(controlermodbusStr, MODBUSPLCDEMODATA);   
-            if (g_senddata == 1) {
-                ESP_LOGI(RX_MODBUS_TASK_TAG, "Read bytes: '%s'", controlermodbusStr);
-                if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                    ESP_LOGE(RX_MODBUS_TASK_TAG, "Error occurred during sending queue");
-                }
-            }
-		}
-    }
-    vTaskDelete(NULL);
-}
-#endif
-
-#ifdef CONFIG_PLC_PPI_CONNECT_NETWORK
-void rx_ppi_task(void *arg)
-{
-    const char *RX_PPI_TASK_TAG = "RX_PPI_TASK";
-    uint32_t sendaddr = (uint32_t)&controlerppiStr;
-    int ret = 0;
-    TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 10;
-    
-    xLastWakeTime = xTaskGetTickCount();
-    esp_log_level_set(RX_PPI_TASK_TAG, ESP_LOG_ERROR);
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        ret = GetNetDataFromS7PlcNet();
-// Parse Data
-        if (ret == 0) {
-            ParseOpCode(controlerppiStr, PPIPLCDEMODATA);   
-            if (g_senddata == 1) {
-                ESP_LOGI(RX_PPI_TASK_TAG, "Read bytes: '%s'", controlerppiStr);
-                if (IOT_PostMessage((const char *)sendaddr) != 0) {
-                    ESP_LOGE(RX_PPI_TASK_TAG, "Error occurred during sending queue");
-                }
-            }
-		}
-    }
-    vTaskDelete(NULL);
-}
-#endif
-
-void uart_event_task(void *pvParameters)
-{
-    static const char *UART_EVENT_TASK_TAG = "UART_EVENT_TASK";
-    uart_event_t event;
-    size_t buffered_size;
-    uint8_t* dtmp = (uint8_t*) malloc(RX_BUF_SIZE + 1);   // 多 1 字节保证日志打印时以 0 结尾
-    int ret;
-
-    if (dtmp == NULL) {
-        ESP_LOGE(UART_EVENT_TASK_TAG, "no memory for uart rx buffer");
-        vTaskDelete(NULL);
-        return;
-    }
-    esp_log_level_set(UART_EVENT_TASK_TAG, ESP_LOG_ERROR);
-    for(;;) {
-        //Waiting for UART event.
-        if(xQueueReceive(uart1_queue, (void * )&event, (TickType_t)portMAX_DELAY)) {
-            bzero(dtmp, RX_BUF_SIZE + 1);
-            ESP_LOGI(UART_EVENT_TASK_TAG, "uart[%d] event:", UART_NUM_1);
-            switch(event.type) {
-                //Event of UART receving data
-                /*We'd better handler data event fast, there would be much more data events than
-                other types of events. If we take too much time on data event, the queue might
-                be full.*/
-                case UART_DATA:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "[UART DATA]: %d", event.size);
-                    uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "[DATA EVT]: %s", dtmp);
-                    ret = UART_WriteBufferBytes(dtmp, event.size);
-                    if (ret != 0) {
-                        ESP_LOGE(UART_EVENT_TASK_TAG, "uart buffer error: %d", ret);
-                    }
-                    // uart_write_bytes(UART_NUM_1, (const char*) dtmp, event.size);
-                    break;
-                //Event of HW FIFO overflow detected
-                case UART_FIFO_OVF:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "hw fifo overflow");
-                    // If fifo overflow happened, you should consider adding flow control for your application.
-                    // The ISR has already reset the rx FIFO,
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(UART_NUM_1);
-                    xQueueReset(uart1_queue);
-                    break;
-                //Event of UART ring buffer full
-                case UART_BUFFER_FULL:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "ring buffer full");
-                    // If buffer full happened, you should consider encreasing your buffer size
-                    // As an example, we directly flush the rx buffer here in order to read more data.
-                    uart_flush_input(UART_NUM_1);
-                    xQueueReset(uart1_queue);
-                    break;
-                //Event of UART RX break detected
-                case UART_BREAK:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "uart rx break");
-                    break;
-                //Event of UART parity check error
-                case UART_PARITY_ERR:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "uart parity error");
-                    break;
-                //Event of UART frame error
-                case UART_FRAME_ERR:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "uart frame error");
-                    break;
-                //UART_PATTERN_DET
-                case UART_PATTERN_DET:
-                    uart_get_buffered_data_len(UART_NUM_1, &buffered_size);
-                    int pos = uart_pattern_pop_pos(UART_NUM_1);
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "[UART PATTERN DETECTED] pos: %d, buffered size: %d", pos, buffered_size);
-                    if (pos == -1) {
-                        // There used to be a UART_PATTERN_DET event, but the pattern position queue is full so that it can not
-                        // record the position. We should set a larger queue size.
-                        // As an example, we directly flush the rx buffer here.
-                        uart_flush_input(UART_NUM_1);
-                    } else {
-                        uart_read_bytes(UART_NUM_1, dtmp, pos, 100 / portTICK_PERIOD_MS);
-                        uint8_t pat[PATTERN_CHR_NUM + 1];
-                        memset(pat, 0, sizeof(pat));
-                        uart_read_bytes(UART_NUM_1, pat, PATTERN_CHR_NUM, 100 / portTICK_PERIOD_MS);
-                        ESP_LOGI(UART_EVENT_TASK_TAG, "read data: %s", dtmp);
-                        ESP_LOGI(UART_EVENT_TASK_TAG, "read pat : %s", pat);
-                    }
-                    break;
-                //Others
-                default:
-                    ESP_LOGI(UART_EVENT_TASK_TAG, "uart event type: %d", event.type);
-                    break;
-            }
-        }
-    }
-    free(dtmp);
-    dtmp = NULL;
-    vTaskDelete(NULL);
 }

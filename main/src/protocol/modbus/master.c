@@ -11,6 +11,7 @@
 #include "mbcontroller.h"
 #include "sdkconfig.h"
 #include "iot_common.h"
+#include "iot_report.h"
 
 #define AIR_SWITCH        0
 #define TEMP_CONTROLER    1
@@ -211,8 +212,7 @@ const mb_parameter_descriptor_t device_parameters[] = {
 #endif
 
 TempControlTransData tempTransData = {0, 0, -1};
-ElectroFactoryData electroData = {0};
-CRFactoryData crdata = {0};
+static __attribute__((unused)) ElectroFactoryData electroData = {0};
 
 // Calculate number of parameters in the table
 const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_parameters[0]));
@@ -278,7 +278,7 @@ void ParseTemperatureData(uint16_t cid, int data)
         tempTransData.SV = 0;
         tempTransData.dPt = -1;
         if (electroData.tempControl.realData != 0 && electroData.tempControl.setData != 0) {
-            xEventGroupSetBits(xEventGroup1, BIT_18);
+            IotReport_SendValue(TEMPDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.tempControl.realData);
         }
     }
 }
@@ -296,7 +296,8 @@ void ParseMotorData(uint16_t cid, int data)
         break;
     }
     if (electroData.motorData.voltage != 0 && electroData.motorData.current != 0) {
-        xEventGroupSetBits(xEventGroup1, BIT_19);
+        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.motorData.voltage);
+        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR002", "%.1f", electroData.motorData.current);
     }
 }
 #elif DEVICE_VERSION == FREEZER
@@ -310,16 +311,15 @@ void ParseFreezerData(uint16_t cid, int data)
         break;
     }
     if (electroData.freezerData.temperature != 0) {
-        xEventGroupSetBits(xEventGroup1, BIT_20);
+        IotReport_SendValue(FREEZERDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.freezerData.temperature);
     }
 }
 #elif DEVICE_VERSION == RECORD
 void ParseRecordData(uint16_t cid, float data)
 {
+    // 无纸记录仪：第 cid 个温区上报为 FR(cid+1)
     if (data != 0) {
-        crdata.tempControl.tempzoom[cid] = data;
-        g_crrecordplccount = cid + 1;
-        xEventGroupSetBits(xEventGroup1, BIT_21);
+        IotReport_SendPoint(FREEZERDEVTYPEID, DEVTYPENAME, cid + 1, "%.2f", data);
     }
 }
 #endif
