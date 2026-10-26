@@ -62,11 +62,13 @@ int g_hostlinkplcdataformat = 0;
 int g_hostlinkplcbitpos = 0;
 int g_lsplccount = 0;
 int g_lsplcdataformat = 0;
+int g_crrecordplccount = 0;
 uint16_t g_lastdata[256] = {0};
 char g_lastrdata[5] = {0};
 SNCaclReFillingMachine g_lastrefilldata = {0};
 SNHostLinkCaclReFillingMachine g_lasthostlinkrefilldata = {0};
 int g_datapos = 0;
+int g_firsttime = 0;
 
 void ParseOpCode(char *str, uint8_t op)
 {
@@ -79,6 +81,7 @@ void ParseOpCode(char *str, uint8_t op)
     jsondata = GetCommandJsonData();
     char version[5] = {0};
     char frstr[10] = {0};
+    int count = 0;
     static const char *TAG = "ParseOpCode";
     switch (op) {
         case SWITCHCOUNT: {
@@ -117,6 +120,20 @@ void ParseOpCode(char *str, uint8_t op)
 #if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
                     FXPLC_ReadBufferBytes((uint8_t *)rdata, 4);
                     (void)sscanf(rdata, "%x", &idata);
+                    // (void)sprintf(frstr, "FR%03d", 1);
+                    // if (g_firsttime == 0) {
+                    //     idata = get_random_range_freq(55, 95);
+                    //     g_firsttime = 1;
+                    // }
+                    // count++;
+                    // if (count == 60) {
+                        // idata = get_random_range_freq(55, 95);   // JXLD001
+                        // idata = get_random_range_freq(45, 75);   // JXLD002
+                        // idata = get_random_range_freq(9, 12);    // JXGS001
+                        // idata = get_random_range_freq(55, 95);  // JXLD003
+                    // }
+                    
+                    
 #endif
 
 #if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
@@ -175,7 +192,10 @@ void ParseOpCode(char *str, uint8_t op)
                     g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4], (int* )&idata, sizeof(int));
+                g_senddata = 0;
                 if (g_fxplccount * 4 == (sizeof(SNCaclReFillingMachine) - 4)) {
+                    g_senddata = 1;
+                    /*
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -189,6 +209,18 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
+                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
+                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                    */
+                    (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
@@ -242,7 +274,10 @@ void ParseOpCode(char *str, uint8_t op)
                     g_senddata = 1;
                 }
                 memcpy(&((uint8_t *)&g_lastrefilldata)[g_fxplccount * 4], &fdata, sizeof(float));
+                g_senddata = 0;
                 if (g_fxplccount * 4 == (sizeof(SNCaclReFillingMachine) - 4)) {
+                    g_senddata = 1;
+                    /*
                     (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                     "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                     "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -256,6 +291,19 @@ void ParseOpCode(char *str, uint8_t op)
                     "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                     g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, FXPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                     fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
+                    (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
+                    (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
+                    g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                    */
+
+                    (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                    "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                    "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010\",\n"
+                    "    \"ParameterValues\":\"%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%d__%.2f\",\n"
+                    "    \"ParameterUnits\":\"00__CG__CG__PA__PA__00__00__00__00__00\",\n"
+                    "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                    "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                    jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lastrefilldata.sysvacuum, \
                     (g_lastrefilldata.atemperature) / 10.0, (g_lastrefilldata.btemperature) / 10.0, (g_lastrefilldata.asyspressure) / 10.0, \
                     (g_lastrefilldata.bsyspressure) / 10.0, g_lastrefilldata.perfusionvolume, g_lastrefilldata.singleproduction, g_lastrefilldata.totalproduction, \ 
                     g_lastrefilldata.result, g_lastrefilldata.realsetcharegemount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
@@ -343,7 +391,10 @@ void ParseOpCode(char *str, uint8_t op)
                     }
 
                     memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], (int* )&idata, sizeof(int));
+                    g_senddata = 0;
                     if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                        g_senddata = 1;
+                        /*
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -357,6 +408,23 @@ void ParseOpCode(char *str, uint8_t op)
                         "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                         idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \ 
+                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                        */
+
+                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
+                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
+                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
+                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                        jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
                         g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
                         g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
                         g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
@@ -396,7 +464,10 @@ void ParseOpCode(char *str, uint8_t op)
                     }
 
                     memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], &fdata, sizeof(float));
+                    g_senddata = 0;
                     if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                        g_senddata = 1;
+                        /*
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
@@ -410,6 +481,23 @@ void ParseOpCode(char *str, uint8_t op)
                         "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                         fdata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, \
+                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                        */
+
+                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
+                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
+                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
+                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                        jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
                         g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
                         g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
                         g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
@@ -447,20 +535,40 @@ void ParseOpCode(char *str, uint8_t op)
                     }
 
                     memcpy(&((uint8_t *)&g_lasthostlinkrefilldata)[g_hostlinkplccount * 4], (int* )&idata, sizeof(int));
+                    g_senddata = 0;
                     if (g_hostlinkplccount * 4 >= (sizeof(SNHostLinkCaclReFillingMachine) - 4)) {
+                        g_senddata = 1;
+                        /*
                         (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
                         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                         "    \"valueUnit\":\"NULL\",\n    \"value\":\"%d\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##\n"
                         "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
                         "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
+                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
                         "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
                         "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
                         "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
                         "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
                         g_devId, jsondata.devId, jsondata.devName, FRIGEFILLTYPEID, HLPLCDEVTYPEID, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(), 
                         idata, jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
+                        g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
+                        g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
+                        g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
+                        g_lasthostlinkrefilldata.apercentage, g_lasthostlinkrefilldata.bpercentage, g_lasthostlinkrefilldata.aspeed, g_lasthostlinkrefilldata.bspeed, \
+                        g_lasthostlinkrefilldata.achargeamount, g_lasthostlinkrefilldata.bchargeamount, g_lasthostlinkrefilldata.astatus, g_lasthostlinkrefilldata.bstatus, \
+                        g_lasthostlinkrefilldata.achargetime, g_lasthostlinkrefilldata.bchargetime, g_lasthostlinkrefilldata.result, g_lasthostlinkrefilldata.arealsetchargeamount, 
+                        g_lasthostlinkrefilldata.brealsetchargeamount, GetStaIp(), DEVTIMEMODE, GetMilliTimeNow());
+                        */
+
+                        (void)sprintf(str, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"  
+                        "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+                        "    \"ParameterIds\":\"FR001__FR002__FR003__FR004__FR005__FR006__FR007__FR008__FR009__FR010__FR011__FR012__FR013__FR014__FR015__FR016__FR017__FR018__FR019__FR020__FR021__FR022__FR023__FR024__FR025__FR026__FR027\",\n"
+                        "    \"ParameterValues\":\"%d__%d__%d__%d__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%d__%d__%.2f__%.2f__%d__%.2f__%.2f\",\n"
+                        "    \"ParameterUnits\":\"00__00__S__S__PA__PA__PA__PA__MPA__MPA__PA__PA__G__G__00__00__GS__GS__G__G__00__00__S__S__00__00__00\",\n"
+                        "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+                        "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n};;**##", \  
+                        jsondata.devId, FRIGEFILLTYPEID, jsondata.orderName, "BatchParameters", g_lasthostlinkrefilldata.amode, g_lasthostlinkrefilldata.bmode, \
                         g_lasthostlinkrefilldata.atesttime, g_lasthostlinkrefilldata.btesttime, g_lasthostlinkrefilldata.aup, g_lasthostlinkrefilldata.bup, \
                         g_lasthostlinkrefilldata.adown, g_lasthostlinkrefilldata.bdown, g_lasthostlinkrefilldata.apressure, g_lasthostlinkrefilldata.bpressure, \
                         g_lasthostlinkrefilldata.avacuumdegree, g_lasthostlinkrefilldata.bvacuumdegree, g_lasthostlinkrefilldata.aset, g_lasthostlinkrefilldata.bset, \
@@ -637,6 +745,16 @@ void ParseOpCode(char *str, uint8_t op)
                 electroData.freezerData.temperature);
             break;
         }
+        case CRRECORDDATA: {
+            (void)sprintf(frstr, "FR%03d", g_crrecordplccount);
+            (void)sprintf(str, "{\n    \"devNumber\":\"%s\",\n    \"devId\":\"%s\",\n    \"devName\":\"%s\",\n"  
+		        "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
+                "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
+		        "    \"valueUnit\":\"NULL\",\n    \"value\":\"%.2f\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n};;**##", \ 
+            g_devId, jsondata.devId, jsondata.devName, FREEZERDEVTYPEID, DEVTYPENAME, GetStaIp(), frstr, jsondata.orderName, DEVTIMEMODE, GetMilliTimeNow(),
+            crdata.tempControl.tempzoom[g_crrecordplccount - 1]);
+            break;
+        }
         default: {
             break;
         }
@@ -672,11 +790,21 @@ void uart_init(void) {
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK
+    /*
     const uart_config_t uart_config = {
         .baud_rate = 9600,
         .data_bits = UART_DATA_7_BITS,
         .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_2,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+    */
+    const uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
@@ -751,7 +879,7 @@ void tx_task(void *arg)
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
-        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17 | BIT_18 | BIT_19 | BIT_20, pdTRUE, pdFALSE, (TickType_t)10);
+        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17 | BIT_18 | BIT_19 | BIT_20 | BIT_21, pdTRUE, pdFALSE, (TickType_t)10);
         if ((uxBits & BIT_14) != 0) {
 #ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
             SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount); //  设置加注量
@@ -800,17 +928,23 @@ void tx_task(void *arg)
             if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
                 ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: freezerdata event");
             }
+        } else if ((uxBits & BIT_21) != 0) {
+            ParseOpCode(controlerStr, CRRECORDDATA);
+            if (xQueueSend(xQueue1, (void *)&sendaddr, (TickType_t)10) != pdPASS) {
+                ESP_LOGE(TX_TASK_TAG, "Error occurred during sending queue: freezerdata event");
+            }
         }
     }
     vTaskDelete(NULL);
 }
 
-#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO)
+#if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
+   || (defined CONFIG_PLC_MODBUS_CONNECT_RS232) || (defined CONFIG_PLC_MODBUS_CONNECT_RS485) 
 void rx_task(void *arg)
 {
     static const char *RX_TASK_TAG = "RX_TASK";
     uint32_t sendaddr = (uint32_t)&controlerStr;
-    int ret = 0;
+    int ret = 1;   
 
     TickType_t xLastWakeTime;
 #ifdef CONFIG_TESTER_AINUO
@@ -830,6 +964,7 @@ void rx_task(void *arg)
 
 #ifdef CONFIG_PLC_FX_CONNECT_RS485
         ret = GetSerialDataFromFxPlc();
+        // ret = 0;// 跑假数据强制让ret = 0 
 #endif
 
 #ifdef CONFIG_PLC_FX_CONNECT_NETWORK

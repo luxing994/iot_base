@@ -61,11 +61,8 @@ typedef struct
     float holding_data1;
     float holding_data2;
     float holding_data3;
-    uint16_t test_regs[150];
     float holding_data4;
     float holding_data5;
-    float holding_data6;
-    float holding_data7;
 } holding_reg_params_t;
 #pragma pack(pop)
 

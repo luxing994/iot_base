@@ -3,7 +3,7 @@
 
 void uart_init(void);
 void tx_task(void *arg);
-// void rx_task(void *arg);
+void rx_task(void *arg);
 void rx_modbus_task(void *arg);
 void rx_ppi_task(void *arg);
 void uart_event_task(void *pvParameters);

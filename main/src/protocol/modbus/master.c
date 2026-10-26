@@ -16,13 +16,15 @@
 #define TEMP_CONTROLER    1
 #define MOTOR             2
 #define FREEZER           3
+#define RECORD            4
 
 #define AIR_SWITCH_SPEED      9600
 #define TEMP_CONTROLER_SPEED  9600
 #define MOTOR_SPEED           19200
 #define FREEZER_SPEED         4800
+#define RECORD_SPEED          9600
 
-#define DEVICE_VERSION    FREEZER
+#define DEVICE_VERSION    RECORD
 
 #define MB_PORT_NUM       1   // Number of UART port used for Modbus connection
 #define MB_DEV_SPEED      9600  // The communication speed of the UART
@@ -91,10 +93,21 @@ enum {
     CID_HOLD_DATA_1,
     CID_COUNT
 };
-#else
+#elif DEVICE_VERSION == FREEZER
 // Enumeration of all supported CIDs for device (used in parameter definition table)
 enum {
     CID_HOLD_DATA_0 = 0,
+    CID_COUNT
+};
+#elif DEVICE_VERSION == RECORD
+// Enumeration of all supported CIDs for device (used in parameter definition table)
+enum {
+    CID_HOLD_DATA_0 = 0,
+    CID_HOLD_DATA_1,
+    CID_HOLD_DATA_2,
+    CID_HOLD_DATA_3,
+    CID_HOLD_DATA_4,
+    CID_HOLD_DATA_5,
     CID_COUNT
 };
 #endif
@@ -118,30 +131,88 @@ const mb_parameter_descriptor_t device_parameters[] = {
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 74, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 75, 1,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data1), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 12, 1,
-            HOLD_OFFSET(holding_data2), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data2), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
 #elif DEVICE_VERSION == MOTOR
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
     { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 1, 1,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data1), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
 };
-#else
+#elif DEVICE_VERSION == FREEZER
 const mb_parameter_descriptor_t device_parameters[] = {
     // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
     { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 7, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_FLOAT, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
+};
+#elif DEVICE_VERSION == RECORD
+const mb_parameter_descriptor_t device_parameters[] = {
+    {   CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x2000,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data0),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
+    {   CID_HOLD_DATA_1, STR("Data_channel_1"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x2002,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data1),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
+    {   CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x2004,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data2),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
+    {   CID_HOLD_DATA_3, STR("Data_channel_3"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x2006,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data3),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
+    {   CID_HOLD_DATA_4, STR("Data_channel_4"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x2008,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data4),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
+    {   CID_HOLD_DATA_5, STR("Data_channel_5"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
+        0x200a,            /* 起始地址：高16位在 0x2000 */
+        2,                 /* 读 2 个寄存器 = 32 位 */
+        HOLD_OFFSET(holding_data5),         /* 指向 float 变量 */
+        PARAM_TYPE_FLOAT,                   /* 浮点 */
+        4,                                   /* 数据大小：4 字节 */
+        OPTS(-40, 100, 1),
+        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
+    },
 };
 #endif
 
 TempControlTransData tempTransData = {0, 0, -1};
 ElectroFactoryData electroData = {0};
+CRFactoryData crdata = {0};
 
 // Calculate number of parameters in the table
 const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_parameters[0]));
@@ -242,6 +313,15 @@ void ParseFreezerData(uint16_t cid, int data)
         xEventGroupSetBits(xEventGroup1, BIT_20);
     }
 }
+#elif DEVICE_VERSION == RECORD
+void ParseRecordData(uint16_t cid, float data)
+{
+    if (data != 0) {
+        crdata.tempControl.tempzoom[cid] = data;
+        g_crrecordplccount = cid + 1;
+        xEventGroupSetBits(xEventGroup1, BIT_21);
+    }
+}
 #endif
 // User operation function to read slave values and check alarm
 void master_operation_func(void *arg)
@@ -251,6 +331,9 @@ void master_operation_func(void *arg)
     int dvalue = 0;
     bool alarm_state = false;
     const mb_parameter_descriptor_t* param_descriptor = NULL;
+    int high_first = 1;
+    uint16_t highword = 0;
+    uint16_t lowword = 0;
 
     ESP_LOGI(MASTER_TAG, "Start modbus test...");
     
@@ -272,35 +355,57 @@ void master_operation_func(void *arg)
                 err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
                                                     (uint8_t*)&dvalue, &type);
                 if (err == ESP_OK) {
-                    *(uint16_t* )temp_data_ptr = dvalue;
-                    if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
-                        (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
-                        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
-                                        param_descriptor->cid,
-                                        (char*)param_descriptor->param_key,
-                                        (char*)param_descriptor->param_units,
-                                        dvalue,
-                                        *(uint32_t*)temp_data_ptr);
-#if DEVICE_VERSION == TEMP_CONTROLER
-                        ParseTemperatureData(param_descriptor->cid, dvalue);
-#elif DEVICE_VERSION == MOTOR
-                        ParseMotorData(param_descriptor->cid, dvalue);
-#elif DEVICE_VERSION == FREEZER
-                        ParseFreezerData(param_descriptor->cid, dvalue);
+                    if (type == PARAM_TYPE_FLOAT) {
+                        if (high_first) {
+                                highword = (dvalue >> 16) & 0xffff;
+                                lowword =  dvalue & 0xffff;
+                                dvalue = lowword << 16 | highword;
+                        } 
+                        memcpy(temp_data_ptr, &dvalue, sizeof(float));   // 按位拷贝，不做数值转换
+                        value = *((float *)&dvalue);
+                        if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
+                            (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
+                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %f (0x%x) read successful.",
+                                            param_descriptor->cid,
+                                            (char*)param_descriptor->param_key,
+                                            (char*)param_descriptor->param_units,
+                                            value,
+                                            *(uint32_t*)temp_data_ptr);
+#if DEVICE_VERSION == RECORD
+                            ParseRecordData(param_descriptor->cid, value);
 #endif
+                        }
                     } else {
-                        uint16_t state = *(uint16_t*)temp_data_ptr;
-                        const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
-                        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %s (0x%x) read successful.",
-                                        param_descriptor->cid,
-                                        (char*)param_descriptor->param_key,
-                                        (char*)param_descriptor->param_units,
-                                        (const char*)rw_str,
-                                        *(uint16_t*)temp_data_ptr);
-                        if (state & param_descriptor->param_opts.opt1) {
-                            alarm_state = true;
-                            ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
-                                    param_descriptor->cid);
+                        *(uint16_t* )temp_data_ptr = dvalue;
+                        if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
+                            (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
+                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
+                                            param_descriptor->cid,
+                                            (char*)param_descriptor->param_key,
+                                            (char*)param_descriptor->param_units,
+                                            dvalue,
+                                            *(uint32_t*)temp_data_ptr);
+#if DEVICE_VERSION == TEMP_CONTROLER
+                            ParseTemperatureData(param_descriptor->cid, dvalue);
+#elif DEVICE_VERSION == MOTOR
+                            ParseMotorData(param_descriptor->cid, dvalue);
+#elif DEVICE_VERSION == FREEZER
+                            ParseFreezerData(param_descriptor->cid, dvalue);
+#endif
+                        } else {
+                            uint16_t state = *(uint16_t*)temp_data_ptr;
+                            const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
+                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %s (0x%x) read successful.",
+                                            param_descriptor->cid,
+                                            (char*)param_descriptor->param_key,
+                                            (char*)param_descriptor->param_units,
+                                            (const char*)rw_str,
+                                            *(uint16_t*)temp_data_ptr);
+                            if (state & param_descriptor->param_opts.opt1) {
+                                alarm_state = true;
+                                ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
+                                        param_descriptor->cid);
+                            }
                         }
                     }
                 } else {
@@ -390,9 +495,18 @@ esp_err_t master_init(void)
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
-#else 
+#elif DEVICE_VERSION == FREEZER
     const uart_config_t uart_config = {
         .baud_rate = FREEZER_SPEED,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
+    };
+#elif DEVICE_VERSION == RECORD
+    const uart_config_t uart_config = {
+        .baud_rate = RECORD_SPEED,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -404,12 +518,12 @@ esp_err_t master_init(void)
     // Initialize and start Modbus controller
     mb_communication_info_t comm = {
             .port = MB_PORT_NUM,
-#if CONFIG_MB_COMM_MODE_ASCII
-            .mode = MB_MODE_ASCII,
-#elif CONFIG_MB_COMM_MODE_RTU
+// #if CONFIG_MB_COMM_MODE_ASCII
+//             .mode = MB_MODE_ASCII,
+// #elif CONFIG_MB_COMM_MODE_RTU
             .mode = MB_MODE_RTU,
-#endif
-            .baudrate = MB_DEV_SPEED,
+//#endif
+            .baudrate = uart_config.baud_rate,
             .parity = MB_PARITY_NONE
     };
     void* master_handler = NULL;

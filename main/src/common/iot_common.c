@@ -5,6 +5,7 @@
 #include <math.h>
 #include "esp_log.h"
 #include "iot_common.h"
+#include "time.h"
 
 const uint16_t polynom = 0xA001;
 RingBuffer uart2Buffer;
@@ -266,4 +267,32 @@ int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
         return -1;
     }
 	return 0;
+}
+
+// 
+int get_random_range_freq(int min_val, int max_val)
+{
+    int current_value = 0;
+    int seeded = 0;
+
+    uint64_t now = GetMilliTimeNow();   // 微秒
+
+    // 参数保护
+    if (min_val > max_val)
+    {
+        int temp = min_val;
+        min_val = max_val;
+        max_val = temp;
+    }
+
+    // 初始化随机种子（只执行一次）
+    if (!seeded)
+    {
+        srand((unsigned int)now);
+        seeded = 1;
+    }
+
+    current_value = min_val + (rand() % (max_val - min_val + 1));
+
+    return current_value;
 }

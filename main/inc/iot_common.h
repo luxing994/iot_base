@@ -49,7 +49,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "CRKZG001"
+#define DEVID        "JXGS001"
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -175,6 +175,14 @@ typedef struct {
     AirSwitchData switchData;
 } ElectroFactoryData;
 
+typedef struct {
+    float tempzoom[6];
+} TempRecordData;
+
+typedef struct {
+    TempRecordData tempControl;
+} CRFactoryData;
+
 // 生能1-4车间冷媒灌注机设置数据格式
 typedef struct {
     char *select;
@@ -227,6 +235,7 @@ typedef struct {
 } SNHostLinkCaclReFillingMachine;
 
 extern ElectroFactoryData electroData;
+extern CRFactoryData crdata;
 extern int g_fxplccount;
 extern int g_fxplcdataformat;
 extern int g_fxplcbitpos;
@@ -239,6 +248,7 @@ extern int g_hostlinkplcdataformat;
 extern int g_hostlinkplcbitpos;
 extern int g_lsplccount;
 extern int g_lsplcdataformat;
+extern int g_crrecordplccount;
 extern uint64_t g_baseTime;
 
 uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
@@ -263,5 +273,6 @@ int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 int PPIPLC_InitBuffer(void);
 int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
 int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
+int get_random_range_freq(int min_val, int max_val);
 
 #endif

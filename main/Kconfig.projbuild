@@ -101,6 +101,39 @@ menu "Server Mode Configuration"
             Keep-alive probe packet retry count.
 endmenu
 
+menu "Sensor Configuration"
+
+config SENSOR_MAX6675
+    bool "Enable MAX6675 thermocouple sensor"
+    default n
+
+if SENSOR_MAX6675
+
+config MAX6675_CS_GPIO
+    int "MAX6675 CS GPIO number"
+    default 10
+    range 0 48
+    help
+        GPIO pin connected to MAX6675 CS (chip select, active low).
+
+config MAX6675_SCK_GPIO
+    int "MAX6675 SCK GPIO number"
+    default 12
+    range 0 48
+    help
+        GPIO pin connected to MAX6675 SCK (clock).
+
+config MAX6675_SO_GPIO
+    int "MAX6675 SO GPIO number (MISO)"
+    default 13
+    range 0 48
+    help
+        GPIO pin connected to MAX6675 SO (serial output / MISO).
+
+endif # SENSOR_MAX6675
+
+endmenu
+
 menu "PLC Communication Configuration"
 
 menuconfig PLC_PROTOCOLS_ENABLED

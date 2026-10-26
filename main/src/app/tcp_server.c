@@ -235,6 +235,7 @@ void ParseCommandJsonData(cJSON *root)
         token = cJSON_GetObjectItem(root, "parameters");
         if (token != NULL) {
             g_setsnrefillingmachine.setchargeamount = atof((token->valuestring));
+            ESP_LOGI(TAG, "paradatatype: %.2f", g_setsnrefillingmachine.setchargeamount);
         }
 
         token = cJSON_GetObjectItem(root, "parameterType");
@@ -1290,6 +1291,8 @@ void send_data_task(void *pvParameters)
             // SerialReadSingleFloatDataRegister(0, 255, 10, 352, 12);        // 产品加工长度（2号）
             // SerialReadSingleFloatDataRegister(0, 255, 10, 2520, 13);       // 扩口当前位置（2号）
             // SerialReadSingleFloatDataRegister(0, 255, 10, 8350, 14);       // 送料当前位置（2号）
+
+            // SerialReadSingleDataRegister(0, 255, 10, 8340, 1);        // 嘉兴假数据
         #endif
 #endif
 

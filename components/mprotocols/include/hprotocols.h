@@ -17,6 +17,7 @@
 #define LSPLCDEMODATA       38
 #define PPIPLCDEMODATA      39
 #define MODBUSPLCDEMODATA   40
+#define CRRECORDDATA        41
 
 #define VERSION_SIZE        4
 

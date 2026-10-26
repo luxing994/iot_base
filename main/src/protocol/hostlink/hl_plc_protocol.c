@@ -176,7 +176,7 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_SHORT;
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
@@ -186,7 +186,7 @@ void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_BIT;
 	g_hostlinkplcbitpos = bitpos;
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
@@ -195,7 +195,7 @@ void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_FLOAT;
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
@@ -204,7 +204,7 @@ void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_BCD;
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLWriteBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t data, uint16_t frnum)
@@ -213,7 +213,7 @@ void HLWriteBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t data, uin
 	// feedback_data = feedback_data | (0x0001 << bitpos);
 	HLPackWriteWordCIORegisterFrame(address, bitpos, data, &hlwbdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwbdatabuff, sizeof(HostLinkWriteCIOCommandFrameFormat));
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLWriteRealDataRegister(uint32_t address, float wdata)
@@ -227,7 +227,7 @@ void HLWriteRealDataRegister(uint32_t address, float wdata)
 	
 	HLPackWriteRealDataRegisterFrame(address, (uint8_t *)sfdata, &hlwrdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwrdatabuff, sizeof(HostLinkWriteRealCommandFrameFormat));
-    vTaskDelay(30);
+    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 int GetSerialWordDataFromHlPlc(void)

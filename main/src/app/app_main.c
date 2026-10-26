@@ -13,6 +13,7 @@
 #include "tcp_server.h"
 #include "uart_task.h"
 #include "sensor.h"
+#include "max6675.h"
 #include "fx_plc_protocol.h"
 #include "master.h"
 #include "tcp_master.h"
@@ -44,6 +45,9 @@ void app_main(void)
     uart_init();
 #endif
     InitSensorGpio();
+#ifdef CONFIG_SENSOR_MAX6675
+    MAX6675_Init();
+#endif
     FXPLC_InitBuffer();
     MODBUSPLC_InitBuffer();
     PPIPLC_InitBuffer();
@@ -53,7 +57,7 @@ void app_main(void)
     xEventGroup2 = xEventGroupCreate();
     xEventGroup3 = xEventGroupCreate();
 
-    // xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
+    xTaskCreate(rx_task, "uart_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*8, NULL, configMAX_PRIORITIES - 3, NULL);
 #if (defined CONFIG_PLC_FX) || (defined CONFIG_PLC_HOSTLINK) || (defined CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI) || (defined CONFIG_TESTER_76T) || (defined CONFIG_TESTER_AINUO) \
 || (defined CONFIG_PLC_MODBUS_CONNECT_NETWORK)
@@ -73,6 +77,9 @@ void app_main(void)
 #if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
     xTaskCreate(tcp_ppi_client_task, "tcp_ppi_client", 1024*8, NULL, 5, NULL);
     xTaskCreate(rx_ppi_task, "tcp_ppi_rx_task", 1024*8, NULL, configMAX_PRIORITIES - 2, NULL);
+#endif
+#ifdef CONFIG_SENSOR_MAX6675
+    xTaskCreate(max6675_task, "max6675_task", 1024*4, NULL, 5, NULL);
 #endif
     xTaskCreate(tcp_client3_task, "tcp_client3", 1024*8, NULL, 5, NULL);
     xTaskCreate(tcp_server_task, "tcp_server", 4096, (void*)AF_INET, 5, NULL);

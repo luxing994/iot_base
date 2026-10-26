@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#define HOSTLINK_READ_DELAY_TIME 10
 /*
 UART传输格式
 数据位：7位

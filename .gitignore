@@ -4,3 +4,5 @@ build/
 sdkconfig.old
 .vscode/
 openocd.log
+
+.claude/
