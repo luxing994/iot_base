@@ -119,8 +119,7 @@ struct ConfigData {
     uint8_t mode;
 };
 
-// 命令字段统一用定长数组保存副本，不再指向 cJSON 树（原实现解析后从不释放 cJSON，
-// 且字段缺失时为 NULL，会导致 strcmp/atoll 空指针）
+// 上位机命令字段长度与 group 命令参数表尺寸（命令处理见 host_cmd.h）
 #define CMD_STR_LEN        48
 #define CMD_SHORT_STR_LEN  16
 #define CMD_PARA_GROUPS    9
@@ -131,22 +130,6 @@ typedef struct {
     char value[CMD_SHORT_STR_LEN];
 } parametersData;
 
-typedef struct {
-    char devId[CMD_STR_LEN];
-    char devName[CMD_STR_LEN];
-    char devTypeId[CMD_STR_LEN];
-    char deviceOrderFile[CMD_STR_LEN];
-    char deviceOrderMode[CMD_SHORT_STR_LEN];
-    char groupId[CMD_SHORT_STR_LEN];
-    char deviceOrderWay[CMD_SHORT_STR_LEN];
-    char orderDate[CMD_STR_LEN];
-    char orderId[CMD_STR_LEN];
-    char orderName[CMD_STR_LEN];
-    char parameterType[CMD_STR_LEN];
-    parametersData paradata[CMD_PARA_GROUPS][CMD_PARA_ITEMS];
-    char responseType[CMD_SHORT_STR_LEN];
-    char timeStamp[CMD_STR_LEN];
-} CommandJsonData;
 
 // 电镀厂温控仪表、整流机和冷冻机数据
 typedef struct {

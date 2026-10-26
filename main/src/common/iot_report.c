@@ -6,7 +6,7 @@
 #include "iot_report.h"
 #include "iot_time.h"
 #include "tcp_client.h"
-#include "tcp_server.h"
+#include "host_cmd.h"
 
 #define VALUE_MSG_SIZE      768
 #define BATCH_MSG_EXTRA     512     // 批量报文中除三个参数串以外的固定字段长度
@@ -43,9 +43,11 @@ static const char *OrDefault(const char *value, const char *def)
 
 int IotReport_SendValueMsg(const IotValueMsg *msg)
 {
-    const CommandJsonData *cmd = GetCommandJsonData();
+    HostCmdIdentity id;
     char *buf;
     int len;
+
+    HostCmd_GetIdentity(&id);   // 上位机最近一次命令中的 devId / devName / orderName
 
     if (msg == NULL || msg->value == NULL) {
         return -1;
@@ -61,9 +63,9 @@ int IotReport_SendValueMsg(const IotValueMsg *msg)
         "    \"devTypeId\": \"%s\",\n    \"devTypeName\":\"%s\",\n    \"devIP\":\"%s\",\n"
         "    \"orderId\":\"%s\",\n    \"orderName\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
         "    \"valueUnit\":\"NULL\",\n    \"value\":\"%s\",\n    \"expand\":\"NULL\",\n    \"isAnswer\":\"no\"\n}" IOT_MSG_END,
-        OrDefault(msg->devNumber, IOT_DEV_NUMBER), OrDefault(msg->devId, cmd->devId),
-        OrDefault(msg->devName, cmd->devName), OrDefault(msg->devTypeId, ""), OrDefault(msg->devTypeName, ""),
-        GetStaIp(), OrDefault(msg->orderId, ""), OrDefault(msg->orderName, cmd->orderName),
+        OrDefault(msg->devNumber, IOT_DEV_NUMBER), OrDefault(msg->devId, id.devId),
+        OrDefault(msg->devName, id.devName), OrDefault(msg->devTypeId, ""), OrDefault(msg->devTypeName, ""),
+        GetStaIp(), OrDefault(msg->orderId, ""), OrDefault(msg->orderName, id.orderName),
         DEVTIMEMODE, (long long)GetMilliTimeNow(), msg->value);
     if (len < 0 || len >= VALUE_MSG_SIZE) {
         ESP_LOGE(TAG, "report too long: %d", len);
@@ -182,10 +184,12 @@ int IotBatch_Add(IotBatch *batch, const char *unit, const char *fmt, ...)
 
 int IotBatch_Send(const IotBatch *batch, const char *devTypeId)
 {
-    const CommandJsonData *cmd = GetCommandJsonData();
+    HostCmdIdentity id;
     size_t size;
     char *buf;
     int len;
+
+    HostCmd_GetIdentity(&id);   // 上位机最近一次命令中的 devId / orderName
 
     if (batch == NULL || batch->count == 0) {
         return -1;
@@ -205,7 +209,7 @@ int IotBatch_Send(const IotBatch *batch, const char *devTypeId)
         "    \"ParameterUnits\":\"%s\",\n"
         "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
         "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n}" IOT_MSG_END,
-        cmd->devId, devTypeId, cmd->orderName, IOT_BATCH_ORDER_ID,
+        id.devId, devTypeId, id.orderName, IOT_BATCH_ORDER_ID,
         batch->ids, batch->values, batch->units,
         GetStaIp(), DEVTIMEMODE, (long long)GetMilliTimeNow());
     if (len < 0 || (size_t)len >= size) {

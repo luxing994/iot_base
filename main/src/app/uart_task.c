@@ -20,7 +20,7 @@
 #include "iot_report.h"
 #include "plc_report.h"
 #include "uart_task.h"
-#include "tcp_server.h"
+#include "host_cmd.h"
 #include "sensor.h"
 #include "fx_plc_protocol.h"
 #include "lx_modbus_tcp_master.h"
@@ -288,17 +288,52 @@ void rx_ppi_task(void *arg)
 // 开关量计数 / 状态：沿用上位机最近一次命令中的 devTypeId 和 orderId
 static void ReportSwitch(int value)
 {
-    const CommandJsonData *cmd = GetCommandJsonData();
+    HostCmdIdentity id;
     char str[16];
     IotValueMsg msg = {
-        .devTypeId = cmd->devTypeId,
+        .devTypeId = id.devTypeId,
         .devTypeName = DEVTYPENAME,
-        .orderId = cmd->orderId,
+        .orderId = id.orderId,
         .value = str,
     };
 
+    HostCmd_GetIdentity(&id);
     snprintf(str, sizeof(str), "%d", value);
     IotReport_SendValueMsg(&msg);
+}
+
+// 上位机 single 模式命令：写冷媒灌注机充注量
+static void ApplyChargeSetting(void)
+{
+    SNSetCaclReFillingMachine charge;
+
+    HostCmd_GetChargeSetting(&charge);
+#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
+    SerialWriteSingleFloatDataRegister(0, 255, 10, 16, charge.setchargeamount);
+#endif
+
+#ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
+    if (strcmp(charge.select, "A") == 0) {
+        HLWriteRealDataRegister(8150, charge.setchargeamount);   // A充注量设定值
+        HLReadFloatDataRegister(8150, 26);                       // A充注设定值
+    } else if (strcmp(charge.select, "B") == 0) {
+        HLWriteRealDataRegister(8550, charge.setchargeamount);   // B充注量设定值
+        HLReadFloatDataRegister(8550, 27);                       // B充注设定值
+    }
+#endif
+    (void)charge;
+}
+
+// 上位机 group 模式命令：下发安规测试仪组参数
+static void ApplyTesterGroup(void)
+{
+#ifdef CONFIG_TESTER_76T
+    TTesterSetGroupPara(HostCmd_GetTesterGroup());
+#endif
+
+#ifdef CONFIG_TESTER_AINUO
+    AINUO_TTesterSetGroupPara(HostCmd_GetTesterGroup());
+#endif
 }
 
 void tx_task(void *arg)
@@ -308,35 +343,19 @@ void tx_task(void *arg)
 
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_ERROR);
     while (1) {
+        // 返回时所有等待位都会被清除，因此每一位都要独立处理（原实现用 else if，同时到达的事件会丢失）
         uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17,
                                      pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
-        if ((uxBits & BIT_14) != 0) {
-            // 上位机 single 模式命令：写冷媒灌注机充注量
-#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-            SerialWriteSingleFloatDataRegister(0, 255, 10, 16, g_setsnrefillingmachine.setchargeamount);
-#endif
-
-#ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-            if (strcmp(g_setsnrefillingmachine.select, "A") == 0) {
-                HLWriteRealDataRegister(8150, g_setsnrefillingmachine.setchargeamount);   // A充注量设定值
-                HLReadFloatDataRegister(8150, 26);                                         // A充注设定值
-            } else if (strcmp(g_setsnrefillingmachine.select, "B") == 0) {
-                HLWriteRealDataRegister(8550, g_setsnrefillingmachine.setchargeamount);   // B充注量设定值
-                HLReadFloatDataRegister(8550, 27);                                         // B充注设定值
-            }
-#endif
-        } else if ((uxBits & BIT_15) != 0) {
-            // 上位机 group 模式命令：下发安规测试仪组参数
-#ifdef CONFIG_TESTER_76T
-            TTesterSetGroupPara(GetGroupIdFromRecvJsonData());
-#endif
-
-#ifdef CONFIG_TESTER_AINUO
-            AINUO_TTesterSetGroupPara(GetGroupIdFromRecvJsonData());
-#endif
-        } else if ((uxBits & BIT_16) != 0) {
+        if (uxBits & BIT_14) {
+            ApplyChargeSetting();
+        }
+        if (uxBits & BIT_15) {
+            ApplyTesterGroup();
+        }
+        if (uxBits & BIT_16) {
             ReportSwitch(GetSwitchCount());
-        } else if ((uxBits & BIT_17) != 0) {
+        }
+        if (uxBits & BIT_17) {
             ReportSwitch(GetSwitchLevel());
         }
     }

@@ -17,7 +17,7 @@
 #include "sdkconfig.h"
 #include "iot_common.h"
 #include "plc_poll.h"
-#include "tcp_server.h"
+#include "host_cmd.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "ppi_plc_protocol.h"
@@ -37,7 +37,7 @@ void send_data_task(void *pvParameters)
     xLastWakeTime = xTaskGetTickCount();
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        if (g_devStartFlushFlag == 0) {
+        if (!HostCmd_IsCollectEnabled()) {
             // 上位机发送 EndFlush 后暂停采集，StartFlush 后恢复
         } else {
 #ifdef CONFIG_PLC_FX_CONNECT_RS232
@@ -294,10 +294,10 @@ void send_data_task(void *pvParameters)
 #endif
 
 #ifdef CONFIG_TESTER_76T
-            if (g_snttestercurrentgroup == 0) {
+            if (HostCmd_GetTesterGroup() == 0) {
                 TTesterReadCurrentGroup();
             } else {
-                TTesterReadHistoryGroup(g_snttestercurrentgroup);
+                TTesterReadHistoryGroup(HostCmd_GetTesterGroup());
             }
             
 #endif

@@ -15,7 +15,9 @@ main/
 ├── src/app/
 │   ├── app_main.c        初始化与任务创建
 │   ├── tcp_client.c      连接上位机（数据上报 / 心跳 / OTA 通道）、网口 PLC 连接与重连
-│   ├── tcp_server.c      接收上位机 JSON 命令、文件分包
+│   ├── tcp_server.c      本机 TCP 服务端（命令端口 JSON 粘包/拆包、文件端口）
+│   ├── host_cmd.c        上位机命令解析、命令状态（线程安全读取接口）、分发
+│   ├── file_transfer.c   文件分包接收
 │   ├── uart_task.c       UART1 初始化、串口收发任务、命令执行
 │   ├── plc_poll.c        ★ 设备寄存器点表：每种设备读哪些寄存器、对应哪个 FR 编号
 │   ├── plc_report.c      ★ 各协议数据解码，选择单值 / 变化 / 批量上报
