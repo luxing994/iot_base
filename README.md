@@ -18,13 +18,14 @@ main/
 │   ├── tcp_server.c      本机 TCP 服务端（命令端口 JSON 粘包/拆包、文件端口）
 │   ├── host_cmd.c        上位机命令解析、命令状态（线程安全读取接口）、分发
 │   ├── file_transfer.c   文件分包接收
-│   ├── uart_task.c       UART1 初始化、串口收发任务、命令执行
+│   ├── uart_task.c       UART1 初始化与事件任务、命令执行任务 cmd_task
 │   ├── plc_poll.c        ★ 设备寄存器点表：每种设备读哪些寄存器、对应哪个 FR 编号
 │   ├── plc_report.c      ★ 各协议数据解码，选择单值 / 变化 / 批量上报
 │   └── ota_task.c        HTTP OTA
 ├── src/common/
 │   ├── iot_report.c      ★ 统一拼装上报 JSON（单值报文、批量报文、批量采集器）
 │   ├── iot_common.c      校验、BCD、环形缓冲区封装、上报队列
+│   ├── serial_txn.c      串口同步事务（加锁、等待完整应答、回滚 / 提交）
 │   └── ringbuffer.c
 ├── src/driver/           GPIO 开关量、MAX6675 热电偶、时间基准
 └── src/protocol/         三菱 FX、欧姆龙 HostLink、西门子 PPI / S7、LS、
@@ -34,17 +35,20 @@ main/
 ## 数据流
 
 ```
-send_data_task / PlcPoll_xxxNet (plc_poll.c)   按点表发读请求，记录当前 FR 编号和数据格式
-        │
-        ▼
-协议层 Get*()  解析应答，原始数据写入环形缓冲区
-        │
-        ▼
+点表（plc_poll.c）逐点执行，每个点是一次同步事务：
+   │
+   │  串口：SerialTxn_Begin → 发请求 → SerialTxn_Wait(协议解析函数) → 解码上报 → SerialTxn_End
+   │        （serial_txn.c：串口加锁；应答未收全时回滚读位置继续等，超时放弃）
+   │  网口：由各连接任务调用 PlcPoll_xxxNet()，收到应答立即解码上报（链路失效则重连）
+   ▼
 plc_report.c   按协议 / 格式 / 字节序解码，按设备类型选择上报方式
-        │
-        ▼
+   │
+   ▼
 iot_report.c   拼装 JSON（以 ";;**##" 结尾）→ 上报队列 → tcp_client_task → 上位机
 ```
+
+上位机写命令（冷媒充注量、测试仪组参数）由 `cmd_task` 执行，同样在串口事务内收发，
+不会插进轮询的"请求-应答"中间。
 
 Modbus RTU 设备（`master.c`）、开关量中断、MAX6675 直接调用 `iot_report`。
 

@@ -206,6 +206,13 @@ int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 int PPIPLC_InitBuffer(void);
 int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
 int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
+void UART_CommitBuffer(void);
+void UART_RollbackBuffer(void);
+void UART_FlushBuffer(void);
+uint32_t UART_BufferedBytes(void);
+void FXPLC_FlushBuffer(void);
+void PPIPLC_FlushBuffer(void);
+void MODBUSPLC_FlushBuffer(void);
 int get_random_range_freq(int min_val, int max_val);
 int IOT_PostMessage(const char *msg);
 

@@ -274,7 +274,7 @@ int AINUO_TTesterResolve(void)
 	char curData[5] = {0};
     char sum[2] = {0};
     char end, command;
-    int address, ret, i;
+    int address = -1, ret, i;
 
 	while ((curData[0] != AINUO_TESTER_FRAME_HEAD) || (address != AINUO_TESTER_ADDRESS)) {
         ret = UART_ReadBufferBytes((uint8_t *)&curData[0], 4);

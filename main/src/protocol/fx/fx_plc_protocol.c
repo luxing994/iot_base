@@ -601,7 +601,6 @@ void ReadSingleDataRegister(uint16_t address, uint16_t frnum)   // RS232
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&rdatabuff, sizeof(FxPlcReadFrameFormat));
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -610,7 +609,6 @@ void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeo
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_SHORT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -619,7 +617,6 @@ void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeo
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_INT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -628,7 +625,6 @@ void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t 
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_FLOAT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -637,7 +633,6 @@ void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t time
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialReadSingleMDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum)    // RS485
@@ -646,7 +641,6 @@ void SerialReadSingleMDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t time
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&srdatabuff, PLC_SERIAL_READ_DATA_FRAME_LEAGTH);
 	g_fxplccount = frnum;
 	g_fxplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(FX_PLC_READ_DELAY_TIME);
 }
 
 void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata)    // RS485

@@ -344,138 +344,66 @@ static int PPIPackReadBitInputFrame(uint32_t address, uint8_t bit, uint8_t lengt
 
 void PPIReadBitDataRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadBitDataRegisterFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadByteDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadByteDataRegisterFrame(address, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadShortDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadWordDataRegisterFrame(address, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_SHORT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadSIntDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadWordDataRegisterFrame(address, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_INT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadFloatDataRegister(uint32_t address, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadDWordDataRegisterFrame(address, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_FLOAT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadBitOutputRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadBitOutputFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadBitInputRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadBitInputFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 void PPIReadBitMDataRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum)
 {
-	uint8_t rdata;
-
     PPIPackReadBitMDataFrame(address, bit, length, &ppircdatabuff);
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&ppircdatabuff, sizeof(PpiPlcReadCommandFrameFormat));
 	g_ppiplccount = frnum;
 	g_ppiplcdataformat = PLC_DATA_TYPE_BIT;
-    vTaskDelay(10);
-    if (g_confirmflag == 1) {
-        PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
-        uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
-        g_confirmflag = 0;
-    }
-    vTaskDelay(10);
 }
 
 int GetSerialWordDataFromPpiPlc(void)
@@ -558,4 +486,23 @@ int GetSerialWordDataFromPpiPlc(void)
     }
 
 	return 0;
+}
+
+/*
+ * PPI 读数据时 PLC 先回一个短应答（E5），主站需再发确认帧，PLC 才返回数据。
+ * GetSerialWordDataFromPpiPlc() 读到 E5 时置位请求，由串口事务层调用下面两个函数完成握手。
+ */
+int PPI_TakeConfirmRequest(void)
+{
+    if (g_confirmflag == 1) {
+        g_confirmflag = 0;
+        return 1;
+    }
+    return 0;
+}
+
+void PPISendConfirm(void)
+{
+    PPIPackDConfirmCommandDataFrame(&ppiccdatabuff);
+    uart_write_bytes(UART_NUM_1, (uint8_t *)&ppiccdatabuff, sizeof(PpiPlcConfirmCommandFrameFormat));
 }

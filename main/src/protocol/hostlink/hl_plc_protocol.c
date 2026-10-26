@@ -176,7 +176,6 @@ void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_SHORT;
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
@@ -186,7 +185,6 @@ void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_BIT;
 	g_hostlinkplcbitpos = bitpos;
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
@@ -195,7 +193,6 @@ void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_FLOAT;
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
@@ -204,7 +201,6 @@ void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
 	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
 	g_hostlinkplccount = frnum;
 	g_hostlinkplcdataformat = PLC_DATA_TYPE_BCD;
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
 }
 
 void HLWriteBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t data, uint16_t frnum)

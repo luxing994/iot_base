@@ -171,6 +171,19 @@ endmenu
 
 menu "PLC Communication Configuration"
 
+config IOT_SERIAL_TIMEOUT_MS
+    int "Serial PLC response timeout (ms)"
+    range 50 5000
+    default 500
+    help
+        Max time to wait for a complete response after each serial request.
+
+config IOT_TESTER_TIMEOUT_MS
+    int "Safety tester response timeout (ms)"
+    range 50 5000
+    default 1000
+
+
 menuconfig PLC_PROTOCOLS_ENABLED
     bool "Enable PLC protocols"
     default y

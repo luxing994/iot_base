@@ -175,6 +175,8 @@ int UART_InitBuffer(void)
     if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {
         return -1;
     }
+    // 串口接收缓冲使用事务模式：帧未收全时回滚，已读字节不丢失（见 serial_txn.c）
+    RING_SetTransactional(&uart2Buffer, 1);
 
     return 0;
 }
@@ -318,4 +320,41 @@ int get_random_range_freq(int min_val, int max_val)
     current_value = min_val + (rand() % (max_val - min_val + 1));
 
     return current_value;
+}
+/* ----------------------------------------------------- 串口接收缓冲事务接口 */
+
+void UART_CommitBuffer(void)
+{
+    RING_Commit(&uart2Buffer);
+}
+
+void UART_RollbackBuffer(void)
+{
+    RING_Rollback(&uart2Buffer);
+}
+
+void UART_FlushBuffer(void)
+{
+    RING_Flush(&uart2Buffer);
+}
+
+uint32_t UART_BufferedBytes(void)
+{
+    return RING_Count(&uart2Buffer);
+}
+
+/* 协议层解码数据缓冲：每次解析前清空，避免半帧残留 */
+void FXPLC_FlushBuffer(void)
+{
+    RING_Flush(&dataRegisterBuffer);
+}
+
+void PPIPLC_FlushBuffer(void)
+{
+    RING_Flush(&ppidataRegisterBuffer);
+}
+
+void MODBUSPLC_FlushBuffer(void)
+{
+    RING_Flush(&modbusdataRegisterBuffer);
 }

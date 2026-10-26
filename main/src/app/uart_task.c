@@ -2,10 +2,9 @@
  * UART1 驱动与串口相关任务
  *
  *   uart_event_task : UART 驱动事件 -> 把收到的字节写入 uart2Buffer
- *   rx_task         : 周期调用协议层解析应答，解析成功后交给 plc_report 解码上报
- *   rx_modbus_task  : Modbus TCP 读到数据后解码上报
- *   rx_ppi_task     : S7 网口读到数据后解码上报
  *   cmd_task        : 执行上位机命令（写 PLC / 测试仪参数），上报开关量中断事件
+ *
+ * 串口请求与应答的配对由 serial_txn.c 的事务完成，轮询见 plc_poll.c
  */
 #include <string.h>
 #include <stdlib.h>
@@ -22,9 +21,8 @@
 #include "uart_task.h"
 #include "host_cmd.h"
 #include "sensor.h"
+#include "serial_txn.h"
 #include "fx_plc_protocol.h"
-#include "lx_modbus_tcp_master.h"
-#include "lx_s7comm.h"
 #include "hl_plc_protocol.h"
 #include "ls_plc_load_protocol.h"
 #include "ppi_plc_protocol.h"
@@ -36,7 +34,6 @@
 #define TXD_PIN            (GPIO_NUM_17)
 #define RXD_PIN            (GPIO_NUM_18)
 #define RTS_PIN            (GPIO_NUM_8)
-#define TESTER_JSON_SIZE   2048
 
 
 
@@ -166,123 +163,6 @@ void uart_event_task(void *pvParameters)
 
 #endif /* APP_UART_ENABLED */
 
-/* ------------------------------------------------------------- 接收任务 */
-
-#ifdef APP_RX_TASK_ENABLED
-
-#if defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
-static char s_testerJson[TESTER_JSON_SIZE];
-#endif
-
-// 解析一次各协议的应答，成功则解码上报
-static void RxPollOnce(void)
-{
-    int ret;
-
-#if defined(CONFIG_PLC_FX)
-#if defined(CONFIG_PLC_FX_CONNECT_RS232)
-    ret = GetDataFromFxPlc();
-#elif defined(CONFIG_PLC_FX_CONNECT_RS485)
-    ret = GetSerialDataFromFxPlc();
-#else
-    ret = GetNetDataFromFxPlc();
-#endif
-    if (ret == 0) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-        SendAckToPlc();
-#endif
-        PlcReport_Fx();
-    }
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-    else {
-        // 注意：缓冲区为空时也会走到这里，与原实现一致，每个周期都会回 NAK
-        SendNackToPlc();
-    }
-#endif
-#endif
-
-#if defined(CONFIG_PLC_HOSTLINK_CONNECT_RS232) || defined(CONFIG_PLC_HOSTLINK_CONNECT_RS485)
-    if (GetSerialWordDataFromHlPlc() == 0) {
-        PlcReport_HostLink();
-    }
-#endif
-
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-    if (GetSerialWordDataFromPpiPlc() == 0) {
-        PlcReport_Ppi();
-    }
-#endif
-
-#if defined(CONFIG_PLC_LS_LOAD_CONNECT_RS232)
-    if (DBSGetData() == 0) {
-        PlcReport_Ls();
-    }
-#endif
-
-#if defined(CONFIG_TESTER_76T)
-    if (TTesterResolve() == 0) {
-        TTesterGetJsonData(s_testerJson);
-        IOT_PostMessage(s_testerJson);
-    }
-#endif
-
-#if defined(CONFIG_TESTER_AINUO)
-    if (AINUO_TTesterResolve() == 0) {
-        AINUO_TTesterGetJsonData(s_testerJson);
-        IOT_PostMessage(s_testerJson);
-    }
-#endif
-
-    (void)ret;
-}
-
-void rx_task(void *arg)
-{
-    static const char *RX_TASK_TAG = "RX_TASK";
-#ifdef CONFIG_TESTER_AINUO
-    const TickType_t xFrequency = pdMS_TO_TICKS(1000);
-#else
-    const TickType_t xFrequency = pdMS_TO_TICKS(100);
-#endif
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    esp_log_level_set(RX_TASK_TAG, ESP_LOG_ERROR);
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        RxPollOnce();
-    }
-}
-
-#endif /* APP_RX_TASK_ENABLED */
-
-#ifdef CONFIG_PLC_MODBUS_CONNECT_NETWORK
-void rx_modbus_task(void *arg)
-{
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100));
-        if (GetNetDataFromModbusPlc() == 0) {
-            PlcReport_ModbusNet();
-        }
-    }
-}
-#endif
-
-#ifdef CONFIG_PLC_PPI_CONNECT_NETWORK
-void rx_ppi_task(void *arg)
-{
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    while (1) {
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100));
-        if (GetNetDataFromS7PlcNet() == 0) {
-            PlcReport_Ppi();
-        }
-    }
-}
-#endif
-
 /* ------------------------------------------------------------- 命令任务 */
 
 // 开关量计数 / 状态：沿用上位机最近一次命令中的 devTypeId 和 orderId
@@ -302,37 +182,55 @@ static void ReportSwitch(int value)
     IotReport_SendValueMsg(&msg);
 }
 
-// 上位机 single 模式命令：写冷媒灌注机充注量
+// 上位机 single 模式命令：写冷媒灌注机充注量（写完回读设定值，供 host_cmd 判断是否回复 "true"）
 static void ApplyChargeSetting(void)
 {
     SNSetCaclReFillingMachine charge;
 
     HostCmd_GetChargeSetting(&charge);
 #ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
+    SerialTxn_Begin();
     SerialWriteSingleFloatDataRegister(0, 255, 10, 16, charge.setchargeamount);
+    SerialTxn_End();
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
+    uint32_t address = 0;
+    int frnum = 0;
+
     if (strcmp(charge.select, "A") == 0) {
-        HLWriteRealDataRegister(8150, charge.setchargeamount);   // A充注量设定值
-        HLReadFloatDataRegister(8150, 26);                       // A充注设定值
+        address = 8150;     // A充注量设定值 -> FR026
+        frnum = 26;
     } else if (strcmp(charge.select, "B") == 0) {
-        HLWriteRealDataRegister(8550, charge.setchargeamount);   // B充注量设定值
-        HLReadFloatDataRegister(8550, 27);                       // B充注设定值
+        address = 8550;     // B充注量设定值 -> FR027
+        frnum = 27;
+    }
+    if (address != 0) {
+        SerialTxn_Begin();
+        HLWriteRealDataRegister(address, charge.setchargeamount);
+        SerialTxn_End();
+        SERIAL_TXN(HLReadFloatDataRegister(address, frnum), GetSerialWordDataFromHlPlc,
+                   SERIAL_TXN_TIMEOUT_MS, PlcReport_HostLink());
     }
 #endif
     (void)charge;
 }
 
-// 上位机 group 模式命令：下发安规测试仪组参数
+// 上位机 group 模式命令：下发安规测试仪组参数（应答只用于确认，不上报）
 static void ApplyTesterGroup(void)
 {
 #ifdef CONFIG_TESTER_76T
+    SerialTxn_Begin();
     TTesterSetGroupPara(HostCmd_GetTesterGroup());
+    SerialTxn_Wait(TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_End();
 #endif
 
 #ifdef CONFIG_TESTER_AINUO
+    SerialTxn_Begin();
     AINUO_TTesterSetGroupPara(HostCmd_GetTesterGroup());
+    SerialTxn_Wait(AINUO_TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_End();
 #endif
 }
 

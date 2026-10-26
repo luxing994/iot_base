@@ -156,5 +156,7 @@ void PPIReadBitInputRegister(uint32_t address, uint8_t bit, uint8_t length, uint
 void PPIReadBitOutputRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum);
 void PPIReadBitMDataRegister(uint32_t address, uint8_t bit, uint8_t length, uint16_t frnum);
 int GetSerialWordDataFromPpiPlc(void);
+int PPI_TakeConfirmRequest(void);
+void PPISendConfirm(void);
 
 #endif
