@@ -1,6 +1,7 @@
 #ifndef IOT_COMMON_H
 #define IOT_COMMON_H
 
+#include "sdkconfig.h"
 #include "ringbuffer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -53,7 +54,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_31	( 1 << 31 )
 
 #define ID           "123"
-#define DEVID        "JXGS001"
+#define DEVID        CONFIG_IOT_DEVICE_ID   // menuconfig -> Device Identity
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"
@@ -78,6 +79,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define LSPLCDEVTYPEID    "LSPLC"
 #define HLPLCDEVTYPEID    "HLPLC"
 #define MDPLCDEVTYPEID    "MDPLC"
+#define PPIPLCDEVTYPEID   "PPIPLC"
 
 #define PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI 0
 #define PLC_DATA_TYPE_SHORT                      1

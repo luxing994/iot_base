@@ -1,6 +1,8 @@
 #ifndef T_TESTER_PROTOCOL_H
 #define T_TESTER_PROTOCOL_H
 
+#include "iot_common.h"   // parametersData
+
 /*
 安全测试仪 76T协议
 UART传输格式
@@ -390,5 +392,11 @@ void TTesterGetJsonData(char *str);
 uint16_t TTesterStrChangeToUint(char *str);
 int TTesterGetSetParaStatus(char *str);
 int TTesterResolve(void);
+
+// 测试项参数个数 / 字节数表与当前 group 命令选中的测试项（定义于 t_tester_protocol.c）
+extern int ttestparanum[10];
+extern int ttestparabytenum[10];
+extern int tterterparasetstatus[9];
+void TTesterApplyItemParams(int item, parametersData *para);
 
 #endif

@@ -2,6 +2,7 @@
 #define AINUO_TESTER_ASCII_PROTOCOL_H
 
 #include <stdint.h>
+#include "iot_common.h"   // parametersData
 
 /*
 AINUO安全测试仪 ASCII协议
@@ -181,5 +182,6 @@ void AINUO_TTesterReadCurrentGroup(void);
 void AINUO_TTesterSetGroupPara(uint16_t group);
 void AINUO_TTesterGetJsonData(char *str);
 int AINUO_TTesterResolve(void);
+void AINUO_TTesterApplyItemParams(int item, parametersData *para);
 
 #endif

@@ -336,3 +336,96 @@ int AINUO_TTesterResolve(void)
     AINUO_TTesterPackJsonFrame();
 	return 0;
 }
+
+// 把上位机 group 命令中一个测试项的参数写入对应的设置结构体（原位于 tcp_server.c）
+void AINUO_TTesterApplyItemParams(int item, parametersData *para)
+{
+    switch (item) {
+    case TTESTERPRESSURIZATION: {
+
+        ainuosetpressurizationtestdata.voltage = atof(para[0].value);
+        ainuosetpressurizationtestdata.current1 = atof(para[1].value);
+        ainuosetpressurizationtestdata.current2 = atof(para[2].value);
+        ainuosetpressurizationtestdata.uptime = atof(para[3].value);
+        ainuosetpressurizationtestdata.downtime = atof(para[4].value);
+        ainuosetpressurizationtestdata.testtime = atof(para[5].value);
+        ainuosetpressurizationtestdata.startpoint = atoi(para[6].value);
+        ainuosetpressurizationtestdata.condition = atoi(para[7].value);
+        
+        break;
+    }
+    case TTESTERGROUNDING: {
+
+        ainuosetgroudingtestdata.current = atof(para[0].value);
+        ainuosetgroudingtestdata.resistance1 = atof(para[1].value);
+        ainuosetgroudingtestdata.resistance2 = atof(para[2].value);
+        ainuosetgroudingtestdata.testtime = atof(para[3].value);
+        break;
+    }
+    case TTESTERINSULATION: {
+
+        ainuosetinsulationtestdata.voltage = atof(para[0].value);
+        ainuosetinsulationtestdata.resistance1 = atof(para[1].value);
+        ainuosetinsulationtestdata.resistance2 = atof(para[2].value);
+        ainuosetinsulationtestdata.testtime = atof(para[3].value);
+        ainuosetinsulationtestdata.delaytime = atof(para[4].value);  // 绝缘延判定时间
+        ainuosetinsulationtestdata.uptime = atof(para[6].value);   //绝缘缓升时间
+
+        break;
+    }
+    case TTESTERLEAKAGE: {
+
+        ainuosetleakagetestdata.voltage = atof(para[0].value);
+        ainuosetleakagetestdata.current1 = atof(para[1].value);
+        ainuosetleakagetestdata.current2 = atof(para[2].value);
+        ainuosetleakagetestdata.testtime = atof(para[3].value);
+        ainuosetleakagetestdata.condition = atoi(para[4].value);
+
+        break;
+    }
+    case TTESTERPOWER: {
+
+        ainuosetpowertestdata.voltage = atof(para[0].value);
+        ainuosetpowertestdata.power1 = atof(para[3].value);
+        ainuosetpowertestdata.power2 = atof(para[4].value);
+        ainuosetpowertestdata.testtime = atof(para[6].value);
+        break;
+    }
+    case TTESTERSTARTUP: {
+
+        ainuosetstarttestdata.voltage = atof(para[0].value);
+        ainuosetstarttestdata.current1 = atof(para[3].value);
+        ainuosetstarttestdata.current2 = atof(para[4].value);
+        ainuosetstarttestdata.testtime = atof(para[6].value);
+        break;
+    }
+    case TTESTEROPENSHORT: {
+
+        ainuosetshortcircuittestdata.voltage = atof(para[0].value);
+        ainuosetshortcircuittestdata.resistance = atof(para[1].value);
+        ainuosetshortcircuittestdata.testtime = atof(para[2].value);
+        break;
+    }
+    case TTESTERDCVOLTAGE: {
+        ainuosetdcvoltagetestdata.voltage = atof(para[0].value);
+        ainuosetdcvoltagetestdata.current = atof(para[1].value);
+        ainuosetdcvoltagetestdata.testtime = atof(para[2].value);
+        ainuosetdcvoltagetestdata.condition = atoi(para[3].value);
+        ainuosetdcvoltagetestdata.uptime = atof(para[4].value);
+        ainuosetdcvoltagetestdata.startpoint = atoi(para[5].value);
+        ainuosetdcvoltagetestdata.delaytime = atof(para[6].value);
+        break;
+    }
+    case TTESTERCOMMON: {
+        ainuosetcommontestdata.compensate = atoi(para[0].value);
+        ainuosetcommontestdata.failitem = atoi(para[1].value);
+        ainuosetcommontestdata.ofrequence = atoi(para[2].value);
+        ainuosetcommontestdata.loadground = atoi(para[3].value);
+        ainuosetcommontestdata.utensiltype = atoi(para[4].value);
+        break;
+    }
+    default: {
+        break;
+    }
+    }
+}

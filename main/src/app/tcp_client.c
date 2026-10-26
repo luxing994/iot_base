@@ -26,6 +26,7 @@
 #include "lx_modbus_tcp_master.h"
 #include "lx_s7comm.h"
 #include "ota_task.h"
+#include "plc_poll.h"
 
 #if defined(CONFIG_EXAMPLE_IPV4)
 #define HOST_IP_ADDR CONFIG_EXAMPLE_IPV4_ADDR
@@ -324,8 +325,6 @@ void tcp_client3_task(void *pvParameters)
 typedef int (*PlcConnectFunc)(void);
 typedef int (*PlcPollFunc)(int sock);
 
-// 读寄存器返回 <0 表示链路失效，立即结束本轮并重连
-#define NET_READ(call)  do { if ((call) < 0) { return -1; } } while (0)
 
 static void PlcNetClientLoop(const char *tag, PlcConnectFunc connect_fn, PlcPollFunc poll_fn)
 {
@@ -357,34 +356,9 @@ static int ModbusConnect(void)
     return TcpConnect(CONFIG_PLC_MODBUS_IPV4_ADDR, CONFIG_PLC_MODBUS_TCP_PORT, "tcp modbus client");
 }
 
-static int ModbusPoll(int sock)
-{
-    // 电解炉控制柜
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 5, 23));       // 11#工作室真空度
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 7, 24));       // 11#收集室真空度
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 13, 25));      // 11#工作室压力值
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 15, 26));      // 11#收集室压力值
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 19, 27));      // 11#炉体水温
-
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 1, 28));       // 12#工作室真空度
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 3, 29));       // 12#收集室真空度
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 9, 30));       // 12#工作室压力值
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 11, 31));      // 12#收集室压力值
-    NET_READ(MODBUS_NetReadFloatRegister(sock, 17, 32));      // 12#炉体水温
-
-    // 无纸记录仪
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x2000, 1));       // 1温区温度
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x2002, 2));       // 2温区温度
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x2004, 3));       // 3温区温度
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x2006, 4));       // 4温区温度
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x2008, 5));       // 5温区温度
-    // NET_READ(MODBUS_NetReadFloatRegister(sock, 0x200A, 6));       // 6温区温度
-    return 0;
-}
-
 void tcp_modbus_client_task(void *pvParameters)
 {
-    PlcNetClientLoop("tcp modbus client", ModbusConnect, ModbusPoll);
+    PlcNetClientLoop("tcp modbus client", ModbusConnect, PlcPoll_ModbusNet);
 }
 #endif
 
@@ -394,22 +368,9 @@ static int FxConnect(void)
     return TcpConnect(CONFIG_PLC_FX_IPV4_ADDR, CONFIG_PLC_FX_TCP_PORT, "tcp fx client");
 }
 
-static int FxPoll(int sock)
-{
-    NET_READ(FX_NetReadSingleYDataRegister(sock, 94, 1));        // 正常运行状态
-    NET_READ(FX_NetReadSingleYDataRegister(sock, 93, 2));        // 暂停状态
-    NET_READ(FX_NetReadSingleYDataRegister(sock, 92, 3));        // 异常停止状态
-    NET_READ(FX_NetReadSingleDataRegister(sock, 214, 4));        // 白班生产时间
-    NET_READ(FX_NetReadSingleDataRegister(sock, 215, 5));        // 晚班生产时间
-    NET_READ(FX_NetReadDoubleDataRegister(sock, 30, 6));         // 总累计冲次
-    NET_READ(FX_NetReadSingleDataRegister(sock, 10, 7));         // 实时冲速
-    NET_READ(FX_NetReadSingleDataRegister(sock, 101, 8));        // 当前累积生产数量
-    return 0;
-}
-
 void tcp_fx_client_task(void *pvParameters)
 {
-    PlcNetClientLoop("tcp fx client", FxConnect, FxPoll);
+    PlcNetClientLoop("tcp fx client", FxConnect, PlcPoll_FxNet);
 }
 #endif
 
@@ -420,61 +381,8 @@ static int S7Connect(void)
     return s7_connect(CONFIG_PLC_PPI_IPV4_ADDR, CONFIG_PLC_PPI_TCP_PORT, &pdu_len);
 }
 
-static int S7Poll(int sock)
-{
-#ifdef CONFIG_PLC_PPI_ELECTROLYSIS_DEVICE
-    // 电解炉电解柜
-    NET_READ(S7_NetReadBitQRegister(sock, 0, 2, 1));         // 运行显示
-    NET_READ(S7_NetReadBitMRegister(sock, 2, 0, 2));         // 启动
-    NET_READ(S7_NetReadBitMRegister(sock, 2, 3, 3));         // 故障复位
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 1, 4));   // 电源输入故障
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 2, 5));   // 设备超温
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 3, 6));   // 输出过电压
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 4, 7));   // 输出过电流
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 5, 8));   // IGBT保护
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 6, 9));   // 输出低电压
-    NET_READ(S7_NetReadBitDataRegister(sock, 3315, 7, 10));  // 风扇变频故障
-    NET_READ(S7_NetReadBitDataRegister(sock, 3316, 1, 11));  // 故障显示
-    NET_READ(S7_NetReadBitMRegister(sock, 0, 7, 12));        // 急停
-    NET_READ(S7_NetReadFloatDataRegister(sock, 210, 13));    // 实时电压
-    NET_READ(S7_NetReadFloatDataRegister(sock, 214, 14));    // 实时电流
-    NET_READ(S7_NetReadFloatDataRegister(sock, 280, 15));    // 设备温度
-    NET_READ(S7_NetReadFloatDataRegister(sock, 534, 16));    // 电解AH
-    NET_READ(S7_NetReadFloatDataRegister(sock, 1648, 17));   // 电压给定
-    NET_READ(S7_NetReadFloatDataRegister(sock, 1848, 18));   // 电流给定
-    NET_READ(S7_NetReadIntDataRegister(sock, 900, 19));      // 批号
-    NET_READ(S7_NetReadSingleDataRegister(sock, 520, 20));   // 电解时间H
-    NET_READ(S7_NetReadSingleDataRegister(sock, 522, 21));   // 电解时间M
-#endif
-
-#ifdef CONFIG_PLC_PPI_CONTROLLER_DEVICE
-    // 电解炉控制柜PLC
-    NET_READ(S7_NetReadBitQRegister(sock, 8, 3, 1));         // 前置阀1开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 8, 4, 2));         // 前置阀1关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 8, 5, 3));         // 前置阀2开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 8, 6, 4));         // 前置阀2关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 0, 7, 5));         // 旁通阀输出
-    NET_READ(S7_NetReadBitQRegister(sock, 8, 7, 6));         // 粗抽阀1（左）开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 0, 7));         // 粗抽阀1（左）关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 1, 8));         // 粗抽阀2（左）开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 2, 9));         // 粗抽阀2（左）关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 3, 10));        // 粗抽阀1（右）开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 4, 11));        // 粗抽阀1（右）关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 5, 12));        // 粗抽阀2（右）开到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 9, 6, 13));        // 粗抽阀2（右）关到位指示
-    NET_READ(S7_NetReadBitQRegister(sock, 0, 0, 14));        // H-150滑阀泵输出
-    NET_READ(S7_NetReadBitQRegister(sock, 0, 1, 15));        // ZJP-1200罗茨泵输出
-    NET_READ(S7_NetReadBitIRegister(sock, 9, 0, 17));        // 插板阀开启到位(左)
-    NET_READ(S7_NetReadBitIRegister(sock, 9, 1, 18));        // 插板阀关闭到位(左)
-    NET_READ(S7_NetReadBitIRegister(sock, 9, 2, 19));        // 插板阀开启到位(右)
-    NET_READ(S7_NetReadBitIRegister(sock, 9, 3, 20));        // 插板阀关闭到位(右)
-    NET_READ(S7_NetReadFloatDataRegister(sock, 100, 22));    // 冷却水压力
-#endif
-    return 0;
-}
-
 void tcp_ppi_client_task(void *pvParameters)
 {
-    PlcNetClientLoop("tcp ppi client", S7Connect, S7Poll);
+    PlcNetClientLoop("tcp ppi client", S7Connect, PlcPoll_S7Net);
 }
 #endif

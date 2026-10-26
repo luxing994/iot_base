@@ -38,9 +38,7 @@
 #define RTS_PIN            (GPIO_NUM_8)
 #define TESTER_JSON_SIZE   2048
 
-extern SNSetCaclReFillingMachine g_setsnrefillingmachine;
 
-uint32_t g_devStartStatus = 0;
 
 /* ------------------------------------------------------------------ UART */
 

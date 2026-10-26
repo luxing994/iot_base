@@ -8,7 +8,7 @@
 #include "nvs_flash.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
-#include "addr_from_stdin.h"
+#include "lwip/sockets.h"   // AF_INET
 #include "tcp_client.h"
 #include "tcp_server.h"
 #include "uart_task.h"
@@ -18,6 +18,7 @@
 #include "master.h"
 #include "tcp_master.h"
 #include "iot_common.h"
+#include "plc_poll.h"
 
 QueueHandle_t xQueue1;
 EventGroupHandle_t xEventGroup1;

@@ -21,9 +21,10 @@
 
 #include <stdint.h>
 #include <stdarg.h>
+#include "sdkconfig.h"
 
 #define IOT_MSG_END              ";;**##"
-#define IOT_DEV_NUMBER           "IIIG_1.0"   // 报文 devNumber 字段默认值
+#define IOT_DEV_NUMBER           CONFIG_IOT_DEVICE_NUMBER   // 报文 devNumber 字段默认值（menuconfig -> Device Identity）
 #define IOT_BATCH_ORDER_ID       "BatchParameters"
 #define IOT_BATCH_MAX_POINTS     40
 

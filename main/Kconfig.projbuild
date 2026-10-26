@@ -1,16 +1,35 @@
+menu "Device Identity"
+
+    config IOT_DEVICE_ID
+        string "Device ID (devId)"
+        default "JXGS001"
+        help
+            Device ID used in online / heartbeat packets and as the default devId
+            before the host sends any command. Must be unique for every gateway.
+
+    config IOT_DEVICE_NUMBER
+        string "Device number (devNumber)"
+        default "IIIG_1.0"
+        help
+            devNumber field of data reports.
+
+endmenu
+
 menu "TCP Server IP Configuration"
 
+    # 上位机地址（本机作为客户端连接）
     choice EXAMPLE_IP_MODE
         prompt "IP Version"
-        depends on EXAMPLE_SOCKET_IP_INPUT_STRING
+        default EXAMPLE_IPV4
         help
-            Example can use either IPV4 or IPV6.
+            Host can use either IPV4 or IPV6.
 
         config EXAMPLE_IPV4
             bool "IPV4"
 
         config EXAMPLE_IPV6
             bool "IPV6"
+            select EXAMPLE_CONNECT_IPV6
 
     endchoice
 
@@ -19,68 +38,47 @@ menu "TCP Server IP Configuration"
         default "192.168.0.165"
         depends on EXAMPLE_IPV4
         help
-            The example will connect to this IPV4 address.
+            Host IPV4 address.
 
     config EXAMPLE_IPV6_ADDR
         string "IPV6 Address"
         default "FE80::30AD:E57B:C212:68AD"
         depends on EXAMPLE_IPV6
         help
-            The example will connect to this IPV6 address.
+            Host IPV6 address.
 
     config EXAMPLE_PORT
-        int "Port"
+        int "Data report port"
         range 0 65535
         default 3333
         help
-            The remote port to which the client example will connect to.
-    
+            Host port that receives data reports.
+
     config EXAMPLE_PORT1
-        int "Port1"
+        int "Online / heartbeat port"
         range 0 65535
         default 3333
         help
-            The remote port to which the client example will connect to.
-
-    choice EXAMPLE_SOCKET_IP_INPUT
-        prompt "Socket example source"
-        default EXAMPLE_SOCKET_IP_INPUT_STRING
-        help
-            Selects the input source of the IP used in the example.
-
-        config EXAMPLE_SOCKET_IP_INPUT_STRING
-            bool "From string"
-
-        config EXAMPLE_SOCKET_IP_INPUT_STDIN
-            bool "From stdin"
-    endchoice
+            Host port that receives online and heartbeat packets.
 
 endmenu
 
 menu "Server Mode Configuration"
 
-    config EXAMPLE_IPV4
-        bool "IPV4"
-        default y
-
-    config EXAMPLE_IPV6
-        bool "IPV6"
-        default n
-        select EXAMPLE_CONNECT_IPV6
-
+    # 本机监听端口（IP 版本沿用上面的 EXAMPLE_IP_MODE，原来这里重复定义了 EXAMPLE_IPV4/IPV6）
     config SERVER_PORT
-        int "Port"
+        int "Command port"
         range 0 65535
         default 3333
         help
-            Local port the example server will listen on.
-    
+            Local port that receives JSON commands from the host.
+
     config SERVER_PORT1
-        int "Port1"
+        int "File transfer port"
         range 0 65535
         default 3333
         help
-            Local port the example server will listen on.
+            Local port that receives file packets from the host.
 
     config EXAMPLE_KEEPALIVE_IDLE
         int "TCP keep-alive idle time(s)"

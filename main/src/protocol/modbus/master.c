@@ -319,7 +319,7 @@ void ParseRecordData(uint16_t cid, float data)
 {
     // 无纸记录仪：第 cid 个温区上报为 FR(cid+1)
     if (data != 0) {
-        IotReport_SendPoint(FREEZERDEVTYPEID, DEVTYPENAME, cid + 1, "%.2f", data);
+        IotReport_SendPoint(TEMPDEVTYPEID, DEVTYPENAME, cid + 1, "%.2f", data);   // 温度记录 -> WK
     }
 }
 #endif

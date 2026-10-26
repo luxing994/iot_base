@@ -512,7 +512,7 @@ static void TTesterPackJsonFrame(void)
                 "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
 		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"  
                 "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n};;**##",
-            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, VACUUMTYPEID, "read", T_TESTER_ORDERNAME, \
+            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, SAFETYTESTERTYPEID, "read", T_TESTER_ORDERNAME, \
             T_TESTER_ORDERID, T_TESTER_ORDERMODE, ttesterreadgroupnumber, ttesterparadatajsondatabuff, ttesterparaunitjsondatabuff, ttestertestresultjsondatabuff, \
             curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
 }
@@ -667,4 +667,172 @@ int TTesterResolve(void)
 
     TTesterPackJsonFrame();
 	return 0;
+}
+
+
+// 把上位机 group 命令中一个测试项的参数写入对应的设置结构体（原位于 tcp_server.c）
+void TTesterApplyItemParams(int item, parametersData *para)
+{
+    switch (item) {
+    case TTESTERPRESSURIZATION: {
+        setprepara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setprepara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setprepara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setprepara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setprepara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setprepara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setprepara.uptime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setprepara.uptime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setprepara.downtime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
+        setprepara.downtime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+        setprepara.testtime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
+        setprepara.testtime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
+        setprepara.curtozero[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setprepara.curtozero[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+        setprepara.teststatus = atoi(para[7].value);
+        setprepara.testmode = atoi(para[8].value);
+        setprepara.curset[0] = TTesterStrChangeToUint(para[9].value) >> 8;
+        setprepara.curset[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
+        setprepara.suspendtime[0] = TTesterStrChangeToUint(para[10].value) >> 8;
+        setprepara.suspendtime[1] = TTesterStrChangeToUint(para[10].value) & 0xff;
+
+        break;
+    }
+    case TTESTERGROUNDING: {
+        setgroundpara.curset[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setgroundpara.curset[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setgroundpara.resupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setgroundpara.resupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setgroundpara.reslowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setgroundpara.reslowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setgroundpara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setgroundpara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setgroundpara.testmode = atoi(para[4].value);
+        setgroundpara.suspendtime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
+        setgroundpara.suspendtime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
+        setgroundpara.res0tozero[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setgroundpara.res0tozero[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+
+        break;
+    }
+    case TTESTERINSULATION: {
+        setinspara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setinspara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setinspara.resupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setinspara.resupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setinspara.reslowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setinspara.reslowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setinspara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setinspara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setinspara.delaytime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
+        setinspara.delaytime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+        setinspara.testmode = atoi(para[5].value);
+        setinspara.suspendtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setinspara.suspendtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+        setinspara.res0tozero[0] = TTesterStrChangeToUint(para[7].value) >> 8;
+        setinspara.res0tozero[1] = TTesterStrChangeToUint(para[7].value) & 0xff;
+        setinspara.res1tozero[0] = TTesterStrChangeToUint(para[8].value) >> 8;
+        setinspara.res1tozero[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
+        setinspara.res2tozero[0] = TTesterStrChangeToUint(para[9].value) >> 8;
+        setinspara.res2tozero[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
+
+
+        break;
+    }
+    case TTESTERLEAKAGE: {
+        setleapara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setleapara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setleapara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setleapara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setleapara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setleapara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setleapara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setleapara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setleapara.teststatus = atoi(para[4].value);
+        setleapara.testmode = atoi(para[5].value);
+        setleapara.suspendtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setleapara.suspendtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+        setleapara.res0tozero[0] = TTesterStrChangeToUint(para[7].value) >> 8;
+        setleapara.res0tozero[1] = TTesterStrChangeToUint(para[7].value) & 0xff;
+        setleapara.res1tozero[0] = TTesterStrChangeToUint(para[8].value) >> 8;
+        setleapara.res1tozero[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
+        setleapara.res2tozero[0] = TTesterStrChangeToUint(para[9].value) >> 8;
+        setleapara.res2tozero[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
+        setleapara.curtozero[0] = TTesterStrChangeToUint(para[10].value) >> 8;
+        setleapara.curtozero[1] = TTesterStrChangeToUint(para[10].value) & 0xff;
+
+
+        break;
+    }
+    case TTESTERPOWER: {
+        setpowerpara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setpowerpara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setpowerpara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setpowerpara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setpowerpara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setpowerpara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setpowerpara.powerupperlim[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setpowerpara.powerupperlim[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setpowerpara.powerlowerlim[0] = TTesterStrChangeToUint(para[4].value) >> 8;
+        setpowerpara.powerlowerlim[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+        setpowerpara.delaytime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
+        setpowerpara.delaytime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
+        setpowerpara.testtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setpowerpara.testtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+        setpowerpara.testmode = atoi(para[7].value);
+        setpowerpara.suspendtime[0] = TTesterStrChangeToUint(para[8].value) >> 8;
+        setpowerpara.suspendtime[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
+        setpowerpara.voltype = atoi(para[9].value);
+
+        break;
+    }
+    case TTESTERSTARTUP: {
+        setstartuppara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setstartuppara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setstartuppara.volupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setstartuppara.volupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setstartuppara.vollowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setstartuppara.vollowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setstartuppara.curupperlim[0] = TTesterStrChangeToUint(para[3].value) >> 8;
+        setstartuppara.curupperlim[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
+        setstartuppara.curlowerlim[0] = TTesterStrChangeToUint(para[4].value) >> 8;
+        setstartuppara.curlowerlim[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+        setstartuppara.delaytime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
+        setstartuppara.delaytime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
+        setstartuppara.testtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
+        setstartuppara.testtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+        setstartuppara.testmode = atoi(para[7].value);
+        setstartuppara.suspendtime[0] = TTesterStrChangeToUint(para[8].value) >> 8;
+        setstartuppara.suspendtime[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
+        setstartuppara.voltype = atoi(para[9].value);
+
+        break;
+    }
+    case TTESTEROPENSHORT: {
+        setopenshortpara.curupperlim[0] = TTesterStrChangeToUint(para[0].value) >> 8;
+        setopenshortpara.curupperlim[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
+        setopenshortpara.curlowerlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
+        setopenshortpara.curlowerlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
+        setopenshortpara.testtime[0] = TTesterStrChangeToUint(para[2].value) >> 8;
+        setopenshortpara.testtime[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
+        setopenshortpara.testmode = atoi(para[3].value);
+        setopenshortpara.suspendtime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
+        setopenshortpara.suspendtime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+
+        break;
+    }
+    case TTESTERDCVOLTAGE: {
+        break;
+    }
+    case TTESTERCOMMON: {
+        setcommonpara.failitem = atoi(para[1].value);
+        setcommonpara.frequence = atoi(para[2].value);
+        setcommonpara.grouplink = atoi(para[3].value);
+        setcommonpara.utensiltype = atoi(para[4].value);
+        break;
+    }
+    default: {
+        break;
+    }
+    }
 }

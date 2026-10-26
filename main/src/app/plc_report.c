@@ -106,19 +106,33 @@ static __attribute__((unused)) double ValueAsDouble(const PlcValue *v)
     return (v->kind == PLC_VAL_FLOAT) ? (double)v->f : (double)v->i;
 }
 
+/*
+ * 各协议上报时使用的设备类型（devTypeId / devTypeName）。
+ * 同一协议的所有数据点都使用同一组值，不随数据格式变化。
+ */
+typedef struct {
+    const char *devTypeId;     // 设备类别：LM 冷媒灌注 / ZK 真空 / WK 温控 ...
+    const char *devTypeName;   // PLC 类别：FXPLC / HLPLC / LSPLC / PPIPLC / MDPLC
+} PlcReportType;
+
+static const PlcReportType s_fxType         = { FRIGEFILLTYPEID, FXPLCDEVTYPEID };
+static const PlcReportType s_hostLinkType   = { FRIGEFILLTYPEID, HLPLCDEVTYPEID };
+static const PlcReportType s_lsType         = { VACUUMTYPEID,    LSPLCDEVTYPEID };
+static const PlcReportType s_ppiType        = { VACUUMTYPEID,    PPIPLCDEVTYPEID };
+static const PlcReportType s_modbusNetType  = { VACUUMTYPEID,    MDPLCDEVTYPEID };
+
 /* 单值上报：整数 "%d"，浮点按 decimals 位小数，字符串原样 */
-static void SendValue(const char *devTypeId, const char *devTypeName, int frnum,
-                      const PlcValue *v, int decimals)
+static void SendValue(const PlcReportType *type, int frnum, const PlcValue *v, int decimals)
 {
     switch (v->kind) {
     case PLC_VAL_STR:
-        IotReport_SendPoint(devTypeId, devTypeName, frnum, "%s", v->s);
+        IotReport_SendPoint(type->devTypeId, type->devTypeName, frnum, "%s", v->s);
         break;
     case PLC_VAL_FLOAT:
-        IotReport_SendPoint(devTypeId, devTypeName, frnum, "%.*f", decimals, (double)v->f);
+        IotReport_SendPoint(type->devTypeId, type->devTypeName, frnum, "%.*f", decimals, (double)v->f);
         break;
     default:
-        IotReport_SendPoint(devTypeId, devTypeName, frnum, "%d", (int)v->i);
+        IotReport_SendPoint(type->devTypeId, type->devTypeName, frnum, "%d", (int)v->i);
         break;
     }
 }
@@ -290,7 +304,7 @@ void PlcReport_Fx(void)
         }
 #endif
     }
-    SendValue(FRIGEFILLTYPEID, FXPLCDEVTYPEID, frnum, &v, 2);
+    SendValue(&s_fxType, frnum, &v, 2);
 }
 
 /* --------------------------------------------------------- 欧姆龙 HostLink */
@@ -344,7 +358,7 @@ void PlcReport_HostLink(void)
         return;
     }
 #endif
-    SendValue(FRIGEFILLTYPEID, HLPLCDEVTYPEID, frnum, &v, 2);
+    SendValue(&s_hostLinkType, frnum, &v, 2);
 }
 
 /* ------------------------------------------------------------------ LS / DBS */
@@ -359,7 +373,7 @@ void PlcReport_Ls(void)
         if (ReadString(FXPLC_ReadBufferBytes, &v) != 0) {
             return;
         }
-        SendValue(VACUUMTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_lsType, frnum, &v, 2);
     } else if (g_lsplcdataformat == PLC_DATA_TYPE_SHORT) {
         // 4 个十六进制字符，前后两个字节交换
         for (int i = 0; i < 4; i++) {
@@ -368,7 +382,7 @@ void PlcReport_Ls(void)
             }
         }
         SetInt(&v, (int32_t)strtoul(buf, NULL, 16));
-        SendValue(FRIGEFILLTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_lsType, frnum, &v, 2);
     }
 }
 
@@ -393,22 +407,22 @@ void PlcReport_Ppi(void)
     case PLC_DATA_TYPE_BIT:
         if (ReadBytes(rd, 1, 1, &raw) != 0) return;
         SetInt(&v, (int32_t)raw);
-        SendValue(VACUUMTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_ppiType, frnum, &v, 2);
         break;
     case PLC_DATA_TYPE_SHORT:
         if (ReadBytes(rd, 2, PPI_LITTLE_ENDIAN, &raw) != 0) return;
         SetInt(&v, (int16_t)raw);          // S7 INT 为有符号 16 位
-        SendValue(FRIGEFILLTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_ppiType, frnum, &v, 2);
         break;
     case PLC_DATA_TYPE_INT:
         if (ReadBytes(rd, 4, PPI_LITTLE_ENDIAN, &raw) != 0) return;
         SetInt(&v, (int32_t)raw);
-        SendValue(FRIGEFILLTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_ppiType, frnum, &v, 2);
         break;
     case PLC_DATA_TYPE_FLOAT:
         if (ReadBytes(rd, 4, PPI_LITTLE_ENDIAN, &raw) != 0) return;
         SetFloat(&v, U32ToFloat(raw));
-        SendValue(FRIGEFILLTYPEID, LSPLCDEVTYPEID, frnum, &v, 2);
+        SendValue(&s_ppiType, frnum, &v, 2);
         break;
     default:
         break;
@@ -429,17 +443,17 @@ void PlcReport_ModbusNet(void)
     case PLC_DATA_TYPE_FLOAT:
         if (ReadBytes(rd, 4, 1, &raw) != 0) return;
         SetFloat(&v, U32ToFloat(raw));
-        SendValue(VACUUMTYPEID, MDPLCDEVTYPEID, frnum, &v, 3);
+        SendValue(&s_modbusNetType, frnum, &v, 3);
         break;
     case PLC_DATA_TYPE_SHORT:
         if (ReadBytes(rd, 2, 1, &raw) != 0) return;
         SetInt(&v, (int32_t)raw);
-        SendValue(VACUUMTYPEID, MDPLCDEVTYPEID, frnum, &v, 3);
+        SendValue(&s_modbusNetType, frnum, &v, 3);
         break;
     case PLC_DATA_TYPE_INT:
         if (ReadBytes(rd, 4, 1, &raw) != 0) return;
         SetInt(&v, (int32_t)raw);
-        SendValue(FRIGEFILLTYPEID, LSPLCDEVTYPEID, frnum, &v, 3);
+        SendValue(&s_modbusNetType, frnum, &v, 3);
         break;
     default:
         break;

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <strings.h>
 #include "ota_task.h"
+#include "tcp_client.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
@@ -9,7 +10,6 @@
 #include "lwip/sockets.h"
 #include "root_cert.h"
 
-extern int ota_tcp_sock;  // 与上位机的 TCP 控制通道（断线时为 -1）
 
 static const char *TAG = "OTA_TASK";
 static int64_t total_len = 0;
