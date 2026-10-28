@@ -11,39 +11,57 @@
 
 ## 目录结构
 
+按功能模块划分，每个模块的 `.c` 和 `.h` 放在同一目录（模块目录都在 include 路径中，直接 `#include "xxx.h"`）。
+
 ```
 main/
-├── src/app/
-│   ├── app_main.c        初始化与任务创建
-│   ├── tcp_client.c      连接上位机（数据上报 / 心跳 / OTA 通道）、网口 PLC 连接与重连
-│   ├── tcp_server.c      本机 TCP 服务端（命令端口 JSON 粘包/拆包、文件端口）
-│   ├── host_cmd.c        上位机命令解析、命令状态（线程安全读取接口）、分发
-│   ├── gw_config.c       运行参数（NVS 存储，出厂默认值来自 menuconfig）
-│   ├── net_manager.c     以太网 / Wi-Fi / 配置热点管理、连按复位检测
-│   ├── web_config.c      配置网页（页面在 main/web/index.html，编译时嵌入固件）
-│   ├── file_transfer.c   文件分包接收
-│   ├── uart_task.c       UART1 初始化与事件任务、命令执行任务 cmd_task
-│   ├── plc_points.c      ★ 设备点表：每种设备读哪些寄存器、对应哪个 FR 编号（按 menuconfig 选择）
-│   ├── plc_poll.c        按点表逐点轮询（串口事务 / 网口）
-│   ├── plc_report.c      ★ 选择单值 / 变化 / 批量上报
-│   └── ota_task.c        HTTP OTA
-├── src/common/
-│   ├── iot_report.c      ★ 统一拼装上报 JSON（单值报文、批量报文、批量采集器、安规测试仪组结果）
-│   ├── iot_common.c      串口接收缓冲封装、上报队列
-│   ├── serial_txn.c      串口同步事务（加锁、等待完整应答、回滚 / 提交）
-│   ├── net_io.c          网口 PLC 收发（按长度收全、超时）
+├── app_main.c / app_info.h   启动顺序、任务创建、启动信息、HEALTH 日志
+├── core/                     基础设施
+│   ├── iot_common.c          串口接收缓冲封装、上报队列
+│   ├── iot_time.c            时间基准（上位机校时）
 │   └── ringbuffer.c
-├── src/driver/           GPIO 开关量、MAX6675 热电偶、时间基准
-└── src/protocol/         三菱 FX、欧姆龙 HostLink、西门子 PPI / S7、DBS 真空计、
-                          Modbus RTU / TCP、76T 与艾诺安规测试仪；proto_util.c 为公共编解码工具
+├── config/
+│   └── gw_config.c           运行参数（用户区 / 出厂区，NVS 存储，默认值来自 menuconfig）
+├── net/
+│   └── net_manager.c         以太网 / Wi-Fi / 配置热点 / mDNS、连按复位检测
+├── host/                     与上位机通信
+│   ├── tcp_client.c          连接上位机（上报 / 心跳 / OTA 通道）、网口 PLC 连接与重连
+│   ├── tcp_server.c          本机 TCP 服务端（命令端口 JSON 粘包/拆包、文件端口）
+│   ├── host_cmd.c            上位机命令解析与分发
+│   ├── iot_report.c          ★ 统一拼装上报 JSON（单值、批量、测试仪组结果）
+│   ├── file_transfer.c       文件分包接收
+│   └── ota_task.c            HTTP OTA（root_cert.h 为证书）
+├── collect/                  设备数据采集
+│   ├── plc_points.c          ★ 设备点表：每种设备读哪些寄存器、对应哪个 FR 编号
+│   ├── plc_poll.c            按点表逐点轮询（串口事务 / 网口）
+│   ├── plc_report.c          ★ 选择单值 / 变化 / 批量上报
+│   ├── uart_task.c           UART1 初始化与事件任务、命令执行任务 cmd_task
+│   ├── serial_txn.c          串口同步事务（加锁、等待完整应答、回滚 / 提交）
+│   └── net_io.c              网口 PLC 收发（按长度收全、超时）
+├── protocol/                 设备通信协议，每种协议一个子目录
+│   ├── proto_util.c          公共编解码工具；s7_area.h 为 PPI / S7comm 共用
+│   ├── fx/ hostlink/ ppi/ s7comm/ ls/
+│   ├── 76t/ ainuo/           安规测试仪
+│   └── modbus/               Modbus RTU（esp-modbus）/ Modbus TCP
+├── driver/                   板载外设：GPIO 开关量（sensor.c）、MAX6675 热电偶
+├── diag/                     诊断与日志
+│   ├── diag.c                诊断检查项、诊断报告导出、core dump
+│   ├── event_log.c           事件日志与崩溃记录（存 flash）
+│   ├── log_buffer.c          运行日志内存缓冲
+│   └── monitor.c             报文监视
+└── web/
+    ├── web_config.c          配置网页 HTTP 接口
+    └── index.html            页面（编译时嵌入固件）
 ```
+
+新增源文件后在 `main/CMakeLists.txt` 的 SRCS 中登记；新增目录还要加入 INCLUDE_DIRS。
 
 ## 数据流
 
 ```
 plc_poll.c     按点表（plc_points.c）逐点调用协议层的读函数
    │
-   │  协议层（src/protocol）：组帧 → 收发 → 校验 → 解码，直接返回 PlcValue（plc_value.h）
+   │  协议层（protocol/）：组帧 → 收发 → 校验 → 解码，直接返回 PlcValue（plc_value.h）
    │    串口：FX_LinkRead() 等内部是一次同步事务（serial_txn.c：串口加锁，
    │          应答未收全时回滚读位置继续等，设备回 NAK 或超时则放弃该点）
    │    网口：FX_NetRead() / S7_NetRead() / MODBUS_NetRead()，按报文头长度收全应答（net_io.c），
@@ -101,7 +119,7 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
 在 `Kconfig.projbuild` 对应协议的 `Device` 下增加一个选项；若上报方式特殊（变化上报、批量上报），
 在 `plc_report.c` 中处理。Modbus RTU 设备的参数表在 `master.c` 中。
 
-**新增一种 PLC 协议**：在 `src/protocol/` 下实现读函数，返回 `PlcValue`：
+**新增一种 PLC 协议**：在 `protocol/` 下新建子目录实现读函数（并登记到 CMakeLists.txt），返回 `PlcValue`：
 串口协议写一个解析函数，用 `SerialTxn_Request()` 发请求并等应答（参考 `ls_plc_load_protocol.c`，最简单）；
 网口协议用 `net_io.h` 收发（参考 `lx_modbus_tcp_master.c`）。
 然后在 `plc_points.h` 增加点类型，在 `plc_poll.c` 增加"点类型 → 读函数"的翻译。
@@ -115,9 +133,13 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
    字母数字以外的字符换成 `-`；需电脑与网关在同一网段，Windows 10/11、macOS、iOS 支持）或 `http://<网关 IP>`。
    路由器的设备列表中网关也以这个名称显示。
    电脑开了代理软件时，需把 `*.local` 加入代理的直连（绕过）列表，否则会提示“无法处理此请求”。
-3. 用账号 `admin` 登录（密码默认 `admin`），可查看运行状态、启用以太网 / Wi-Fi（至少一个）、设置 DHCP / 静态 IP、选择 Wi-Fi、上位机地址和端口、
-   网口 PLC 地址、网页密码，保存后自动重启生效；也可在网页中重启或恢复出厂。
-   “系统”中可打开“仅允许通过配置热点访问”，打开后局域网 IP 访问会被拒绝。
+3. 用账号 `admin` 登录（密码默认 `admin`）。页面分为：
+   - **状态**：运行概况、网络、上位机连接；有问题时点顶部概况进入诊断
+   - **诊断**：检查结果和处理建议、最近事件、导出诊断信息
+   - **设置**：以太网 / Wi-Fi 开关（至少一个）、自动获取 / 固定 IP、Wi-Fi 扫描、上位机地址、网口设备地址
+   - **系统**：修改登录密码、“只允许通过配置热点打开本页面”、重启、恢复出厂
+
+   修改后底部出现保存栏（可撤销），保存后自动重启生效。厂家账号另有“报文”“出厂”页，诊断页另有运行日志和崩溃记录。
 
 参数保存在 NVS 中，升级固件不会丢失；网页中没有保存过的参数使用 menuconfig 中的值（出厂默认值）。
 
@@ -162,13 +184,12 @@ idf.py -p PORT flash monitor
 
 | 子菜单 | 内容 |
 |---|---|
-| Device identity | 设备号 `devId`（每台网关必须唯一）、`devNumber` |
-| Host connection | 上位机 IP、上报 / 心跳 / OTA 端口、心跳和重连间隔 |
-| Local server | 命令端口、文件端口开关、TCP keepalive |
-| Network | Wi-Fi、W5500 引脚、以太网 MAC、DHCP / 静态 IP、配置热点密码、网页密码（出厂默认值） |
-| Data acquisition | 应答超时；各协议的设备类型、连接方式、网口 IP / 端口 |
-| Sensors | MAX6675 热电偶 |
-| Debug | 任务栈余量监视 |
+| Data acquisition | 采集什么设备：各协议的设备类型、连接方式、网口设备 IP / 端口默认值；应答超时；MAX6675 热电偶 |
+| Factory parameters | 出厂参数默认值（网页“出厂”页逐台修改，客户不能改）：devId 等设备标识、上位机端口、本机端口、热点密码、厂家账号密码、以太网 MAC |
+| Field parameters | 现场参数默认值（客户在网页修改，恢复出厂回到这里的值）：上位机地址、以太网 DHCP / 固定 IP、Wi-Fi、admin 密码、仅热点访问 |
+| Hardware | W5500 以太网模块开关与引脚 |
+| Communication | 心跳间隔、重连间隔、TCP keep-alive |
+| Debug | HEALTH 日志间隔、任务栈余量监视 |
 
 - UART1 同一时间只能服务**一种串口协议**，选了多个时编译会直接报错；网口协议之间、网口与一种串口协议可以组合使用
 - 旧版本的 sdkconfig 可以直接使用：配置项改名记录在 `main/sdkconfig.rename`，编译时自动迁移

@@ -308,7 +308,7 @@ void app_main(void)
         bool abnormal;
         const char *reset = Diag_ResetText(&abnormal);
 
-        EvLog_Add(abnormal ? EV_ERROR : EV_INFO, "网关启动（%s），固件 %s %s", reset, FW_VERSION,
+        EvLog_Add((abnormal ? EV_ERROR : EV_INFO) | EV_OP, "网关启动（%s），固件 %s %s", reset, FW_VERSION,
                   esp_ota_get_app_description()->version);
     }
 

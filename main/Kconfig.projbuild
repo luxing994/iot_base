@@ -1,309 +1,15 @@
+# 网关自定义配置
+#
+#   Data acquisition     采集什么设备（每个固件版本按现场设备选择，编译期决定）
+#   Factory parameters   出厂参数默认值：出货时可用厂家账号在配置网页"出厂"页逐台修改，客户不能修改
+#   Field parameters     现场参数默认值：客户在配置网页修改，"恢复出厂设置"时回到这里的值
+#   Hardware             板载硬件（以太网模块引脚）
+#   Communication        心跳、重连、TCP keep-alive
+#   Debug                调试日志
+#
+# 网页中保存过的参数优先于这里的值；只改这里的值不会影响已经在网页中保存过参数的设备。
+
 menu "IoT Gateway Configuration"
-
-# =====================================================================
-menu "Device identity"
-
-    comment "Factory defaults - values saved on the web config page take precedence"
-
-    config IOT_DEVICE_ID
-        string "Device ID (devId)"
-        default "JXGS001"
-        help
-            设备号。用于上线包 / 心跳包的 devId，以及上位机下发命令之前数据报文的默认 devId。
-            每台网关必须唯一。
-
-            这里是默认值。devId、devNumber、上位机端口、本机端口、以太网 MAC 是出厂参数：
-            出货时用出厂密码（IOT_FACTORY_PASSWORD）登录配置网页逐台设置，不必为每台单独编译。
-            其余参数由客户在配置网页修改。网页中保存过的值优先于这里的值。
-
-    config IOT_DEVICE_NUMBER
-        string "Device number (devNumber)"
-        default "IIIG_1.0"
-        help
-            数据报文中的 devNumber 字段。
-
-    config IOT_DEVICE_NAME
-        string "Device name (devName)"
-        default "Hello"
-        help
-            上线包 / 心跳包、温度报文中的 devName 字段。出厂参数，可在配置网页"出厂"页修改。
-
-    config IOT_DEVICE_TYPE_ID
-        string "Device type ID (devTypeId)"
-        default "Hello"
-        help
-            上线包 / 心跳包中的 devTypeId 字段，也是上位机下发命令之前数据报文的默认值。
-            出厂参数，可在配置网页"出厂"页修改。
-
-    config IOT_ORDER_NAME
-        string "Order name (orderName)"
-        default "Hello"
-        help
-            上线包 / 心跳包中的 orderName 字段，也是上位机下发命令之前数据报文的默认值。
-            出厂参数，可在配置网页"出厂"页修改。
-
-endmenu
-
-# =====================================================================
-menu "Host connection"
-
-    comment "Gateway connects to the host (upper computer)"
-    comment "Address and ports: factory defaults, overridden by the web config page"
-
-    choice IOT_HOST_IP_MODE
-        prompt "IP version"
-        default IOT_HOST_IPV4
-        help
-            上位机地址的 IP 版本，本机服务端口也使用同一版本。
-
-        config IOT_HOST_IPV4
-            bool "IPv4"
-
-        config IOT_HOST_IPV6
-            bool "IPv6"
-
-    endchoice
-
-    config IOT_HOST_IPV4_ADDR
-        string "Host IPv4 address"
-        default "192.168.0.165"
-        depends on IOT_HOST_IPV4
-        help
-            上位机 IPv4 地址。
-
-    config IOT_HOST_IPV6_ADDR
-        string "Host IPv6 address"
-        default "FE80::30AD:E57B:C212:68AD"
-        depends on IOT_HOST_IPV6
-        help
-            上位机 IPv6 地址。
-
-    config IOT_HOST_REPORT_PORT
-        int "Data report port"
-        range 0 65535
-        default 8761
-        help
-            上位机接收数据报文的端口（采集数据、开关量、传感器等）。填 0 表示不使用该通道。
-
-    config IOT_HOST_LINK_PORT
-        int "Online / heartbeat port"
-        range 0 65535
-        default 8766
-        help
-            上位机接收上线包和心跳包的端口；该连接上收到的纯数字会被当作时间戳用于校时。
-            填 0 表示不使用该通道。
-
-    config IOT_HOST_OTA_PORT
-        int "OTA control port"
-        range 0 65535
-        default 8768
-        help
-            上位机 OTA 控制通道端口。该连接同样发送上线包和心跳包，
-            并接收 "OTA_UPDATE:<url>" 和 "TIMESTAMP:<ms>" 命令。填 0 表示不使用该通道。
-
-    config IOT_HEARTBEAT_INTERVAL_MS
-        int "Heartbeat interval (ms)"
-        range 100 60000
-        default 1000
-        help
-            心跳包发送间隔。
-
-    config IOT_RECONNECT_INTERVAL_MS
-        int "Reconnect interval (ms)"
-        range 100 60000
-        default 5000
-        help
-            与上位机或网口 PLC 断线后的重连间隔。
-
-endmenu
-
-# =====================================================================
-menu "Local server"
-
-    comment "Host connects to the gateway"
-    comment "Ports: factory defaults, overridden by the web config page"
-
-    config IOT_CMD_PORT
-        int "Command port"
-        range 0 65535
-        default 8765
-        help
-            本机监听的命令端口，接收上位机 JSON 命令（StartFlush / EndFlush / PowerOn /
-            PowerOff / single / group）。
-
-    config IOT_FILE_SERVER
-        bool "Enable file transfer server"
-        default y
-        help
-            监听文件端口接收上位机分包发送的文件。不需要接收文件的设备可以关闭，
-            节省一个任务和一个 socket。
-
-    config IOT_FILE_PORT
-        int "File transfer port"
-        range 0 65535
-        default 8766
-        depends on IOT_FILE_SERVER
-        help
-            本机监听的文件端口。
-
-    config IOT_KEEPALIVE_IDLE
-        int "TCP keep-alive idle time (s)"
-        default 5
-        help
-            连接空闲多久后开始发送 keep-alive 探测包。
-
-    config IOT_KEEPALIVE_INTERVAL
-        int "TCP keep-alive interval (s)"
-        default 5
-        help
-            keep-alive 探测包的发送间隔。
-
-    config IOT_KEEPALIVE_COUNT
-        int "TCP keep-alive retry count"
-        default 3
-        help
-            连续多少次探测无应答后判定连接断开。
-
-endmenu
-
-# =====================================================================
-menu "Network"
-
-    comment "Factory defaults - values saved on the web config page take precedence"
-
-    config IOT_WIFI_ENABLE
-        bool "Use Wi-Fi"
-        default n
-        help
-            是否使用 Wi-Fi 联网。以太网和 Wi-Fi 至少启用一个（以太网开关在配置网页中，默认启用）。
-            出厂默认关闭，由客户在配置网页中打开并选择 Wi-Fi。配置热点不受此开关影响。
-
-    config IOT_WIFI_SSID
-        string "Wi-Fi SSID"
-        depends on IOT_WIFI_ENABLE
-        default ""
-        help
-            要连接的 Wi-Fi 名称。出厂默认值，现场可在配置网页修改。
-
-    config IOT_WIFI_PASSWORD
-        string "Wi-Fi password"
-        depends on IOT_WIFI_ENABLE
-        default ""
-        help
-            Wi-Fi 密码，开放网络留空。出厂默认值，现场可在配置网页修改。
-
-    config IOT_ETH_W5500
-        bool "W5500 Ethernet module"
-        default y
-        help
-            板上的 W5500 SPI 以太网模块。没有焊接以太网模块的板子关闭此项。
-
-    if IOT_ETH_W5500
-
-        config IOT_ETH_SPI_HOST
-            int "SPI host"
-            range 0 2
-            default 1
-
-        config IOT_ETH_SPI_SCLK_GPIO
-            int "SPI SCLK GPIO"
-            default 15
-
-        config IOT_ETH_SPI_MOSI_GPIO
-            int "SPI MOSI GPIO"
-            default 6
-
-        config IOT_ETH_SPI_MISO_GPIO
-            int "SPI MISO GPIO"
-            default 7
-
-        config IOT_ETH_SPI_CS_GPIO
-            int "SPI CS GPIO"
-            default 16
-
-        config IOT_ETH_SPI_INT_GPIO
-            int "Interrupt GPIO"
-            default 5
-
-        config IOT_ETH_RST_GPIO
-            int "Reset GPIO (-1: not connected)"
-            default 4
-
-        config IOT_ETH_SPI_CLOCK_MHZ
-            int "SPI clock (MHz)"
-            range 5 80
-            default 40
-
-        config IOT_ETH_MAC
-            string "Ethernet MAC address"
-            default ""
-            help
-                以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
-                W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
-                需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）；
-                老设备升级固件时，如果客户现场按 MAC 绑定了 IP 或白名单，需填回原来的 MAC。
-                MAC 属于出厂参数：可用出厂密码登录配置网页逐台设置，客户不能修改，恢复出厂也不会改变。
-
-        config IOT_ETH_DHCP
-            bool "Obtain IP address automatically (DHCP)"
-            default y
-            help
-                关闭时使用下面的静态地址。出厂默认值，现场可在配置网页修改。
-
-        config IOT_ETH_STATIC_IP
-            string "Static IP"
-            default "192.168.1.200"
-            depends on !IOT_ETH_DHCP
-
-        config IOT_ETH_STATIC_MASK
-            string "Subnet mask"
-            default "255.255.255.0"
-            depends on !IOT_ETH_DHCP
-
-        config IOT_ETH_STATIC_GATEWAY
-            string "Gateway"
-            default "192.168.1.1"
-            depends on !IOT_ETH_DHCP
-
-        config IOT_ETH_STATIC_DNS
-            string "DNS server"
-            default "192.168.1.1"
-            depends on !IOT_ETH_DHCP
-
-    endif # IOT_ETH_W5500
-
-    config IOT_AP_PASSWORD
-        string "Config hotspot password"
-        default "12345678"
-        help
-            配置热点 IoTGW-xxxx 的密码，至少 8 位。出厂参数：可用出厂密码在配置网页逐台设置（如印在标签上），客户不能修改。
-            热点只在以下情况打开：出厂状态（从未保存过配置）、5 秒内连按 3 次复位键
-            （或快速断电上电 3 次）；10 分钟内没有人连接则自动关闭。网络断开不会打开热点。
-
-    config IOT_WEB_PASSWORD
-        string "Config web page password"
-        default "admin"
-        help
-            配置网页客户账号 admin 的登录密码。出厂默认值，现场可在配置网页修改。
-
-    config IOT_WEB_AP_ONLY
-        bool "Config web page: hotspot access only"
-        default n
-        help
-            打开后配置网页只能通过配置热点（http://192.168.4.1）访问，
-            从局域网 IP 访问会被拒绝，避免网页密码在局域网中明文传输。
-            出厂默认值，现场可在配置网页"系统"中修改。
-
-    config IOT_FACTORY_PASSWORD
-        string "Factory password (config web page)"
-        default "iotgw-factory"
-        help
-            出厂密码：配置网页厂家账号 factory 的密码，用它登录时可修改出厂参数（devId、devNumber、上位机端口、
-            本机命令 / 文件端口、以太网 MAC）。所有设备相同，只给生产 / 售后人员，不要告诉客户。
-            出厂参数在网页中保存后单独存放，客户恢复出厂不会清除；没在网页中设置过时使用
-            menuconfig 中的值。留空表示禁用出厂登录。
-
-endmenu
 
 # =====================================================================
 menu "Data acquisition"
@@ -390,12 +96,12 @@ menu "Data acquisition"
         endchoice
 
         config PLC_FX_IPV4_ADDR
-            string "PLC IPv4 address"
+            string "PLC IPv4 address (default, web page editable)"
             default "169.254.221.82"
             depends on PLC_FX_CONNECT_NETWORK
 
         config PLC_FX_TCP_PORT
-            int "PLC TCP port"
+            int "PLC TCP port (default, web page editable)"
             range 0 65535
             default 8765
             depends on PLC_FX_CONNECT_NETWORK
@@ -495,12 +201,12 @@ menu "Data acquisition"
         endchoice
 
         config PLC_PPI_IPV4_ADDR
-            string "PLC IPv4 address"
+            string "PLC IPv4 address (default, web page editable)"
             default "192.168.1.10"
             depends on PLC_PPI_CONNECT_NETWORK
 
         config PLC_PPI_TCP_PORT
-            int "PLC TCP port"
+            int "PLC TCP port (default, web page editable)"
             range 0 65535
             default 102
             depends on PLC_PPI_CONNECT_NETWORK
@@ -588,12 +294,12 @@ menu "Data acquisition"
         endchoice
 
         config PLC_MODBUS_IPV4_ADDR
-            string "Device IPv4 address"
+            string "Device IPv4 address (default, web page editable)"
             default "192.168.2.192"
             depends on PLC_MODBUS_CONNECT_NETWORK
 
         config PLC_MODBUS_TCP_PORT
-            int "Device TCP port"
+            int "Device TCP port (default, web page editable)"
             range 0 65535
             default 502
             depends on PLC_MODBUS_CONNECT_NETWORK
@@ -673,11 +379,7 @@ menu "Data acquisition"
         default y if PLC_FX_CONNECT_RS485 || PLC_HOSTLINK_CONNECT_RS485 || PLC_PPI_CONNECT_RS485 || \
                      PLC_MODBUS_CONNECT_RS485 || TESTER_76T_CONNECT_RS485 || TESTER_AINUO_CONNECT_RS485
 
-endmenu
-
-# =====================================================================
-menu "Sensors"
-
+    # ------------------------------------------------ Sensors
     config SENSOR_MAX6675
         bool "MAX6675 thermocouple"
         default n
@@ -709,7 +411,314 @@ menu "Sensors"
 
     endif # SENSOR_MAX6675
 
-endmenu
+endmenu # Data acquisition
+
+# =====================================================================
+menu "Factory parameters"
+
+    comment "Defaults - set per unit on the web page factory tab"
+    comment "Customers cannot change them; factory reset keeps them"
+
+    comment "--- Device identity ---"
+
+    config IOT_DEVICE_ID
+        string "Device ID (devId)"
+        default "JXGS001"
+        help
+            设备号。用于上线包 / 心跳包的 devId，以及上位机下发命令之前数据报文的默认 devId。
+            每台网关必须唯一，出货时按编号规则用厂家账号在配置网页逐台设置，不必为每台单独编译。
+            局域网访问地址 http://<devId>.local 也由它生成。
+
+    config IOT_DEVICE_NUMBER
+        string "Device number (devNumber)"
+        default "IIIG_1.0"
+        help
+            上线包 / 心跳包、数据报文中的 devNumber 字段。
+
+    config IOT_DEVICE_NAME
+        string "Device name (devName)"
+        default "Hello"
+        help
+            上线包 / 心跳包、温度报文中的 devName 字段。
+
+    config IOT_DEVICE_TYPE_ID
+        string "Device type ID (devTypeId)"
+        default "Hello"
+        help
+            上线包 / 心跳包中的 devTypeId 字段，也是上位机下发命令之前数据报文的默认值。
+
+    config IOT_ORDER_NAME
+        string "Order name (orderName)"
+        default "Hello"
+        help
+            上线包 / 心跳包中的 orderName 字段，也是上位机下发命令之前数据报文的默认值。
+
+    comment "--- Host ports (gateway connects to host, 0 = unused) ---"
+
+    config IOT_HOST_REPORT_PORT
+        int "Data report port"
+        range 0 65535
+        default 8761
+        help
+            上位机接收数据报文的端口（采集数据、开关量、传感器等）。填 0 表示不使用该通道。
+
+    config IOT_HOST_LINK_PORT
+        int "Online / heartbeat port"
+        range 0 65535
+        default 8766
+        help
+            上位机接收上线包和心跳包的端口；该连接上收到的纯数字会被当作时间戳用于校时。
+            填 0 表示不使用该通道。
+
+    config IOT_HOST_OTA_PORT
+        int "OTA control port"
+        range 0 65535
+        default 8768
+        help
+            上位机 OTA 控制通道端口。该连接同样发送上线包和心跳包，
+            并接收 "OTA_UPDATE:<url>" 和 "TIMESTAMP:<ms>" 命令。填 0 表示不使用该通道。
+
+    comment "--- Local ports (host connects to gateway) ---"
+
+    config IOT_CMD_PORT
+        int "Command port"
+        range 1 65535
+        default 8765
+        help
+            本机监听的命令端口，接收上位机 JSON 命令（StartFlush / EndFlush / PowerOn /
+            PowerOff / single / group）。
+
+    config IOT_FILE_SERVER
+        bool "Enable file transfer server"
+        default y
+        help
+            监听文件端口接收上位机分包发送的文件。不需要接收文件的设备可以关闭，
+            节省一个任务和一个 socket。
+
+    config IOT_FILE_PORT
+        int "File transfer port"
+        range 0 65535
+        default 8766
+        depends on IOT_FILE_SERVER
+        help
+            本机监听的文件端口。
+
+    comment "--- Access ---"
+
+    config IOT_AP_PASSWORD
+        string "Config hotspot password"
+        default "12345678"
+        help
+            配置热点 IoTGW-xxxx 的密码，至少 8 位。可逐台设置（如印在标签上），客户不能修改。
+            热点只在以下情况打开：出厂状态（从未保存过配置）、5 秒内连按 3 次复位键
+            （或快速断电上电 3 次）；10 分钟内没有人连接则自动关闭。网络断开不会打开热点。
+
+    config IOT_FACTORY_PASSWORD
+        string "Factory account password"
+        default "iotgw-factory"
+        help
+            配置网页厂家账号 factory 的密码，所有设备相同，只给生产 / 售后人员，不要告诉客户。
+            厂家账号可以修改出厂参数，查看运行日志、报文监视、崩溃记录。留空表示禁用厂家账号。
+
+    config IOT_ETH_MAC
+        string "Ethernet MAC address"
+        default ""
+        depends on IOT_ETH_W5500
+        help
+            以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
+            W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
+            需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）；
+            老设备升级固件时，如果客户现场按 MAC 绑定了 IP 或白名单，需填回原来的 MAC。
+
+endmenu # Factory parameters
+
+# =====================================================================
+menu "Field parameters"
+
+    comment "Defaults - customers change them on the web page"
+    comment "Web page factory reset restores these values"
+
+    comment "--- Host ---"
+
+    choice IOT_HOST_IP_MODE
+        prompt "IP version"
+        default IOT_HOST_IPV4
+        help
+            上位机地址的 IP 版本，本机服务端口也使用同一版本。
+
+        config IOT_HOST_IPV4
+            bool "IPv4"
+
+        config IOT_HOST_IPV6
+            bool "IPv6"
+
+    endchoice
+
+    config IOT_HOST_IPV4_ADDR
+        string "Host IPv4 address"
+        default "192.168.0.165"
+        depends on IOT_HOST_IPV4
+
+    config IOT_HOST_IPV6_ADDR
+        string "Host IPv6 address"
+        default "FE80::30AD:E57B:C212:68AD"
+        depends on IOT_HOST_IPV6
+
+    comment "--- Ethernet ---"
+        depends on IOT_ETH_W5500
+
+    config IOT_ETH_DHCP
+        bool "Obtain IP address automatically (DHCP)"
+        default y
+        depends on IOT_ETH_W5500
+        help
+            关闭时使用下面的静态地址。
+
+    config IOT_ETH_STATIC_IP
+        string "Static IP"
+        default "192.168.1.200"
+        depends on IOT_ETH_W5500 && !IOT_ETH_DHCP
+
+    config IOT_ETH_STATIC_MASK
+        string "Subnet mask"
+        default "255.255.255.0"
+        depends on IOT_ETH_W5500 && !IOT_ETH_DHCP
+
+    config IOT_ETH_STATIC_GATEWAY
+        string "Gateway"
+        default "192.168.1.1"
+        depends on IOT_ETH_W5500 && !IOT_ETH_DHCP
+
+    config IOT_ETH_STATIC_DNS
+        string "DNS server"
+        default "192.168.1.1"
+        depends on IOT_ETH_W5500 && !IOT_ETH_DHCP
+
+    comment "--- Wi-Fi ---"
+
+    config IOT_WIFI_ENABLE
+        bool "Use Wi-Fi"
+        default n
+        help
+            是否使用 Wi-Fi 联网。以太网和 Wi-Fi 至少启用一个（以太网开关在配置网页中，默认启用）。
+            出厂默认关闭，由客户在配置网页中打开并选择 Wi-Fi。配置热点不受此开关影响。
+
+    config IOT_WIFI_SSID
+        string "Wi-Fi SSID"
+        depends on IOT_WIFI_ENABLE
+        default ""
+
+    config IOT_WIFI_PASSWORD
+        string "Wi-Fi password"
+        depends on IOT_WIFI_ENABLE
+        default ""
+        help
+            开放网络留空。
+
+    comment "--- Web page ---"
+
+    config IOT_WEB_PASSWORD
+        string "Admin account password"
+        default "admin"
+        help
+            配置网页客户账号 admin 的登录密码。
+
+    config IOT_WEB_AP_ONLY
+        bool "Web page: hotspot access only"
+        default n
+        help
+            打开后配置网页只能通过配置热点（http://192.168.4.1）访问，
+            从局域网 IP 访问会被拒绝，避免网页密码在局域网中明文传输。
+
+    comment "Network PLC addresses: see Data acquisition"
+
+endmenu # Field parameters
+
+# =====================================================================
+menu "Hardware"
+
+    config IOT_ETH_W5500
+        bool "W5500 Ethernet module"
+        default y
+        help
+            板上的 W5500 SPI 以太网模块。没有焊接以太网模块的板子关闭此项。
+
+    if IOT_ETH_W5500
+
+        config IOT_ETH_SPI_HOST
+            int "SPI host"
+            range 0 2
+            default 1
+
+        config IOT_ETH_SPI_SCLK_GPIO
+            int "SPI SCLK GPIO"
+            default 15
+
+        config IOT_ETH_SPI_MOSI_GPIO
+            int "SPI MOSI GPIO"
+            default 6
+
+        config IOT_ETH_SPI_MISO_GPIO
+            int "SPI MISO GPIO"
+            default 7
+
+        config IOT_ETH_SPI_CS_GPIO
+            int "SPI CS GPIO"
+            default 16
+
+        config IOT_ETH_SPI_INT_GPIO
+            int "Interrupt GPIO"
+            default 5
+
+        config IOT_ETH_RST_GPIO
+            int "Reset GPIO (-1: not connected)"
+            default 4
+
+        config IOT_ETH_SPI_CLOCK_MHZ
+            int "SPI clock (MHz)"
+            range 5 80
+            default 40
+
+    endif # IOT_ETH_W5500
+
+endmenu # Hardware
+
+# =====================================================================
+menu "Communication"
+
+    config IOT_HEARTBEAT_INTERVAL_MS
+        int "Heartbeat interval (ms)"
+        range 100 60000
+        default 1000
+        help
+            心跳包发送间隔。
+
+    config IOT_RECONNECT_INTERVAL_MS
+        int "Reconnect interval (ms)"
+        range 100 60000
+        default 5000
+        help
+            与上位机或网口 PLC 断线后的重连间隔。
+
+    config IOT_KEEPALIVE_IDLE
+        int "TCP keep-alive idle time (s)"
+        default 5
+        help
+            本机命令 / 文件端口的连接空闲多久后开始发送 keep-alive 探测包。
+
+    config IOT_KEEPALIVE_INTERVAL
+        int "TCP keep-alive interval (s)"
+        default 5
+        help
+            keep-alive 探测包的发送间隔。
+
+    config IOT_KEEPALIVE_COUNT
+        int "TCP keep-alive retry count"
+        default 3
+        help
+            连续多少次探测无应答后判定连接断开。
+
+endmenu # Communication
 
 # =====================================================================
 menu "Debug"
@@ -734,6 +743,6 @@ menu "Debug"
         default 30
         depends on IOT_DEBUG_STACK_MONITOR
 
-endmenu
+endmenu # Debug
 
 endmenu # IoT Gateway Configuration

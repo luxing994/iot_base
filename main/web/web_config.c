@@ -442,7 +442,7 @@ static esp_err_t SaveArea(httpd_req_t *req, GwArea area)
     if (err != ESP_OK) {
         return SendError(req, "400 Bad Request", why != NULL ? why : "保存失败");
     }
-    EvLog_Add(EV_INFO, "%s已修改（%s），重启生效", (area == GW_AREA_FACTORY) ? "出厂参数" : "现场参数",
+    EvLog_Add(EV_INFO | EV_OP, "%s已修改（%s），重启生效", (area == GW_AREA_FACTORY) ? "出厂参数" : "现场参数",
               s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart((area == GW_AREA_FACTORY) ? "factory config saved from web" : "config saved from web");
@@ -508,7 +508,7 @@ static esp_err_t RebootHandler(httpd_req_t *req)
     if (!CheckAuth(req)) {
         return ESP_OK;
     }
-    EvLog_Add(EV_INFO, "网页操作重启（%s）", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
+    EvLog_Add(EV_INFO | EV_OP, "网页操作重启（%s）", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart("restart requested from web");
     return ESP_OK;
@@ -522,7 +522,7 @@ static esp_err_t FactoryHandler(httpd_req_t *req)
     if (GwConfig_Reset() != ESP_OK) {
         return SendError(req, "500 Internal Server Error", "清除配置失败");
     }
-    EvLog_Add(EV_WARN, "恢复出厂设置（%s），现场参数已清除", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
+    EvLog_Add(EV_WARN | EV_OP, "恢复出厂设置（%s），现场参数已清除", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart("factory reset from web");
     return ESP_OK;
@@ -590,16 +590,21 @@ static esp_err_t EventsHandler(httpd_req_t *req)
             n = 200;
         }
     }
-    return SendJson(req, EvLog_ToJson(n));
+    return SendJson(req, EvLog_ToJson(n, s_tokenFactory));     // 客户账号不返回 EV_DEV 事件
 }
 
 static esp_err_t EventsClearHandler(httpd_req_t *req)
 {
-    if (!CheckAuth(req) || !RequireFactory(req)) {
+    if (!CheckAuth(req)) {
         return ESP_OK;
     }
-    EvLog_Clear();
-    EvLog_Add(EV_INFO, "事件记录已清空（factory）");
+    if (s_tokenFactory) {
+        EvLog_Clear();      // 厂家：真正清空
+        EvLog_Add(EV_INFO | EV_OP, "事件记录已清空（factory）");
+    } else {
+        // 客户：只写一条标记，之前的记录对客户不再显示；厂家排查和导出仍能看到
+        EvLog_Add(EV_INFO | EV_DEV | EV_ACK, "客户在网页清除了事件记录（admin）");
+    }
     return SendOk(req);
 }
 
@@ -731,7 +736,7 @@ static esp_err_t CrashClearHandler(httpd_req_t *req)
     }
     EvLog_ClearCrash();
     Diag_CoreDumpErase();
-    EvLog_Add(EV_INFO, "崩溃记录已清除（factory）");
+    EvLog_Add(EV_INFO | EV_DEV, "崩溃记录已清除（factory）");
     return SendOk(req);
 }
 
@@ -809,7 +814,7 @@ static esp_err_t MonitorStartHandler(httpd_req_t *req)
     }
     Mon_Start((uint32_t)mask->valueint, m);
     cJSON_Delete(json);
-    EvLog_Add(EV_INFO, "开始报文监视（%u 分钟）", (unsigned)m);
+    EvLog_Add(EV_INFO | EV_DEV, "开始报文监视（%u 分钟）", (unsigned)m);
     return SendOk(req);
 }
 

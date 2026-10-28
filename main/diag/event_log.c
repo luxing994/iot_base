@@ -195,7 +195,7 @@ uint32_t EvLog_BootNumber(void)
 
 /* ------------------------------------------------------------ 记录 / 读取 */
 
-void EvLog_Add(EvLevel level, const char *fmt, ...)
+void EvLog_Add(int level, const char *fmt, ...)
 {
     EvRecord r;
     va_list args;
@@ -219,7 +219,7 @@ void EvLog_Add(EvLevel level, const char *fmt, ...)
     }
 }
 
-cJSON *EvLog_ToJson(int max)
+cJSON *EvLog_ToJson(int max, bool withDev)
 {
     cJSON *arr = cJSON_CreateArray();
     uint32_t slot;
@@ -235,7 +235,8 @@ cJSON *EvLog_ToJson(int max)
     taskEXIT_CRITICAL(&s_lock);
 
     // 从最新一条往回读，序号不连续（被覆盖、已清空）时停止
-    for (int i = 0; i < max && (uint32_t)i < s_slots; i++) {
+    int n = 0;
+    for (uint32_t i = 0; n < max && i < s_slots; i++) {
         slot = (slot + s_slots - 1) % s_slots;
         ReadSlot(slot, &r);
         if (r.magic != EV_MAGIC || r.seq != expect) {
@@ -243,12 +244,22 @@ cJSON *EvLog_ToJson(int max)
         }
         expect = r.seq - 1;
         r.text[sizeof(r.text) - 1] = '\0';
+        if ((r.level & EV_ACK) && !withDev) {
+            break;          // 客户清除过，更早的不再给客户看
+        }
+        if ((r.level & EV_DEV) && !withDev) {
+            continue;
+        }
+        n++;
 
         cJSON *o = cJSON_CreateObject();
         cJSON_AddNumberToObject(o, "t", (double)r.timeMs);
         cJSON_AddNumberToObject(o, "up", r.uptimeS);
         cJSON_AddNumberToObject(o, "b", r.boot);
-        cJSON_AddNumberToObject(o, "l", r.level);
+        cJSON_AddNumberToObject(o, "l", r.level & EV_LEVEL_MASK);
+        if (r.level & EV_OP) {
+            cJSON_AddTrueToObject(o, "op");
+        }
         cJSON_AddStringToObject(o, "m", r.text);
         cJSON_AddItemToArray(arr, o);
     }

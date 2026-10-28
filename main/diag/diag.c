@@ -138,12 +138,12 @@ static void CheckNetwork(Checks *c, const NetStatus *st)
         Add(c, "error", "以太网", "以太网模块故障，请联系厂家。可暂时改用 Wi-Fi。", "以太网模块无响应");
     } else if (!st->ethLink) {
         Add(c, st->wifiUp ? "warn" : "error", "以太网",
-            "检查网线两端是否插好、交换机 / 路由器网口指示灯是否亮。如果不使用以太网，请在“网络”页关闭以太网。",
+            "检查网线两端是否插好、交换机 / 路由器网口指示灯是否亮。如果不使用以太网，请在“设置”页关闭以太网。",
             "未插网线");
     } else if (!st->ethUp) {
         Add(c, "error", "以太网",
-            cfg->ethDhcp ? "已插网线但没有分配到 IP：确认路由器开启了 DHCP，或在“网络”页改用静态 IP。"
-                         : "检查“网络”页中的静态 IP、子网掩码、网关是否与现场网络一致。",
+            cfg->ethDhcp ? "已插网线但没有分配到 IP：确认路由器开启了 DHCP，或在“设置”页改用固定 IP。"
+                         : "检查“设置”页中的固定 IP、子网掩码、网关是否与现场网络一致。",
             "已插网线，但还没有 IP 地址");
     } else {
         Add(c, "ok", "以太网", NULL, "已连接，IP %s（%s）", st->ethIp, cfg->ethDhcp ? "自动获取" : "静态");
@@ -270,7 +270,7 @@ static void CheckSystem(Checks *c, const NetStatus *st)
         Add(c, "warn", "时间", "心跳通道连上上位机后会自动校时。", "尚未与上位机校时，上报数据的时间可能不准");
     }
     if (!GwConfig_IsSaved()) {
-        Add(c, "warn", "现场配置", "在“网络”“参数”页设置好并保存，之后开机不再自动打开热点。",
+        Add(c, "warn", "现场配置", "在“设置”页选好联网方式、填好上位机地址并保存，之后开机不再自动打开热点。",
             "尚未完成现场配置，每次开机都会打开配置热点");
     }
     if (abnormal) {
@@ -538,7 +538,7 @@ static void ExportCrash(Out *o)
 static void ExportEvents(Out *o)
 {
     static const char *const levels[] = { "信息", "警告", "错误" };
-    cJSON *arr = EvLog_ToJson(EXPORT_EVENTS);
+    cJSON *arr = EvLog_ToJson(EXPORT_EVENTS, true);
     int n = cJSON_GetArraySize(arr);
 
     Printf(o, "\n---------------- 事件（最近 %d 条，旧的在前） ----------------\n", n);

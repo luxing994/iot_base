@@ -404,6 +404,10 @@ esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
         reason = "设备号不能为空";
     } else if (cfg->hostAddr[0] == '\0') {
         reason = "上位机地址不能为空";
+#ifdef CONFIG_IOT_HOST_IPV4
+    } else if (!IsIp4(cfg->hostAddr)) {
+        reason = "上位机地址格式不正确，例如 192.168.0.165";     // tcp_client 用 inet_addr，不解析域名
+#endif
     } else if (cfg->cmdPort == 0) {
         reason = "本机命令端口不能为 0";     // 上位机端口为 0 表示不使用该通道
     } else if (!ethOn && !cfg->wifiEnabled) {
