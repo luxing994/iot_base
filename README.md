@@ -63,7 +63,7 @@ Modbus RTU 设备（`master.c`）、开关量中断、MAX6675 直接调用 `iot_
 | 本机 → 上位机 | `IOT_HOST_REPORT_PORT`（8761） | 数据上报 |
 | 本机 → 上位机 | `IOT_HOST_LINK_PORT`（8766） | 上线包 + 心跳，接收时间戳 |
 | 本机 → 上位机 | `IOT_HOST_OTA_PORT`（8768） | 上线包 + 心跳，接收 `OTA_UPDATE:<url>` / `TIMESTAMP:<ms>` |
-| 上位机 → 本机 | `IOT_CMD_PORT`（8765） | JSON 命令（StartFlush / EndFlush / PowerOn / PowerOff / single / group） |
+| 上位机 → 本机 | `IOT_CMD_PORT`（8765） | JSON 命令（StartFlush / EndFlush / PowerOn / PowerOff / single / group）；single 命令写入 PLC 并回读一致后回复 `true`，否则回复 `false` |
 | 上位机 → 本机 | `IOT_FILE_PORT`（8766，可关闭） | 文件分包 |
 
 ## 常见修改
