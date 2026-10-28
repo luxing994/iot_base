@@ -25,7 +25,18 @@
 #define FREEZER_SPEED         4800
 #define RECORD_SPEED          9600
 
+// 设备型号由 menuconfig 选择（IoT Gateway Configuration -> Data acquisition -> Modbus -> Device）
+#if defined(CONFIG_PLC_MODBUS_RTU_AIR_SWITCH)
+#define DEVICE_VERSION    AIR_SWITCH
+#elif defined(CONFIG_PLC_MODBUS_RTU_TEMP_CONTROLLER)
+#define DEVICE_VERSION    TEMP_CONTROLER
+#elif defined(CONFIG_PLC_MODBUS_RTU_RECTIFIER)
+#define DEVICE_VERSION    MOTOR
+#elif defined(CONFIG_PLC_MODBUS_RTU_FREEZER)
+#define DEVICE_VERSION    FREEZER
+#else
 #define DEVICE_VERSION    RECORD
+#endif
 
 #define MB_PORT_NUM       1   // Number of UART port used for Modbus connection
 #define MB_DEV_SPEED      9600  // The communication speed of the UART

@@ -19,7 +19,8 @@ main/
 │   ├── host_cmd.c        上位机命令解析、命令状态（线程安全读取接口）、分发
 │   ├── file_transfer.c   文件分包接收
 │   ├── uart_task.c       UART1 初始化与事件任务、命令执行任务 cmd_task
-│   ├── plc_poll.c        ★ 设备寄存器点表：每种设备读哪些寄存器、对应哪个 FR 编号
+│   ├── plc_points.c      ★ 设备点表：每种设备读哪些寄存器、对应哪个 FR 编号（按 menuconfig 选择）
+│   ├── plc_poll.c        按点表逐点轮询（串口事务 / 网口）
 │   ├── plc_report.c      ★ 各协议数据解码，选择单值 / 变化 / 批量上报
 │   └── ota_task.c        HTTP OTA
 ├── src/common/
@@ -56,19 +57,23 @@ Modbus RTU 设备（`master.c`）、开关量中断、MAX6675 直接调用 `iot_
 
 | 方向 | 端口（menuconfig） | 用途 |
 |---|---|---|
-| 本机 → 上位机 | `EXAMPLE_PORT` | 数据上报 |
-| 本机 → 上位机 | `EXAMPLE_PORT1` | 上线包 + 1s 心跳，接收时间戳 |
-| 本机 → 上位机 | 8768 | 上线包 + 心跳，接收 `OTA_UPDATE:<url>` / `TIMESTAMP:<ms>` |
-| 上位机 → 本机 | `SERVER_PORT` | JSON 命令（StartFlush / EndFlush / PowerOn / PowerOff / single / group） |
-| 上位机 → 本机 | `SERVER_PORT1` | 文件分包 |
+| 本机 → 上位机 | `IOT_HOST_REPORT_PORT`（8761） | 数据上报 |
+| 本机 → 上位机 | `IOT_HOST_LINK_PORT`（8766） | 上线包 + 心跳，接收时间戳 |
+| 本机 → 上位机 | `IOT_HOST_OTA_PORT`（8768） | 上线包 + 心跳，接收 `OTA_UPDATE:<url>` / `TIMESTAMP:<ms>` |
+| 上位机 → 本机 | `IOT_CMD_PORT`（8765） | JSON 命令（StartFlush / EndFlush / PowerOn / PowerOff / single / group） |
+| 上位机 → 本机 | `IOT_FILE_PORT`（8766，可关闭） | 文件分包 |
 
 ## 常见修改
 
-**新增一个数据点**：在 `plc_poll.c` 对应设备的点表里加一行，例如
+**接入一台未单独适配的设备**：在 menuconfig 中选该协议的 `Common xxx device`，
+然后修改 `plc_points.c` 里对应连接方式的 Common 点表，每行一个数据点：
 
 ```c
-SerialReadSingleDataRegister(0, 255, 10, 214, 4);   // 当前产量 -> FR004
+{ FX_D32, 214, 0, 4, "当前产量" },     // { 类型, 地址, 位号, FR 编号, 说明 }
 ```
+
+类型说明见 `plc_points.h`（如 `FX_D16`、`HL_CIO_BIT`、`S7_VREAL`、`MB_HRFLOAT`）。
+以往现场用过的点表作为"参考点表"保留在 `plc_points.c` 中，可直接复制。
 
 **新增一种 JSON 报文**：调用 `iot_report.h` 中的接口，不要再手写 `sprintf`：
 
@@ -85,21 +90,31 @@ IotBatch_Destroy(b);
 PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCollector` 定义点表即可，
 示例见 `plc_report.c` 中的冷媒灌注机 `s_snBatchPoints`。
 
-**新增一种设备**：在 `Kconfig.projbuild` 对应协议下增加 device type，
-在 `plc_poll.c` 增加该设备的点表；若上报方式特殊，在 `plc_report.c` 中处理。
+**新增一种固定设备类型**：在 `plc_points.c` 增加该设备的点表并在文件末尾的选择逻辑中加一行，
+在 `Kconfig.projbuild` 对应协议的 `Device` 下增加一个选项；若上报方式特殊（变化上报、批量上报），
+在 `plc_report.c` 中处理。Modbus RTU 设备的参数表在 `master.c` 中。
 
 ## 配置与编译
 
 ```bash
-idf.py menuconfig     # Device Identity / TCP Server IP / PLC Communication / Sensor
+idf.py menuconfig     # 本项目配置都在 IoT Gateway Configuration 菜单下
 idf.py build
 idf.py -p PORT flash monitor
 ```
 
-- `Device Identity`：设备号 `devId`（每台网关必须唯一）和 `devNumber`
-- `PLC Communication Configuration`：选择协议、设备类型、连接方式（RS232 / RS485 / 网口）。
-  UART1 同一时间只服务一种串口协议
-- 当前代码已适配的设备类型以 menuconfig 中的选项为准
+`IoT Gateway Configuration` 菜单结构（各选项按 `?` 可查看中文说明）：
+
+| 子菜单 | 内容 |
+|---|---|
+| Device identity | 设备号 `devId`（每台网关必须唯一）、`devNumber` |
+| Host connection | 上位机 IP、上报 / 心跳 / OTA 端口、心跳和重连间隔 |
+| Local server | 命令端口、上线包中的 connectPort、文件端口开关、TCP keepalive |
+| Data acquisition | 应答超时；各协议的设备类型、连接方式、网口 IP / 端口 |
+| Sensors | MAX6675 热电偶 |
+| Debug | 任务栈余量监视 |
+
+- UART1 同一时间只能服务**一种串口协议**，选了多个时编译会直接报错；网口协议之间、网口与一种串口协议可以组合使用
+- 旧版本的 sdkconfig 可以直接使用：配置项改名记录在 `main/sdkconfig.rename`，编译时自动迁移
 
 ## 注意事项
 

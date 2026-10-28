@@ -3,9 +3,21 @@
 
 #include "sdkconfig.h"
 
-/* 需要初始化 UART1 的协议（串口协议；PPI 选网口时仍沿用原有的 UART 初始化） */
-#if defined(CONFIG_PLC_FX) || defined(CONFIG_PLC_HOSTLINK) || defined(CONFIG_PLC_LS_LOAD) || \
-    defined(CONFIG_PLC_PPI) || defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
+/*
+ * 使用 UART1 的串口协议（Modbus RTU 由 esp-modbus 自行管理串口，不在此列）。
+ * UART1 同一时间只能服务一种串口协议，选了多个时在这里直接报错。
+ */
+#if ((defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)) + \
+     defined(CONFIG_PLC_HOSTLINK) + defined(CONFIG_PLC_LS_LOAD) + defined(CONFIG_PLC_PPI_CONNECT_RS485) + \
+     (defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)) + \
+     defined(CONFIG_TESTER_76T) + defined(CONFIG_TESTER_AINUO)) > 1
+#error "menuconfig: UART1 can serve only one serial protocol. Keep one serial device under " \
+       "IoT Gateway Configuration -> Data acquisition (network connections can be combined)."
+#endif
+
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485) || \
+    defined(CONFIG_PLC_HOSTLINK) || defined(CONFIG_PLC_LS_LOAD) || defined(CONFIG_PLC_PPI_CONNECT_RS485) || \
+    defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
 #define APP_UART_ENABLED 1
 #endif
 

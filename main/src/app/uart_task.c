@@ -42,10 +42,9 @@
 #ifdef APP_UART_ENABLED
 
 /*
- * UART1 同一时间只能服务一种串口协议，按优先级取第一个启用的协议的串口参数。
- * （原实现每个协议各定义一个 uart_config，同时启用两个协议时会编译失败）
+ * UART1 同一时间只能服务一种串口协议（uart_task.h 中有编译期检查），按该协议设置串口参数。
  */
-#if defined(CONFIG_PLC_FX)
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
 #define APP_UART_BAUD    9600
 #define APP_UART_DATA    UART_DATA_7_BITS
 #define APP_UART_PARITY  UART_PARITY_EVEN
@@ -71,7 +70,7 @@
 #define APP_UART_DATA    UART_DATA_8_BITS
 #define APP_UART_PARITY  UART_PARITY_DISABLE
 #define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_PLC_PPI)
+#elif defined(CONFIG_PLC_PPI_CONNECT_RS485)
 #define APP_UART_BAUD    9600
 #define APP_UART_DATA    UART_DATA_8_BITS
 #define APP_UART_PARITY  UART_PARITY_EVEN

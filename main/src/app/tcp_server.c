@@ -1,10 +1,10 @@
 /*
  * 本机 TCP 服务端（只负责传输，业务处理见 host_cmd.c / file_transfer.c）
  *
- *   tcp_server_task   CONFIG_SERVER_PORT  : 上位机 JSON 命令。TCP 是字节流，一次 recv 可能
+ *   tcp_server_task   CONFIG_IOT_CMD_PORT  : 上位机 JSON 命令。TCP 是字节流，一次 recv 可能
  *                                           只有半条命令，也可能有多条，这里按花括号配对切分出
  *                                           完整的 JSON 对象后再交给 HostCmd_HandleMessage()
- *   tcp_server1_task  CONFIG_SERVER_PORT1 : 文件分包，交给 FileTransfer_HandlePacket()
+ *   tcp_server1_task  CONFIG_IOT_FILE_PORT : 文件分包，交给 FileTransfer_HandlePacket()
  */
 #include <string.h>
 #include <stdbool.h>
@@ -19,13 +19,13 @@
 #include "host_cmd.h"
 #include "file_transfer.h"
 
-#define PORT                CONFIG_SERVER_PORT      // 命令端口
+#define PORT                CONFIG_IOT_CMD_PORT      // 命令端口
 #ifdef CONFIG_IOT_FILE_SERVER
-#define PORT1               CONFIG_SERVER_PORT1     // 文件端口
+#define PORT1               CONFIG_IOT_FILE_PORT     // 文件端口
 #endif
-#define KEEPALIVE_IDLE      CONFIG_EXAMPLE_KEEPALIVE_IDLE
-#define KEEPALIVE_INTERVAL  CONFIG_EXAMPLE_KEEPALIVE_INTERVAL
-#define KEEPALIVE_COUNT     CONFIG_EXAMPLE_KEEPALIVE_COUNT
+#define KEEPALIVE_IDLE      CONFIG_IOT_KEEPALIVE_IDLE
+#define KEEPALIVE_INTERVAL  CONFIG_IOT_KEEPALIVE_INTERVAL
+#define KEEPALIVE_COUNT     CONFIG_IOT_KEEPALIVE_COUNT
 
 #define SERVER_RETRY_MS     5000
 #define CMD_RX_BUF_SIZE     10240                   // 单条命令最大长度
@@ -48,7 +48,7 @@ static int CreateListenSocket(int addr_family, uint16_t port, const char *tag)
         addr4->sin_family = AF_INET;
         addr4->sin_port = htons(port);
     }
-#ifdef CONFIG_EXAMPLE_IPV6
+#ifdef CONFIG_IOT_HOST_IPV6
     else if (addr_family == AF_INET6) {
         struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&dest_addr;
         addr6->sin6_family = AF_INET6;
@@ -99,7 +99,7 @@ static void LogPeer(const struct sockaddr_storage *addr, const char *tag)
     if (addr->ss_family == PF_INET) {
         inet_ntoa_r(((const struct sockaddr_in *)addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
     }
-#ifdef CONFIG_EXAMPLE_IPV6
+#ifdef CONFIG_IOT_HOST_IPV6
     else if (addr->ss_family == PF_INET6) {
         inet6_ntoa_r(((const struct sockaddr_in6 *)addr)->sin6_addr, addr_str, sizeof(addr_str) - 1);
     }

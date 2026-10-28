@@ -28,17 +28,17 @@
 #include "ota_task.h"
 #include "plc_poll.h"
 
-#if defined(CONFIG_EXAMPLE_IPV4)
-#define HOST_IP_ADDR CONFIG_EXAMPLE_IPV4_ADDR
-#elif defined(CONFIG_EXAMPLE_IPV6)
-#define HOST_IP_ADDR CONFIG_EXAMPLE_IPV6_ADDR
+#if defined(CONFIG_IOT_HOST_IPV4)
+#define HOST_IP_ADDR CONFIG_IOT_HOST_IPV4_ADDR
+#elif defined(CONFIG_IOT_HOST_IPV6)
+#define HOST_IP_ADDR CONFIG_IOT_HOST_IPV6_ADDR
 #else
 #define HOST_IP_ADDR ""
 #endif
 
-#define PORT     CONFIG_EXAMPLE_PORT     // 数据上报
-#define PORT1    CONFIG_EXAMPLE_PORT1    // 上线 / 心跳
-#define OTA_PORT CONFIG_IOT_OTA_PORT     // OTA 控制通道
+#define PORT     CONFIG_IOT_HOST_REPORT_PORT     // 数据上报
+#define PORT1    CONFIG_IOT_HOST_LINK_PORT    // 上线 / 心跳
+#define OTA_PORT CONFIG_IOT_HOST_OTA_PORT     // OTA 控制通道
 
 #define CONNECT_PORT            CONFIG_IOT_ADVERTISED_PORT   // 上线包 connectPort 字段
 #define CLIENT_RECONNECT_MS     CONFIG_IOT_RECONNECT_INTERVAL_MS
@@ -128,7 +128,7 @@ static int TcpConnect(const char *ip, uint16_t port, const char *tag)
     int ip_protocol;
     int sock;
 
-#if defined(CONFIG_EXAMPLE_IPV4)
+#if defined(CONFIG_IOT_HOST_IPV4)
     struct sockaddr_in dest_addr = { 0 };
     dest_addr.sin_addr.s_addr = inet_addr(ip);
     dest_addr.sin_family = AF_INET;

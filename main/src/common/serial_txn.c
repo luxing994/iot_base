@@ -46,7 +46,7 @@ int SerialTxn_Wait(SerialParseFn parse, int timeout_ms)
             }
             UART_RollbackBuffer();
 
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485) || defined(CONFIG_PLC_PPI_CONNECT_RS232)
+#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
             // PPI：收到短应答 E5 后发确认帧，PLC 才会返回数据
             if (PPI_TakeConfirmRequest()) {
                 UART_FlushBuffer();
