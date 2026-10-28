@@ -55,6 +55,11 @@ static const char *TAG = "GW_CONFIG";
 
 #define DEF_AP_PASS         CONFIG_IOT_AP_PASSWORD
 #define DEF_WEB_PASS        CONFIG_IOT_WEB_PASSWORD
+#ifdef CONFIG_IOT_WEB_AP_ONLY
+#define DEF_WEB_AP_ONLY     true
+#else
+#define DEF_WEB_AP_ONLY     false
+#endif
 
 /* 网口 PLC：未启用该连接方式时 menuconfig 中没有对应选项 */
 #ifdef CONFIG_PLC_FX_IPV4_ADDR
@@ -112,6 +117,7 @@ static const GwConfig s_defaults = {
 
     .apPass = DEF_AP_PASS,
     .webPass = DEF_WEB_PASS,
+    .webApOnly = DEF_WEB_AP_ONLY,
 };
 
 /* ------------------------------------------------------------ NVS 字段表 */
@@ -124,12 +130,15 @@ typedef enum {
 
 typedef struct {
     const char *key;        // NVS 键名，最长 15 个字符
+    const char *name;       // JSON 键名（与结构体成员同名）
     uint8_t type;
+    bool secret;            // 密码类：不输出到 JSON
     uint16_t offset;
     uint16_t size;
 } GwField;
 
-#define FIELD(k, t, m)  { k, t, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
+#define FIELD(k, t, m)  { k, #m, t, false, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
+#define SECRET(k, m)    { k, #m, FIELD_STR, true, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
 
 static const GwField s_fields[] = {
     FIELD("dev_id",      FIELD_STR,  devId),
@@ -142,7 +151,7 @@ static const GwField s_fields[] = {
     FIELD("adv_port",    FIELD_U16,  advertisedPort),
     FIELD("file_port",   FIELD_U16,  filePort),
     FIELD("wifi_ssid",   FIELD_STR,  wifiSsid),
-    FIELD("wifi_pass",   FIELD_STR,  wifiPass),
+    SECRET("wifi_pass",              wifiPass),
     FIELD("eth_mac",     FIELD_STR,  ethMac),
     FIELD("eth_dhcp",    FIELD_BOOL, ethDhcp),
     FIELD("eth_ip",      FIELD_STR,  ethIp),
@@ -155,8 +164,9 @@ static const GwField s_fields[] = {
     FIELD("s7_port",     FIELD_U16,  s7Port),
     FIELD("mb_ip",       FIELD_STR,  modbusIp),
     FIELD("mb_port",     FIELD_U16,  modbusPort),
-    FIELD("ap_pass",     FIELD_STR,  apPass),
-    FIELD("web_pass",    FIELD_STR,  webPass),
+    SECRET("ap_pass",                apPass),
+    SECRET("web_pass",               webPass),
+    FIELD("web_ap_only", FIELD_BOOL, webApOnly),
 };
 
 #define FIELD_COUNT (sizeof(s_fields) / sizeof(s_fields[0]))
@@ -432,4 +442,87 @@ esp_err_t GwConfig_Reset(void)
 
     ESP_LOGW(TAG, "config reset to factory defaults: %s", esp_err_to_name(err));
     return err;
+}
+
+/* ------------------------------------------------------------ JSON（配置网页） */
+
+cJSON *GwConfig_ToJson(const GwConfig *cfg)
+{
+    cJSON *root = cJSON_CreateObject();
+
+    if (root == NULL) {
+        return NULL;
+    }
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        const GwField *f = &s_fields[i];
+        const uint8_t *p = (const uint8_t *)cfg + f->offset;
+
+        if (f->secret) {
+            continue;
+        }
+        switch (f->type) {
+        case FIELD_STR:
+            cJSON_AddStringToObject(root, f->name, (const char *)p);
+            break;
+        case FIELD_U16:
+            cJSON_AddNumberToObject(root, f->name, *(const uint16_t *)p);
+            break;
+        case FIELD_BOOL:
+            cJSON_AddBoolToObject(root, f->name, *(const bool *)p);
+            break;
+        default:
+            break;
+        }
+    }
+    return root;
+}
+
+esp_err_t GwConfig_FromJson(GwConfig *cfg, const cJSON *json, const char **why)
+{
+    static char reason[80];     // 只有配置网页调用，不会并发
+
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        const GwField *f = &s_fields[i];
+        const cJSON *item = cJSON_GetObjectItemCaseSensitive(json, f->name);
+        uint8_t *p = (uint8_t *)cfg + f->offset;
+        bool ok = false;
+
+        if (item == NULL) {
+            continue;       // 未出现的字段保持原值
+        }
+        switch (f->type) {
+        case FIELD_STR:
+            if (cJSON_IsString(item) && strlen(item->valuestring) >= f->size) {
+                snprintf(reason, sizeof(reason), "%s 过长（最多 %u 个字符）", f->name, (unsigned)(f->size - 1));
+                *why = reason;
+                return ESP_ERR_INVALID_ARG;
+            }
+            if (cJSON_IsString(item)) {
+                strlcpy((char *)p, item->valuestring, f->size);
+                ok = true;
+            }
+            break;
+        case FIELD_U16:
+            if (cJSON_IsNumber(item) && item->valuedouble >= 0 && item->valuedouble <= 65535 &&
+                item->valuedouble == (double)item->valueint) {
+                *(uint16_t *)p = (uint16_t)item->valueint;
+                ok = true;
+            }
+            break;
+        case FIELD_BOOL:
+            if (cJSON_IsBool(item)) {
+                *(bool *)p = cJSON_IsTrue(item);
+                ok = true;
+            }
+            break;
+        default:
+            break;
+        }
+        if (!ok) {
+            snprintf(reason, sizeof(reason), "%s 格式不正确", f->name);
+            *why = reason;
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    return ESP_OK;
 }

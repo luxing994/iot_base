@@ -24,6 +24,8 @@
 #include "gw_config.h"
 #include "host_cmd.h"
 #include "net_manager.h"
+#include "app_info.h"
+#include "web_config.h"
 
 static const char *TAG = "BOOT";
 
@@ -79,8 +81,6 @@ static void stack_monitor_task(void *arg)
 
 /* ------------------------------------------------------------------ 启动信息 */
 
-#define FW_VERSION  "V3"
-
 /* 本固件启用的采集设备（编译期在 menuconfig 中选择） */
 static const char *const s_devices[] = {
 #if defined(CONFIG_PLC_FX_CONNECT_RS232)
@@ -118,9 +118,9 @@ static const char *const s_devices[] = {
     NULL,
 };
 
-static const char *ResetReasonText(esp_reset_reason_t r)
+const char *App_ResetText(void)
 {
-    switch (r) {
+    switch (esp_reset_reason()) {
     case ESP_RST_POWERON:   return "power on / reset button";
     case ESP_RST_SW:        return "software restart";
     case ESP_RST_PANIC:     return "crash (panic)";
@@ -133,24 +133,34 @@ static const char *ResetReasonText(esp_reset_reason_t r)
     }
 }
 
+const char *App_CollectText(void)
+{
+    static char text[96];
+
+    if (text[0] == '\0') {
+        for (int i = 0; s_devices[i] != NULL; i++) {
+            strlcat(text, (i == 0) ? "" : ", ", sizeof(text));
+            strlcat(text, s_devices[i], sizeof(text));
+        }
+        if (text[0] == '\0') {
+            strlcpy(text, "none", sizeof(text));
+        }
+    }
+    return text;
+}
+
 // 开机时把版本、身份、网络参数集中打印一次，现场看日志时一目了然
 static void PrintBanner(void)
 {
     const GwConfig *c = GwConfig_Get();
-    char devices[96] = "";
     uint8_t mac[6];
-
-    for (int i = 0; s_devices[i] != NULL; i++) {
-        strlcat(devices, (i == 0) ? "" : ", ", sizeof(devices));
-        strlcat(devices, s_devices[i], sizeof(devices));
-    }
 
     ESP_LOGI(TAG, "==================================================================");
     ESP_LOGI(TAG, " IoT Gateway %s   build %s %s   IDF %s", FW_VERSION, __DATE__, __TIME__, esp_get_idf_version());
-    ESP_LOGI(TAG, " reset     : %s", ResetReasonText(esp_reset_reason()));
+    ESP_LOGI(TAG, " reset     : %s", App_ResetText());
     ESP_LOGI(TAG, " config    : %s", GwConfig_IsSaved() ? "saved (web config)" : "factory defaults (menuconfig)");
     ESP_LOGI(TAG, " device    : devId %s, devNumber %s", c->devId, c->devNumber);
-    ESP_LOGI(TAG, " collect   : %s", devices[0] != '\0' ? devices : "none");
+    ESP_LOGI(TAG, " collect   : %s", App_CollectText());
     ESP_LOGI(TAG, " host      : %s  report %u, link %u, ota %u", c->hostAddr,
              c->hostReportPort, c->hostLinkPort, c->hostOtaPort);
     ESP_LOGI(TAG, " local     : cmd port %u, connectPort %u", c->cmdPort, c->advertisedPort);
@@ -184,6 +194,10 @@ static void QuietSystemLogs(void)
     for (size_t i = 0; i < sizeof(tags) / sizeof(tags[0]); i++) {
         esp_log_level_set(tags[i], ESP_LOG_WARN);
     }
+    // 手机浏览器断开连接、请求 favicon 等都会打警告，对现场排查没有意义
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_uri", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
 }
 void app_main(void)
 {
@@ -212,6 +226,7 @@ void app_main(void)
     // GPIO ISR 服务全局只安装一次（W5500 中断和开关量输入共用），重复安装 IDF 会打印错误
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     NetMgr_Start();
+    WebConfig_Start();      // 配置网页：热点 http://192.168.4.1 或局域网 http://<网关 IP>
 
     // 队列和事件组必须先于 GPIO 中断和各任务创建：中断回调里会直接置 xEventGroup1 的位
     xQueue1 = xQueueCreate(IOT_MSG_QUEUE_LEN, sizeof(char *));

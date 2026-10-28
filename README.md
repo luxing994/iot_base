@@ -5,8 +5,9 @@
 时间同步、OTA 升级）。
 
 - 芯片：ESP32-S3，ESP-IDF v5.0
-- 网络：Wi-Fi 或 W5500 以太网（`protocol_examples_common`）
-- 设备、协议、连接方式全部在 `idf.py menuconfig` 中选择
+- 网络：W5500 以太网 + Wi-Fi，任一路有 IP 即可通信
+- 设备类型、协议、串口参数在 `idf.py menuconfig` 中选择（编译期）；
+  网络、上位机地址、设备号等现场参数在**配置网页**中修改，无需重新烧录（见“现场配置”）
 
 ## 目录结构
 
@@ -17,6 +18,9 @@ main/
 │   ├── tcp_client.c      连接上位机（数据上报 / 心跳 / OTA 通道）、网口 PLC 连接与重连
 │   ├── tcp_server.c      本机 TCP 服务端（命令端口 JSON 粘包/拆包、文件端口）
 │   ├── host_cmd.c        上位机命令解析、命令状态（线程安全读取接口）、分发
+│   ├── gw_config.c       运行参数（NVS 存储，出厂默认值来自 menuconfig）
+│   ├── net_manager.c     以太网 / Wi-Fi / 配置热点管理、连按复位检测
+│   ├── web_config.c      配置网页（页面在 main/web/index.html，编译时嵌入固件）
 │   ├── file_transfer.c   文件分包接收
 │   ├── uart_task.c       UART1 初始化与事件任务、命令执行任务 cmd_task
 │   ├── plc_points.c      ★ 设备点表：每种设备读哪些寄存器、对应哪个 FR 编号（按 menuconfig 选择）
@@ -102,6 +106,18 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
 网口协议用 `net_io.h` 收发（参考 `lx_modbus_tcp_master.c`）。
 然后在 `plc_points.h` 增加点类型，在 `plc_poll.c` 增加"点类型 → 读函数"的翻译。
 
+## 现场配置（配网）
+
+1. **进入配置模式**：新烧录的网关（出厂状态）开机即打开配置热点；已配置过的网关在 5 秒内连续按 3 次复位键
+   （或快速断电上电 3 次）打开热点。热点 10 分钟无人连接自动关闭；网络断开**不会**自动打开热点。
+2. 手机 / 电脑连接热点 `IoTGW-xxxx`（xxxx 为 Wi-Fi MAC 后 4 位，密码默认 `12345678`），浏览器访问 `http://192.168.4.1`。
+   网关已接入局域网时，也可直接访问 `http://<网关 IP>`。
+3. 输入网页密码（默认 `admin`）登录，可查看运行状态、修改 Wi-Fi / 以太网（DHCP、静态 IP、MAC）、上位机地址和端口、
+   设备号、网口 PLC 地址、热点和网页密码，保存后自动重启生效；也可在网页中重启或恢复出厂。
+   “系统”中可打开“仅允许通过配置热点访问”，打开后局域网 IP 访问会被拒绝。
+
+参数保存在 NVS 中，升级固件不会丢失；网页中没有保存过的参数使用 menuconfig 中的值（出厂默认值）。
+
 ## 配置与编译
 
 ```bash
@@ -117,6 +133,7 @@ idf.py -p PORT flash monitor
 | Device identity | 设备号 `devId`（每台网关必须唯一）、`devNumber` |
 | Host connection | 上位机 IP、上报 / 心跳 / OTA 端口、心跳和重连间隔 |
 | Local server | 命令端口、上线包中的 connectPort、文件端口开关、TCP keepalive |
+| Network | Wi-Fi、W5500 引脚、以太网 MAC、DHCP / 静态 IP、配置热点密码、网页密码（出厂默认值） |
 | Data acquisition | 应答超时；各协议的设备类型、连接方式、网口 IP / 端口 |
 | Sensors | MAX6675 热电偶 |
 | Debug | 任务栈余量监视 |
@@ -126,5 +143,6 @@ idf.py -p PORT flash monitor
 
 ## 注意事项
 
-- `sdkconfig` 中含 Wi-Fi 账号密码，提交前注意
+- `sdkconfig` 中含 Wi-Fi 账号密码（出厂默认值），提交前注意
+- 配置网页使用 HTTP，密码明文传输，网页密码务必改掉默认值；局域网不可信时打开“仅允许通过配置热点访问”（热点本身有 WPA2 加密）
 - OTA 使用 HTTP 下载且不校验固件签名，只应在受信任的内网中使用

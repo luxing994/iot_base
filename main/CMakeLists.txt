@@ -24,9 +24,11 @@ idf_component_register(SRCS "./src/app/tcp_client.c"
                        SRCS "./src/app/host_cmd.c"
                        SRCS "./src/app/gw_config.c"
                        SRCS "./src/app/net_manager.c"
+                       SRCS "./src/app/web_config.c"
                        SRCS "./src/app/file_transfer.c"
                        SRCS "./src/protocol/modbus/master.c"
                        SRCS "./src/protocol/modbus/modbus_params.c"
                        SRCS "./src/protocol/modbus/lx_modbus_tcp_master.c"
                        SRCS "./src/protocol/s7comm/lx_s7comm.c"
-                    INCLUDE_DIRS "./inc")
+                    INCLUDE_DIRS "./inc"
+                    EMBED_TXTFILES "./web/index.html")   # 配置网页，见 web_config.c

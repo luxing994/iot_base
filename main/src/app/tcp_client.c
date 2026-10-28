@@ -51,12 +51,42 @@ char* GetStaIp(void)
 
 /* ---------------------------------------------------------------- 连接工具 */
 
-// 每个连接任务一份，用于日志限频
+// 每个连接任务一份，用于日志限频和状态查询
 typedef struct {
     const char *tag;
     const char *peer;       // 日志中的对端名称，如 "host report"
     int fails;
+    volatile bool up;
 } ConnLog;
+
+#define MAX_LINKS   8
+
+static ConnLog *s_links[MAX_LINKS];     // 各任务栈上的 ConnLog，任务不退出，指针一直有效
+static int s_linkCount;
+static portMUX_TYPE s_linkLock = portMUX_INITIALIZER_UNLOCKED;
+
+static void RegisterLink(ConnLog *log)
+{
+    taskENTER_CRITICAL(&s_linkLock);
+    if (s_linkCount < MAX_LINKS) {
+        s_links[s_linkCount++] = log;
+    }
+    taskEXIT_CRITICAL(&s_linkLock);
+}
+
+int TcpClient_GetLinks(TcpLinkState *out, int max)
+{
+    int n = 0;
+
+    taskENTER_CRITICAL(&s_linkLock);
+    for (int i = 0; i < s_linkCount && n < max; i++, n++) {
+        out[n].tag = s_links[i]->tag;
+        out[n].peer = s_links[i]->peer;
+        out[n].up = s_links[i]->up;
+    }
+    taskEXIT_CRITICAL(&s_linkLock);
+    return n;
+}
 
 static void WaitNetwork(void)
 {
@@ -78,10 +108,12 @@ static void LogConnected(ConnLog *log, const char *ip, uint16_t port)
 {
     ESP_LOGI(log->tag, "%s %s:%u connected", log->peer, ip, port);
     log->fails = 0;
+    log->up = true;
 }
 
-static void TcpClose(int sock, const ConnLog *log)
+static void TcpClose(int sock, ConnLog *log)
 {
+    log->up = false;
     if (sock >= 0) {
         ESP_LOGW(log->tag, "%s disconnected, reconnect in %d s", log->peer, CLIENT_RECONNECT_MS / 1000);
         shutdown(sock, 0);
@@ -174,6 +206,7 @@ void tcp_client_task(void *pvParameters)
     ConnLog log = { .tag = "HOST", .peer = "report channel" };
     char *msg = NULL;
 
+    RegisterLink(&log);
     while (1) {
         WaitNetwork();
         int sock = TcpConnect(HOST_IP_ADDR, PORT, &log);
@@ -272,6 +305,7 @@ static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler hand
         vTaskDelete(NULL);
         return;
     }
+    RegisterLink(&log);
 
     while (1) {
         WaitNetwork();
@@ -361,6 +395,7 @@ static __attribute__((unused)) void PlcNetClientLoop(const char *peer, PlcConnec
 {
     ConnLog log = { .tag = "PLC", .peer = peer };
 
+    RegisterLink(&log);
     while (1) {
         WaitNetwork();
         int sock = connect_fn(&log);
@@ -415,6 +450,7 @@ static int S7Connect(ConnLog *log)
     int sock = PlcTcpConnect(GwConfig_Get()->s7Ip, GwConfig_Get()->s7Port, log);
 
     if (sock >= 0 && S7_Handshake(sock) != 0) {
+        log->up = false;
         close(sock);
         return -1;
     }

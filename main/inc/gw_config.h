@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "cJSON.h"
 
 #define GW_STR_ID       32
 #define GW_STR_HOST     48      // IPv4 / IPv6 地址
@@ -61,6 +62,7 @@ typedef struct {
     /* 配置模式 */
     char apPass[GW_STR_PASS];           // 配置热点密码（至少 8 位）
     char webPass[GW_STR_PASS];          // 配置网页登录密码
+    bool webApOnly;                     // 配置网页只允许通过配置热点访问
 } GwConfig;
 
 /* 从 NVS 加载配置，须在 nvs_flash_init() 之后、创建任务之前调用 */
@@ -103,5 +105,13 @@ esp_err_t GwConfig_Save(const GwConfig *cfg);
 
 /* 恢复出厂：清除 NVS 中保存的配置，重启后生效 */
 esp_err_t GwConfig_Reset(void);
+
+/*
+ * 与 JSON 互转（配置网页用），键名与结构体成员同名，如 "devId"、"hostReportPort"。
+ *   ToJson   不输出密码类字段（wifiPass、apPass、webPass）
+ *   FromJson 只覆盖 JSON 中出现的字段，类型或长度不对时返回 ESP_ERR_INVALID_ARG 并给出原因
+ */
+cJSON *GwConfig_ToJson(const GwConfig *cfg);
+esp_err_t GwConfig_FromJson(GwConfig *cfg, const cJSON *json, const char **why);
 
 #endif

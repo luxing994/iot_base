@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -43,6 +44,8 @@ static volatile bool s_ethUp;
 static char s_ethIp[16];
 
 static bool s_wifiInited;
+static bool s_wifiStarted;
+static volatile bool s_scanning;        // 网页正在扫描 Wi-Fi，暂停重连
 static bool s_staWanted;                // 配置了 Wi-Fi SSID
 static volatile bool s_staConnected;
 static volatile bool s_staUp;
@@ -143,6 +146,7 @@ static void WifiApplyConfig(void)
     } else {
         if (s_wifiInited) {
             esp_wifi_stop();
+            s_wifiStarted = false;
         }
         return;
     }
@@ -186,6 +190,7 @@ static void WifiApplyConfig(void)
         ESP_LOGE(TAG, "wifi: start failed: %s", esp_err_to_name(err));
         return;
     }
+    s_wifiStarted = true;
     esp_wifi_set_ps(WIFI_PS_NONE);      // 网关常供电，关闭省电以降低通信延迟
 }
 
@@ -448,7 +453,8 @@ static void NetMgrTask(void *arg)
         }
 
         // Wi-Fi 重连；有终端连着配置热点时暂停（重连扫描会切换信道，导致手机掉线）
-        if (s_staWanted && !s_staConnected && s_staRetryAt != 0 && (int32_t)(Now() - s_staRetryAt) >= 0) {
+        if (s_staWanted && !s_staConnected && !s_scanning && s_staRetryAt != 0 &&
+            (int32_t)(Now() - s_staRetryAt) >= 0) {
             if (s_apClients > 0) {
                 if (!retryPausedLogged) {
                     ESP_LOGI(TAG, "wifi: reconnect paused while a client is on the config hotspot");
@@ -559,6 +565,59 @@ void NetMgr_GetLocalIp(const char *peer, char *buf, size_t size)
             }
         }
     }
+}
+
+int NetMgr_ScanWifi(NetWifiAp *out, int max)
+{
+    wifi_scan_config_t scan = { .show_hidden = false };
+    wifi_ap_record_t *recs;
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    uint16_t n = (uint16_t)max;
+    esp_err_t err;
+
+    // 扫描需要 STA 接口：只开着热点时临时切到 AP+STA，Wi-Fi 未启动时以 STA 启动（不会去连接）
+    WifiInit();
+    esp_wifi_get_mode(&mode);
+    if (!s_wifiStarted) {
+        esp_wifi_set_mode(WIFI_MODE_STA);
+        if (esp_wifi_start() == ESP_OK) {
+            s_wifiStarted = true;
+        }
+    } else if (mode == WIFI_MODE_AP) {
+        esp_wifi_set_mode(WIFI_MODE_APSTA);
+    }
+
+    s_scanning = true;
+    err = esp_wifi_scan_start(&scan, true);
+    if (err == ESP_ERR_WIFI_STATE) {
+        // STA 正在连接路由器时不能扫描，停止本次连接后重试（扫描完由管理任务按计划重连）
+        esp_wifi_disconnect();
+        vTaskDelay(pdMS_TO_TICKS(500));
+        err = esp_wifi_scan_start(&scan, true);
+    }
+    s_scanning = false;
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "wifi: scan failed: %s", esp_err_to_name(err));
+        return -1;
+    }
+
+    recs = calloc(n, sizeof(*recs));
+    if (recs == NULL) {
+        return -1;
+    }
+    if (esp_wifi_scan_get_ap_records(&n, recs) != ESP_OK) {
+        n = 0;
+    }
+    for (int i = 0; i < n; i++) {
+        strlcpy(out[i].ssid, (const char *)recs[i].ssid, sizeof(out[i].ssid));
+        out[i].rssi = recs[i].rssi;
+        out[i].secure = (recs[i].authmode != WIFI_AUTH_OPEN);
+    }
+    free(recs);
+    if (s_staWanted && !s_staConnected && s_staRetryAt == 0) {
+        s_staRetryAt = Now();       // 扫描打断了正在进行的连接，尽快重连
+    }
+    return n;
 }
 
 int NetMgr_GetIfIndex(void)

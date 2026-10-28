@@ -60,6 +60,15 @@ void NetMgr_GetLocalIp(const char *peer, char *buf, size_t size);
 /* 打开配置热点 */
 void NetMgr_OpenConfigAp(NetApReason reason);
 
+/* 扫描附近的 Wi-Fi（阻塞约 2~3 秒），返回个数，失败返回 -1 */
+typedef struct {
+    char ssid[33];
+    int8_t rssi;
+    bool secure;
+} NetWifiAp;
+
+int NetMgr_ScanWifi(NetWifiAp *out, int max);
+
 /* IPv6 链路本地地址需要的网口编号（优先以太网） */
 int NetMgr_GetIfIndex(void);
 

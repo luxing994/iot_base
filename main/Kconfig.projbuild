@@ -263,6 +263,14 @@ menu "Network"
         help
             配置网页的登录密码。出厂默认值，现场可在配置网页修改。
 
+    config IOT_WEB_AP_ONLY
+        bool "Config web page: hotspot access only"
+        default n
+        help
+            打开后配置网页只能通过配置热点（http://192.168.4.1）访问，
+            从局域网 IP 访问会被拒绝，避免网页密码在局域网中明文传输。
+            出厂默认值，现场可在配置网页"系统"中修改。
+
 endmenu
 
 # =====================================================================

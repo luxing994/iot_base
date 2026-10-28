@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IoT 网关配置</title>
+<style>
+:root{--bg:#f2f4f7;--card:#fff;--fg:#1f2933;--mut:#6b7785;--line:#e3e7ec;--pri:#1769e0;--ok:#1a9a50;--bad:#d64545;--warn:#c98a00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+header{background:#14324f;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
+header h1{font-size:17px;margin:0;flex:1}
+header small{opacity:.75}
+header button{background:transparent;color:#fff;border:1px solid #ffffff66;padding:4px 10px}
+main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
+nav{display:flex;gap:4px;margin:4px 0 12px;overflow-x:auto}
+nav button{flex:1;background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--mut);padding:8px 4px;white-space:nowrap}
+nav button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
+.card{background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px #0000000f}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.card h2 .sp{flex:1}
+.row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row span:first-child{color:var(--mut);flex:none}
+.row span:last-child{text-align:right;word-break:break-all}
+label{display:block;margin:10px 0 4px;color:var(--mut);font-size:13px}
+input{width:100%;padding:9px 10px;border:1px solid #cfd6de;border-radius:6px;font-size:15px;background:#fff;color:var(--fg)}
+input:focus{outline:2px solid #1769e033;border-color:var(--pri)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}
+.chk{display:flex;align-items:center;gap:8px;margin:10px 0 0;color:var(--fg);font-size:15px}
+.chk input{width:auto}
+.hint{color:var(--mut);font-size:13px;margin:6px 0 0}
+button{font:inherit;border:0;border-radius:6px;padding:9px 16px;background:var(--pri);color:#fff;cursor:pointer}
+button.sec{background:#e8edf3;color:var(--fg)}
+button.bad{background:var(--bad)}
+button:disabled{opacity:.5}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#b8c0c8}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+.scan{margin-top:8px;border:1px solid var(--line);border-radius:6px;max-height:240px;overflow-y:auto}
+.scan div{display:flex;justify-content:space-between;padding:8px 10px;border-top:1px solid var(--line);cursor:pointer}
+.scan div:first-child{border-top:0}
+.scan div:active{background:#eef3fb}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fffffff2;border-top:1px solid var(--line);padding:10px 16px;display:flex;justify-content:center}
+.bar button{width:100%;max-width:688px;padding:12px}
+#msg{position:fixed;left:50%;top:14px;transform:translateX(-50%);max-width:92%;padding:10px 16px;border-radius:8px;color:#fff;display:none;z-index:9}
+#cover{position:fixed;inset:0;background:#14324fe6;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:8}
+#cover div{max-width:420px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>IoT 网关配置 <small id="hdrId"></small></h1><button id="btnOut" class="hide">退出</button></header>
+<div id="msg"></div>
+<div id="cover"><div><h2 id="coverT">网关正在重启</h2><p id="coverD"></p></div></div>
+
+<main>
+<section id="login" class="card hide">
+  <h2>登录</h2>
+  <label>网页密码</label>
+  <input id="pw" type="password" autocomplete="current-password">
+  <p class="hint">出厂密码见 menuconfig（IOT_WEB_PASSWORD），登录后可在“系统”中修改。</p>
+  <p><button id="btnLogin">登录</button></p>
+</section>
+
+<div id="app" class="hide">
+<nav>
+  <button data-tab="st" class="on">状态</button>
+  <button data-tab="net">网络</button>
+  <button data-tab="par">参数</button>
+  <button data-tab="sys">系统</button>
+</nav>
+
+<!-- 状态 -->
+<div id="tab-st">
+  <div class="card"><h2>设备</h2><div id="stDev"></div></div>
+  <div class="card"><h2>网络</h2><div id="stNet"></div></div>
+  <div class="card"><h2>连接</h2><div id="stLink"></div></div>
+</div>
+
+<!-- 网络 -->
+<div id="tab-net" class="hide">
+  <div class="card">
+    <h2>Wi-Fi<span class="sp"></span><button id="btnScan" class="sec">扫描</button></h2>
+    <div id="scan" class="scan hide"></div>
+    <label>名称（SSID），留空表示不使用 Wi-Fi</label>
+    <input data-k="wifiSsid" maxlength="32">
+    <label>密码</label>
+    <input data-s="wifiPass" type="password" maxlength="64" placeholder="不修改请留空" autocomplete="new-password">
+    <label class="chk"><input type="checkbox" id="showPw">显示密码</label>
+  </div>
+  <div class="card" data-f="eth">
+    <h2>以太网</h2>
+    <label>MAC 地址，留空表示自动（每台不同）</label>
+    <input data-k="ethMac" maxlength="17" id="ethMac">
+    <label class="chk"><input type="checkbox" data-k="ethDhcp" id="ethDhcp">自动获取 IP（DHCP）</label>
+    <div id="ethStatic">
+      <div class="grid">
+        <div><label>IP 地址</label><input data-k="ethIp" maxlength="15"></div>
+        <div><label>子网掩码</label><input data-k="ethMask" maxlength="15"></div>
+        <div><label>网关</label><input data-k="ethGateway" maxlength="15"></div>
+        <div><label>DNS（可留空）</label><input data-k="ethDns" maxlength="15"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 参数 -->
+<div id="tab-par" class="hide">
+  <div class="card">
+    <h2>设备标识</h2>
+    <div class="grid">
+      <div><label>devId</label><input data-k="devId" maxlength="31"></div>
+      <div><label>devNumber</label><input data-k="devNumber" maxlength="31"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>上位机</h2>
+    <label>地址</label><input data-k="hostAddr" maxlength="47">
+    <div class="grid3">
+      <div><label>上报端口</label><input data-k="hostReportPort" type="number"></div>
+      <div><label>心跳端口</label><input data-k="hostLinkPort" type="number"></div>
+      <div><label>OTA 端口</label><input data-k="hostOtaPort" type="number"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>本机端口</h2>
+    <div class="grid3">
+      <div><label>命令端口</label><input data-k="cmdPort" type="number"></div>
+      <div><label>connectPort</label><input data-k="advertisedPort" type="number"></div>
+      <div data-f="filePort"><label>文件端口</label><input data-k="filePort" type="number"></div>
+    </div>
+    <p class="hint">connectPort 是上线包中告诉上位机的命令端口，经端口映射时与命令端口不同。</p>
+  </div>
+  <div class="card" data-f="fx">
+    <h2>FX PLC（网口）</h2>
+    <div class="grid"><div><label>IP</label><input data-k="fxIp" maxlength="15"></div><div><label>端口</label><input data-k="fxPort" type="number"></div></div>
+  </div>
+  <div class="card" data-f="s7">
+    <h2>S7 PLC（网口）</h2>
+    <div class="grid"><div><label>IP</label><input data-k="s7Ip" maxlength="15"></div><div><label>端口</label><input data-k="s7Port" type="number"></div></div>
+  </div>
+  <div class="card" data-f="modbus">
+    <h2>Modbus TCP 设备</h2>
+    <div class="grid"><div><label>IP</label><input data-k="modbusIp" maxlength="15"></div><div><label>端口</label><input data-k="modbusPort" type="number"></div></div>
+  </div>
+</div>
+
+<!-- 系统 -->
+<div id="tab-sys" class="hide">
+  <div class="card">
+    <h2>修改密码</h2>
+    <label>配置热点密码（至少 8 位）</label>
+    <input id="apPass" type="password" maxlength="32" placeholder="不修改请留空" autocomplete="new-password">
+    <label>网页登录密码</label>
+    <input id="webPass" type="password" maxlength="32" placeholder="不修改请留空" autocomplete="new-password">
+    <label>再次输入网页登录密码</label>
+    <input id="webPass2" type="password" maxlength="32" autocomplete="new-password">
+    <p><button id="btnPass">保存密码并重启</button></p>
+  </div>
+  <div class="card">
+    <h2>访问控制</h2>
+    <label class="chk"><input type="checkbox" data-k="webApOnly" id="apOnly">仅允许通过配置热点访问本页面</label>
+    <p class="hint">网页使用 HTTP，从局域网访问时密码以明文传输。打开后局域网 IP 访问会被拒绝，只能连按 3 次复位键打开配置热点后访问 http://192.168.4.1。</p>
+    <p><button id="btnApOnly">保存并重启</button></p>
+  </div>
+  <div class="card">
+    <h2>维护</h2>
+    <p class="hint">再次进入配置模式：5 秒内连续按 3 次复位键（或快速断电上电 3 次），网关会打开配置热点 10 分钟；连着局域网时也可直接访问网关 IP。</p>
+    <p><button id="btnReboot" class="sec">重启网关</button></p>
+    <p><button id="btnFactory" class="bad">恢复出厂设置</button></p>
+    <p class="hint">恢复出厂会清除网页中保存的全部参数，改用 menuconfig 中的默认值，并打开配置热点。</p>
+  </div>
+</div>
+</div>
+</main>
+
+<div id="saveBar" class="bar hide"><button id="btnSave">保存并重启</button></div>
+
+<script>
+var $ = function (s) { return document.querySelector(s); };
+var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+var token = '';
+var cfg = null, feat = {}, ethMacNow = '', stTimer = null, tab = 'st', viaAp = false;
+try { token = sessionStorage.getItem('t') || ''; } catch (e) {}
+
+function msg(text, bad) {
+  var m = $('#msg');
+  m.textContent = text;
+  m.style.background = bad ? 'var(--bad)' : 'var(--ok)';
+  m.style.display = 'block';
+  clearTimeout(msg.t);
+  msg.t = setTimeout(function () { m.style.display = 'none'; }, bad ? 5000 : 2500);
+}
+
+function api(path, body) {
+  var opt = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Token': token } };
+  if (body !== undefined) {
+    opt.headers['Content-Type'] = 'application/json';
+    opt.body = JSON.stringify(body);
+  }
+  return fetch(path, opt).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (r.status === 401 && path !== '/api/login') { logout(); }
+      if (!r.ok) { throw new Error(j.error || ('请求失败 HTTP ' + r.status)); }
+      return j;
+    });
+  });
+}
+
+function show(id, on) { $(id).classList.toggle('hide', !on); }
+
+function logout() {
+  token = '';
+  try { sessionStorage.removeItem('t'); } catch (e) {}
+  clearInterval(stTimer);
+  show('#app', false); show('#saveBar', false); show('#btnOut', false); show('#login', true);
+}
+
+function login() {
+  api('/api/login', { password: $('#pw').value }).then(function (j) {
+    token = j.token;
+    try { sessionStorage.setItem('t', token); } catch (e) {}
+    $('#pw').value = '';
+    start();
+  }).catch(function (e) { msg(e.message, true); });
+}
+
+function start() {
+  show('#login', false); show('#app', true); show('#btnOut', true);
+  loadConfig();
+  setTab(tab);
+}
+
+/* ---------------- 状态 ---------------- */
+
+var PEER = { 'report channel': '上位机 上报', 'link channel': '上位机 心跳', 'ota channel': '上位机 OTA',
+  'modbus tcp': 'Modbus TCP', 'fx mc': 'FX PLC', 's7': 'S7 PLC' };
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function rows(list) {
+  return list.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>'; }).join('');
+}
+function dot(cls, text) { return '<span class="dot ' + cls + '"></span>' + text; }
+function dur(s) {
+  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + ' 天 ' : '') + (d || h ? h + ' 小时 ' : '') + m + ' 分';
+}
+function signal(rssi) { return rssi >= -60 ? '强' : rssi >= -75 ? '中' : '弱'; }
+
+function loadStatus() {
+  api('/api/status').then(function (s) {
+    $('#hdrId').textContent = s.devId;
+    $('#stDev').innerHTML = rows([
+      ['devId', esc(s.devId)], ['devNumber', esc(s.devNumber)],
+      ['固件', esc(s.fw + '（' + s.build + '）')],
+      ['采集设备', esc(s.collect)],
+      ['参数来源', s.saved ? '网页保存' : '出厂默认（menuconfig）'],
+      ['运行时间', dur(s.uptime)], ['上次复位', esc(s.reset)], ['空闲内存', Math.round(s.heap / 1024) + ' KB']
+    ]);
+    var e = s.eth, w = s.wifi, a = s.ap, net = [];
+    if (e.present) {
+      net.push(['以太网', e.up ? dot('ok', esc(e.ip) + (e.dhcp ? '（DHCP）' : '（静态）')) : e.link ? dot('warn', '已插网线，等待 IP') : dot('bad', '未插网线')]);
+      net.push(['以太网 MAC', esc(e.mac)]);
+    } else {
+      net.push(['以太网', dot('', '未启用或模块无响应')]);
+    }
+    if (w.enabled) {
+      net.push(['Wi-Fi', w.up ? dot('ok', esc(w.ip) + '，信号' + signal(w.rssi) + '（' + w.rssi + ' dBm）') : dot('bad', '未连接 “' + esc(w.ssid) + '”')]);
+    } else {
+      net.push(['Wi-Fi', dot('', '未配置')]);
+    }
+    net.push(['Wi-Fi MAC', esc(w.mac)]);
+    net.push(['配置热点', a.on ? dot('warn', esc(a.ssid) + '，' + a.clients + ' 台已连接') : '已关闭']);
+    $('#stNet').innerHTML = rows(net);
+    $('#stLink').innerHTML = s.links.length ? rows(s.links.map(function (l) {
+      return [PEER[l.peer] || esc(l.peer), l.up ? dot('ok', '已连接') : dot('bad', '未连接')];
+    })) + '<p class="hint">上位机地址 ' + esc(s.hostAddr) + '</p>' : '<p class="hint">暂无</p>';
+    ethMacNow = e.mac;
+    viaAp = s.viaAp;
+    setMacHint();
+  }).catch(function (e) { if (token) { msg(e.message, true); } });
+}
+
+/* ---------------- 配置 ---------------- */
+
+function loadConfig() {
+  return api('/api/config').then(function (j) {
+    cfg = j.config; feat = j.features || {};
+    $$('[data-f]').forEach(function (el) { el.classList.toggle('hide', !feat[el.getAttribute('data-f')]); });
+    $$('[data-k]').forEach(function (el) {
+      var k = el.getAttribute('data-k');
+      if (el.type === 'checkbox') { el.checked = !!cfg[k]; } else { el.value = cfg[k] === undefined ? '' : cfg[k]; }
+    });
+    $$('[data-s]').forEach(function (el) { el.value = ''; });
+    ethMode();
+    setMacHint();
+  }).catch(function (e) { msg(e.message, true); });
+}
+
+function setMacHint() { $('#ethMac').placeholder = ethMacNow ? '自动（当前 ' + ethMacNow + '）' : '自动'; }
+function ethMode() { show('#ethStatic', !$('#ethDhcp').checked); }
+
+function visible(el) { return !el.closest('[data-f].hide'); }
+
+function collect() {
+  var out = {};
+  $$('[data-k]').forEach(function (el) {
+    if (!visible(el)) { return; }
+    var k = el.getAttribute('data-k');
+    if (el.type === 'checkbox') { out[k] = el.checked; return; }
+    if (el.type === 'number') {
+      var n = Number(el.value);
+      if (el.value === '' || !Number.isInteger(n) || n < 0 || n > 65535) { throw new Error('端口应为 0~65535 的整数'); }
+      out[k] = n; return;
+    }
+    out[k] = el.value.trim();
+  });
+  var pw = $('[data-s=wifiPass]').value;
+  // 换了 Wi-Fi 名称时一定带上密码（留空即开放网络），否则会沿用旧网络的密码
+  if (pw !== '' || out.wifiSsid !== cfg.wifiSsid) { out.wifiPass = pw; }
+  if (out.wifiSsid && out.wifiPass && out.wifiPass.length < 8) { throw new Error('Wi-Fi 密码至少 8 位（开放网络请留空）'); }
+  return out;
+}
+
+function save(body, what) {
+  if (!confirm((what || '保存参数') + '后网关将重启，确认继续？')) { return; }
+  api('/api/config', body).then(function () { restarting(true); }).catch(function (e) { msg(e.message, true); });
+}
+
+function restarting(saved) {
+  clearInterval(stTimer);
+  token = '';
+  try { sessionStorage.removeItem('t'); } catch (e) {}
+  $('#coverT').textContent = saved ? '已保存，网关正在重启' : '网关正在重启';
+  $('#coverD').innerHTML = '约 10 秒后自动刷新页面。<br><br>如果改了网络参数或这是首次配置，网关会按新参数联网，配置热点不再打开，本页可能无法自动恢复：请让手机或电脑回到网关所在的局域网，访问网关的新 IP；也可在 5 秒内连续按 3 次复位键重新打开配置热点。';
+  $('#cover').style.display = 'flex';
+  var tries = 0;
+  setTimeout(function poll() {
+    fetch('/', { cache: 'no-store' }).then(function (r) { if (r.ok) { location.reload(); } else { throw 0; } })
+      .catch(function () { if (++tries < 30) { setTimeout(poll, 2000); } });
+  }, 8000);
+}
+
+/* ---------------- Wi-Fi 扫描 ---------------- */
+
+function scan() {
+  var b = $('#btnScan'), box = $('#scan');
+  b.disabled = true; b.textContent = '扫描中…';
+  api('/api/scan').then(function (list) {
+    var best = {};
+    list.forEach(function (ap) { if (!best[ap.ssid] || best[ap.ssid].rssi < ap.rssi) { best[ap.ssid] = ap; } });
+    list = Object.keys(best).map(function (k) { return best[k]; }).sort(function (x, y) { return y.rssi - x.rssi; });
+    box.innerHTML = list.length ? list.map(function (ap) {
+      return '<div data-ssid="' + esc(ap.ssid) + '"><span>' + (ap.secure ? '🔒 ' : '') + esc(ap.ssid) + '</span><span>' + signal(ap.rssi) + ' ' + ap.rssi + '</span></div>';
+    }).join('') : '<div>未找到 Wi-Fi</div>';
+    show('#scan', true);
+  }).catch(function (e) { msg(e.message, true); })
+    .then(function () { b.disabled = false; b.textContent = '扫描'; });
+}
+
+/* ---------------- 页面 ---------------- */
+
+function setTab(t) {
+  tab = t;
+  $$('nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
+  ['st', 'net', 'par', 'sys'].forEach(function (x) { show('#tab-' + x, x === t); });
+  show('#saveBar', t === 'net' || t === 'par');
+  clearInterval(stTimer);
+  if (t === 'st' || t === 'net') { loadStatus(); }
+  if (t === 'st') { stTimer = setInterval(loadStatus, 5000); }
+}
+
+$$('nav button').forEach(function (b) { b.onclick = function () { setTab(b.getAttribute('data-tab')); }; });
+$('#btnLogin').onclick = login;
+$('#pw').onkeydown = function (e) { if (e.key === 'Enter') { login(); } };
+$('#btnOut').onclick = logout;
+$('#ethDhcp').onchange = ethMode;
+$('#showPw').onchange = function () { $('[data-s=wifiPass]').type = this.checked ? 'text' : 'password'; };
+$('#btnScan').onclick = scan;
+$('#scan').onclick = function (e) {
+  var d = e.target.closest('[data-ssid]');
+  if (!d) { return; }
+  $('[data-k=wifiSsid]').value = d.getAttribute('data-ssid');
+  show('#scan', false);
+  $('[data-s=wifiPass]').focus();
+};
+$('#btnSave').onclick = function () {
+  try { save(collect()); } catch (e) { msg(e.message, true); }
+};
+$('#btnPass').onclick = function () {
+  var body = {}, ap = $('#apPass').value, w1 = $('#webPass').value, w2 = $('#webPass2').value;
+  if (ap) { if (ap.length < 8) { return msg('配置热点密码至少 8 位', true); } body.apPass = ap; }
+  if (w1 || w2) { if (w1 !== w2) { return msg('两次输入的网页密码不一致', true); } body.webPass = w1; }
+  if (!body.apPass && body.webPass === undefined) { return msg('没有要修改的密码', true); }
+  save(body, '修改密码');
+};
+$('#btnApOnly').onclick = function () {
+  var on = $('#apOnly').checked;
+  if (on === !!cfg.webApOnly) { return msg('设置没有变化', true); }
+  if (on && !viaAp && !confirm('你现在是从局域网访问的，保存后本页面将无法再从局域网打开，只能通过配置热点访问。确认继续？')) { return; }
+  save({ webApOnly: on }, on ? '设置仅允许热点访问' : '允许局域网访问');
+};
+$('#btnReboot').onclick = function () {
+  if (confirm('确认重启网关？')) { api('/api/reboot', {}).then(function () { restarting(false); }).catch(function (e) { msg(e.message, true); }); }
+};
+$('#btnFactory').onclick = function () {
+  if (confirm('恢复出厂会清除网页中保存的全部参数，确认继续？') && confirm('再次确认：恢复出厂设置并重启？')) {
+    api('/api/factory', {}).then(function () { restarting(false); }).catch(function (e) { msg(e.message, true); });
+  }
+};
+
+if (token) { start(); } else { logout(); }
+</script>
+</body>
+</html>
