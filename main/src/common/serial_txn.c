@@ -8,6 +8,7 @@
 #include "serial_txn.h"
 #include "event_log.h"
 #include "monitor.h"
+#include "uart_task.h"
 
 #define SERIAL_TXN_UART      UART_NUM_1
 #define SERIAL_TXN_POLL_MS   10     // 应答未收全时的重试间隔
@@ -61,8 +62,9 @@ static void OnTimeout(int buffered)
         s_offlineSince = now;
         s_lastRemind = now;
         s_garbled = (buffered > 0);
-        EvLog_Add(EV_ERROR, "串口设备无应答（%s）",
-                  buffered > 0 ? "收到无法识别的数据，检查波特率、校验位、站号" : "没有收到数据，检查接线和设备电源");
+        EvLog_Add(EV_ERROR, "串口设备无应答：%s，先检查拨码开关是否在 %s 位置",
+                  buffered > 0 ? "收到无法识别的数据" : "没有收到数据",
+                  UART_InterfaceName() != NULL ? UART_InterfaceName() : "正确");
         // 收到数据却解析不出应答，多半是波特率 / 校验位 / 站号不对；完全没数据则检查接线和设备电源
         ESP_LOGW(TAG, "device not responding, keep polling (%s)",
                  buffered > 0 ? "garbled data: check baud rate / parity / station" : "no data: check wiring / power");

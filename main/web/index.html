@@ -226,7 +226,11 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
     <div class="grid">
       <div><label>devId（每台唯一）</label><input data-fk="devId" maxlength="31"></div>
       <div><label>devNumber</label><input data-fk="devNumber" maxlength="31"></div>
+      <div><label>devName</label><input data-fk="devName" maxlength="31"></div>
+      <div><label>devTypeId</label><input data-fk="devTypeId" maxlength="31"></div>
+      <div><label>orderName</label><input data-fk="orderName" maxlength="31"></div>
     </div>
+    <p class="hint">devName、devTypeId、orderName 填入上线包和心跳包；devTypeId、orderName 也是上位机下发命令之前数据报文的默认值。</p>
   </div>
   <div class="card">
     <h2>端口</h2>
@@ -321,6 +325,7 @@ function logout() {
   try { sessionStorage.removeItem('t'); } catch (e) {}
   clearInterval(stTimer);
   stopLog();
+  clearTimeout(dgTimer);
   show('#app', false); show('#saveBar', false); show('#btnOut', false); show('#login', true);
 }
 
@@ -363,6 +368,10 @@ function loadStatus() {
       ['固件', esc(s.fw + '（' + s.build + '）')],
       ['采集设备', esc(s.collect)], ['运行时间', dur(s.uptime)]
     ];
+    if (s.serial) {
+      // 现场常把 232/485 拨码开关拨错，明确提示
+      dev.splice(4, 0, ['串口', esc(s.serial) + '<br><span class="hint">网关拨码开关须在 ' + esc(s.serialIf) + ' 位置</span>']);
+    }
     if (s.role === 'factory') {
       // 售后排查用，客户不需要
       dev.push(['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值']);
@@ -533,12 +542,16 @@ function eventTimes(list, d) {
   });
 }
 
+// 有问题时每 3 秒自动刷新：现场按建议处理（如拨对拨码开关）后不用手动刷新就能看到结果
+var dgTimer = null;
 function loadDiag() {
+  clearTimeout(dgTimer);
   api('/api/diag').then(function (d) {
     $('#dgItems').innerHTML = d.items.map(function (it) {
       return '<div class="chk-item">' + dot(DOT[it.level], '<b>' + esc(it.title) + '</b>：' + esc(it.text)) +
         (it.advice ? '<div class="adv">' + esc(it.advice) + '</div>' : '') + '</div>';
-    }).join('');
+    }).join('') + (d.errors ? '<p class="hint">处理后无需刷新页面，结果每 3 秒自动更新。</p>' : '');
+    if (d.errors && tab === 'dg') { dgTimer = setTimeout(loadDiag, 3000); }
     renderCrash(d);
     return api('/api/events?n=200').then(function (list) {
       var times = eventTimes(list, d);
@@ -734,6 +747,7 @@ function setTab(t) {
   ['st', 'dg', 'mon', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
   show('#saveBar', t === 'net' || t === 'par');
   stopLog();
+  clearTimeout(dgTimer);
   clearInterval(stTimer);
   if (t === 'st' || t === 'net') { loadStatus(); }
   if (t === 'dg') { loadDiag(); }

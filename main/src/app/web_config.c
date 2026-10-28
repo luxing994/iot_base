@@ -25,6 +25,7 @@
 #include "log_buffer.h"
 #include "diag.h"
 #include "monitor.h"
+#include "uart_task.h"
 #include "iot_time.h"
 #include <time.h>
 
@@ -293,6 +294,10 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "heap", esp_get_free_heap_size());
     cJSON_AddStringToObject(root, "reset", App_ResetText());
     cJSON_AddStringToObject(root, "collect", App_CollectText());
+    if (UART_InterfaceText() != NULL) {
+        cJSON_AddStringToObject(root, "serial", UART_InterfaceText());
+        cJSON_AddStringToObject(root, "serialIf", UART_InterfaceName() != NULL ? UART_InterfaceName() : "");
+    }
     cJSON_AddBoolToObject(root, "saved", GwConfig_IsSaved());
     cJSON_AddBoolToObject(root, "factorySaved", GwConfig_IsFactorySaved());
     {

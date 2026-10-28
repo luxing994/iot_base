@@ -6,6 +6,7 @@
  *
  * 串口请求与应答的配对由 serial_txn.c 的事务完成，轮询见 plc_poll.c
  */
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
@@ -161,6 +162,34 @@ void uart_event_task(void *pvParameters)
 }
 
 #endif /* APP_UART_ENABLED */
+
+const char *UART_InterfaceName(void)
+{
+#if defined(CONFIG_APP_USE_RS485)
+    return "RS485";
+#elif defined(CONFIG_APP_USE_RS232)
+    return "RS232";
+#else
+    return NULL;
+#endif
+}
+
+const char *UART_InterfaceText(void)
+{
+#ifdef APP_UART_ENABLED
+    static char text[32];
+
+    if (text[0] == '\0') {
+        snprintf(text, sizeof(text), "%s %d %d%c%s", UART_InterfaceName() ? UART_InterfaceName() : "UART",
+                 APP_UART_BAUD, 5 + (int)APP_UART_DATA,
+                 APP_UART_PARITY == UART_PARITY_EVEN ? 'E' : APP_UART_PARITY == UART_PARITY_ODD ? 'O' : 'N',
+                 APP_UART_STOP == UART_STOP_BITS_2 ? "2" : APP_UART_STOP == UART_STOP_BITS_1_5 ? "1.5" : "1");
+    }
+    return text;
+#else
+    return UART_InterfaceName();     // Modbus RTU 由 esp-modbus 管理，参数见 master.c
+#endif
+}
 
 /* ------------------------------------------------------------- 命令任务 */
 

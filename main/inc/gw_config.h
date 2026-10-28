@@ -29,6 +29,9 @@ typedef struct {
     /* 设备标识 */
     char devId[GW_STR_ID];              // 上报报文 devId，每台网关唯一
     char devNumber[GW_STR_ID];          // 上报报文 devNumber
+    char devName[GW_STR_ID];            // 上线包 / 心跳包、温度报文的 devName
+    char devTypeId[GW_STR_ID];          // 上线包 / 心跳包的 devTypeId；上位机命令之前数据报文的默认值
+    char orderName[GW_STR_ID];          // 上线包 / 心跳包的 orderName；上位机命令之前数据报文的默认值
 
     /* 上位机 */
     char hostAddr[GW_STR_HOST];

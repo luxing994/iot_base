@@ -233,6 +233,10 @@ static void PrintBanner(void)
              GwConfig_IsSaved() ? "web" : "menuconfig (not configured)");
     ESP_LOGI(TAG, " device    : devId %s, devNumber %s", c->devId, c->devNumber);
     ESP_LOGI(TAG, " collect   : %s", App_CollectText());
+    if (UART_InterfaceText() != NULL) {
+        // 现场常把网关上的 232/485 拨码开关拨错，启动时明确提示
+        ESP_LOGI(TAG, " serial    : %s  (switch must be on %s)", UART_InterfaceText(), UART_InterfaceName());
+    }
     ESP_LOGI(TAG, " host      : %s  report %u, link %u, ota %u", c->hostAddr,
              c->hostReportPort, c->hostLinkPort, c->hostOtaPort);
     ESP_LOGI(TAG, " local     : cmd port %u", c->cmdPort);

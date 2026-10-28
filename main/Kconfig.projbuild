@@ -22,6 +22,26 @@ menu "Device identity"
         help
             数据报文中的 devNumber 字段。
 
+    config IOT_DEVICE_NAME
+        string "Device name (devName)"
+        default "Hello"
+        help
+            上线包 / 心跳包、温度报文中的 devName 字段。出厂参数，可在配置网页"出厂"页修改。
+
+    config IOT_DEVICE_TYPE_ID
+        string "Device type ID (devTypeId)"
+        default "Hello"
+        help
+            上线包 / 心跳包中的 devTypeId 字段，也是上位机下发命令之前数据报文的默认值。
+            出厂参数，可在配置网页"出厂"页修改。
+
+    config IOT_ORDER_NAME
+        string "Order name (orderName)"
+        default "Hello"
+        help
+            上线包 / 心跳包中的 orderName 字段，也是上位机下发命令之前数据报文的默认值。
+            出厂参数，可在配置网页"出厂"页修改。
+
 endmenu
 
 # =====================================================================

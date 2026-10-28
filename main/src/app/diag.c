@@ -33,6 +33,7 @@
 #include "net_manager.h"
 #include "serial_txn.h"
 #include "tcp_client.h"
+#include "uart_task.h"
 #include "diag.h"
 
 #define HEAP_LOW_BYTES      (40 * 1024)
@@ -221,21 +222,32 @@ static void CheckLinks(Checks *c, bool netUp)
 static void CheckSerial(Checks *c)
 {
     SerialTxnStats s;
+    const char *name = UART_InterfaceName() != NULL ? UART_InterfaceName() : "串口";
+    const char *params = UART_InterfaceText() != NULL ? UART_InterfaceText() : name;
+    bool rs485 = (strcmp(name, "RS485") == 0);
+    char advice[320];
 
     SerialTxn_GetStats(&s);
     if (s.txns == 0) {
         return;     // 没有串口设备，或还没开始轮询
     }
     if (s.offline) {
-        Add(c, "error", "串口设备",
-            s.garbled ? "收到了数据但无法识别：确认设备的波特率、数据位、校验位、站号与网关一致（网关参数见诊断报告）。"
-                      : "没有收到任何数据：检查 RS485 / RS232 接线（A/B 是否接反）、设备是否上电、设备通信口是否启用。",
-            "设备无应答（已持续 %u 秒）", (unsigned)s.offlineS);
+        // 现场最常见的原因是网关上的 232/485 拨码开关拨错，放在第一条
+        if (s.garbled) {
+            snprintf(advice, sizeof(advice), "①确认网关上的 232/485 拨码开关拨在 %s 位置；"
+                     "②确认设备的波特率、数据位、校验位、站号与网关一致（网关：%s）。", name, params);
+        } else {
+            snprintf(advice, sizeof(advice), "①确认网关上的 232/485 拨码开关拨在 %s 位置（本设备使用 %s）；%s"
+                     "③确认设备已上电、通信口已启用。", name, name,
+                     rs485 ? "②检查 A、B 线是否接反、是否接牢；" : "②检查 TX、RX 是否交叉连接，GND 是否接上；");
+        }
+        Add(c, "error", "串口设备", advice, "%s 设备无应答（已持续 %u 秒）", name, (unsigned)s.offlineS);
     } else if (s.errors > 10 && s.errors > s.ok) {
         Add(c, "warn", "串口设备", "设备有应答但内容有误：确认站号和读取的寄存器地址正确。",
             "应答异常较多（成功 %u，异常 %u）", (unsigned)s.ok, (unsigned)s.errors);
     } else {
-        Add(c, "ok", "串口设备", NULL, "通信正常（成功 %u 次，超时 %u 次）", (unsigned)s.ok, (unsigned)s.timeouts);
+        Add(c, "ok", "串口设备", NULL, "通信正常（%s，成功 %u 次，超时 %u 次）", params,
+            (unsigned)s.ok, (unsigned)s.timeouts);
     }
 }
 

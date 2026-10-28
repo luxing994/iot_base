@@ -26,6 +26,13 @@ void uart_init(void);
 void uart_event_task(void *pvParameters);
 #endif
 
+/*
+ * 串口接口说明，如 "RS485 115200 8N1"（用于启动信息、网页和诊断，提醒现场核对拨码开关）；
+ * 没有串口设备时返回 NULL。UART_InterfaceName() 只返回 "RS485" / "RS232"。
+ */
+const char *UART_InterfaceText(void);
+const char *UART_InterfaceName(void);
+
 // 执行上位机命令（host_cmd 置事件位）并上报开关量中断事件
 void cmd_task(void *arg);
 

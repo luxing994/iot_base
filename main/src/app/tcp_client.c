@@ -229,7 +229,7 @@ static void PackLinkData(char *buf, size_t size, const char *orderId, const char
             "    \"orderId\":\"%s\",\n    \"devIP\":\"%s\",\n    \"connectPort\":\"%d\",\n"
             "    \"value\":\"NULL\",\n    \"timeStamp\":\"%lld\",\n    \"isAnswer\":\"%s\",\n"
             "    \"expand\":\"NULL\"};;**##",
-            DEVID, "Hello", DEVNAME, DEVTYPEID, ORDERNAME, orderId, mcu_ip, CONNECT_PORT,
+            DEVID, GwConfig_Get()->devNumber, DEVNAME, DEVTYPEID, ORDERNAME, orderId, mcu_ip, CONNECT_PORT,
             (long long)GetMilliTimeNow(), isAnswer);
 }
 

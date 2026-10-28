@@ -106,6 +106,9 @@ static const char *TAG = "GW_CONFIG";
 static const GwConfig s_defaults = {
     .devId = CONFIG_IOT_DEVICE_ID,
     .devNumber = CONFIG_IOT_DEVICE_NUMBER,
+    .devName = CONFIG_IOT_DEVICE_NAME,
+    .devTypeId = CONFIG_IOT_DEVICE_TYPE_ID,
+    .orderName = CONFIG_IOT_ORDER_NAME,
 
     .hostAddr = DEF_HOST_ADDR,
     .hostReportPort = CONFIG_IOT_HOST_REPORT_PORT,
@@ -166,6 +169,9 @@ static const GwField s_fields[] = {
     /* 出厂参数：出货时用出厂密码在配置网页设置，客户不能修改，恢复出厂不清除 */
     FACTORY("dev_id",      FIELD_STR,  devId),
     FACTORY("dev_number",  FIELD_STR,  devNumber),
+    FACTORY("dev_name",    FIELD_STR,  devName),
+    FACTORY("dev_type",    FIELD_STR,  devTypeId),
+    FACTORY("order_name",  FIELD_STR,  orderName),
     FACTORY("host_report", FIELD_U16,  hostReportPort),
     FACTORY("host_link",   FIELD_U16,  hostLinkPort),
     FACTORY("host_ota",    FIELD_U16,  hostOtaPort),
