@@ -123,38 +123,6 @@ typedef struct {
 } parametersData;
 
 
-// 电镀厂温控仪表、整流机和冷冻机数据
-typedef struct {
-    int dPt;      // 小数点位置
-    int PV;       // 测量值
-    int SV;       // 设定值
-} TempControlTransData;
-
-typedef struct {
-    float setData;
-    float realData;
-} TempControlData;
-
-typedef struct {
-    float current;
-    float voltage;
-} MotorData;
-
-typedef struct {
-    float temperature;
-} FreezerData;
-
-typedef struct {
-    int status;
-} AirSwitchData;
-
-typedef struct {
-    TempControlData tempControl;
-    MotorData motorData;
-    FreezerData freezerData;
-    AirSwitchData switchData;
-} ElectroFactoryData;
-
 // 生能1-4车间冷媒灌注机设置数据格式
 // （采集数据的点表见 plc_report.c 中的 s_snBatchPoints）
 typedef struct {

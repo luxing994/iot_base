@@ -26,7 +26,12 @@
 #include "sdkconfig.h"
 
 #define SERIAL_TXN_TIMEOUT_MS         CONFIG_IOT_SERIAL_TIMEOUT_MS
+/* 该选项只在启用测试仪时存在，但测试仪源文件始终参与编译，未启用时给一个默认值 */
+#ifdef CONFIG_IOT_TESTER_TIMEOUT_MS
 #define SERIAL_TXN_TESTER_TIMEOUT_MS  CONFIG_IOT_TESTER_TIMEOUT_MS
+#else
+#define SERIAL_TXN_TESTER_TIMEOUT_MS  1000
+#endif
 
 #define SERIAL_PARSE_OK      0
 #define SERIAL_PARSE_MORE   (-1)

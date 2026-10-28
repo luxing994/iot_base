@@ -4,64 +4,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * Modbus RTU 主站（esp-modbus，UART1，RS485 半双工）
+ *
+ * 设备型号在 menuconfig 中选择（IoT Gateway Configuration -> Data acquisition -> Modbus -> Device）。
+ * 每种设备在下面的"设备定义"中占一个 #if 块，集中定义：
+ *   串口参数 / 寄存器参数表（CID）/ 读到数据后的处理 OnValue()
+ * plc_poll_task 每秒调用 master_operation_func() 读一遍所有 CID。
+ *
+ * 新增一种设备：在 Kconfig 的 PLC_MODBUS_RTU_DEVICE 中加选项，在这里加一个 #elif 块。
+ */
+
 #include <math.h>
-#include "string.h"
+#include <string.h>
 #include "esp_log.h"
 #include "modbus_params.h"  // for modbus parameters structures
 #include "mbcontroller.h"
 #include "sdkconfig.h"
 #include "iot_common.h"
 #include "iot_report.h"
+#include "master.h"
 
-#define AIR_SWITCH        0
-#define TEMP_CONTROLER    1
-#define MOTOR             2
-#define FREEZER           3
-#define RECORD            4
+#define MASTER_TAG "MODBUS_RTU"
 
-#define AIR_SWITCH_SPEED      9600
-#define TEMP_CONTROLER_SPEED  9600
-#define MOTOR_SPEED           19200
-#define FREEZER_SPEED         4800
-#define RECORD_SPEED          9600
-
-// 设备型号由 menuconfig 选择（IoT Gateway Configuration -> Data acquisition -> Modbus -> Device）
-#if defined(CONFIG_PLC_MODBUS_RTU_AIR_SWITCH)
-#define DEVICE_VERSION    AIR_SWITCH
-#elif defined(CONFIG_PLC_MODBUS_RTU_TEMP_CONTROLLER)
-#define DEVICE_VERSION    TEMP_CONTROLER
-#elif defined(CONFIG_PLC_MODBUS_RTU_RECTIFIER)
-#define DEVICE_VERSION    MOTOR
-#elif defined(CONFIG_PLC_MODBUS_RTU_FREEZER)
-#define DEVICE_VERSION    FREEZER
-#else
-#define DEVICE_VERSION    RECORD
-#endif
-
-#define MB_PORT_NUM       1   // Number of UART port used for Modbus connection
-#define MB_DEV_SPEED      9600  // The communication speed of the UART
+#define MB_PORT_NUM       1     // UART1
 #define MB_UART_TXD_PIN   17
 #define MB_UART_RXD_PIN   18
 #define MB_UART_RTS_PIN   8
-
-// Note: Some pins on target chip cannot be assigned for UART communication.
-// See UART documentation for selected board and target to configure pins using Kconfig.
-
-// The number of parameters that intended to be used in the particular control process
-#define MASTER_MAX_CIDS num_device_parameters
-
-// Number of reading of parameters from slave
-#define MASTER_MAX_RETRY 30
-
-// Timeout to update cid over Modbus
-#define UPDATE_CIDS_TIMEOUT_MS          (1000)
-#define UPDATE_CIDS_TIMEOUT_TICS        (UPDATE_CIDS_TIMEOUT_MS / portTICK_RATE_MS)
-
-// Timeout between polls
-#define POLL_TIMEOUT_MS                 (1)
-#define POLL_TIMEOUT_TICS               (POLL_TIMEOUT_MS / portTICK_RATE_MS)
-
-#define MASTER_TAG "MASTER_TEST"
+#define MB_DEVICE_ADDR    1     // 从站地址
 
 #define MASTER_CHECK(a, ret_val, str, ...) \
     if (!(a)) { \
@@ -69,507 +39,278 @@
         return (ret_val); \
     }
 
-// The macro to get offset for parameter in the appropriate structure
+// 参数在 holding_reg_params 中的偏移（esp-modbus 要求非 0，因此 +1）
 #define HOLD_OFFSET(field) ((uint16_t)(offsetof(holding_reg_params_t, field) + 1))
-#define INPUT_OFFSET(field) ((uint16_t)(offsetof(input_reg_params_t, field) + 1))
-#define COIL_OFFSET(field) ((uint16_t)(offsetof(coil_reg_params_t, field) + 1))
-// Discrete offset macro
-#define DISCR_OFFSET(field) ((uint16_t)(offsetof(discrete_reg_params_t, field) + 1))
-
 #define STR(fieldname) ((const char*)( fieldname ))
-// Options can be used as bit masks or parameter limits
 #define OPTS(min_val, max_val, step_val) { .opt1 = min_val, .opt2 = max_val, .opt3 = step_val }
 
-// Enumeration of modbus device addresses accessed by master device
-enum {
-    MB_DEVICE_ADDR1 = 1 // Only one slave device used for the test (add other slave addresses here)
-};
-#if DEVICE_VERSION == AIR_SWITCH
-// Enumeration of all supported CIDs for device (used in parameter definition table)
-enum {
-    CID_HOLD_WRITE_REG_1,
-    CID_COUNT
-};
-#elif DEVICE_VERSION == TEMP_CONTROLER
-// Enumeration of all supported CIDs for device (used in parameter definition table)
-enum {
-    CID_HOLD_DATA_0 = 0,
-    CID_HOLD_DATA_1,
-    CID_HOLD_DATA_2,
-    CID_COUNT
-};
-#elif DEVICE_VERSION == MOTOR
-// Enumeration of all supported CIDs for device (used in parameter definition table)
-enum {
-    CID_HOLD_DATA_0 = 0,
-    CID_HOLD_DATA_1,
-    CID_COUNT
-};
-#elif DEVICE_VERSION == FREEZER
-// Enumeration of all supported CIDs for device (used in parameter definition table)
-enum {
-    CID_HOLD_DATA_0 = 0,
-    CID_COUNT
-};
-#elif DEVICE_VERSION == RECORD
-// Enumeration of all supported CIDs for device (used in parameter definition table)
-enum {
-    CID_HOLD_DATA_0 = 0,
-    CID_HOLD_DATA_1,
-    CID_HOLD_DATA_2,
-    CID_HOLD_DATA_3,
-    CID_HOLD_DATA_4,
-    CID_HOLD_DATA_5,
-    CID_COUNT
-};
-#endif
+/* 参数表一行：{ CID, 名称, 单位, 从站地址, 寄存器类型, 起始地址, 寄存器个数, 存储偏移, 数据类型, 字节数, 选项, 权限 } */
+#define HOLD_U16(cid, name, unit, reg, field) \
+    { cid, STR(name), STR(unit), MB_DEVICE_ADDR, MB_PARAM_HOLDING, reg, 1, \
+      HOLD_OFFSET(field), PARAM_TYPE_U16, 2, OPTS(-40, 100, 1), PAR_PERMS_READ_WRITE_TRIGGER }
+#define HOLD_FLOAT(cid, name, unit, reg, field) \
+    { cid, STR(name), STR(unit), MB_DEVICE_ADDR, MB_PARAM_HOLDING, reg, 2, \
+      HOLD_OFFSET(field), PARAM_TYPE_FLOAT, 4, OPTS(-40, 100, 1), PAR_PERMS_READ }
 
-// Example Data (Object) Dictionary for Modbus parameters:
-// The CID field in the table must be unique.
-// Modbus Slave Addr field defines slave address of the device with correspond parameter.
-// Modbus Reg Type - Type of Modbus register area (Holding register, Input Register and such).
-// Reg Start field defines the start Modbus register number and Reg Size defines the number of registers for the characteristic accordingly.
-// The Instance Offset defines offset in the appropriate parameter structure that will be used as instance to save parameter value.
-// Data Type, Data Size specify type of the characteristic and its data size.
-// Parameter Options field specifies the options that can be used to process parameter value (limits or masks).
-// Access Mode - can be used to implement custom options for processing of characteristic (Read/Write restrictions, factory mode values and etc).
-#if DEVICE_VERSION == AIR_SWITCH
-const mb_parameter_descriptor_t device_parameters[] = {
-    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_HOLD_WRITE_REG_1, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 13, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS( 0, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-};
-#elif DEVICE_VERSION == TEMP_CONTROLER
-const mb_parameter_descriptor_t device_parameters[] = {
-    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 74, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 75, 1,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_2, STR("Data_channel_2"), STR("__"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 12, 1,
-            HOLD_OFFSET(holding_data2), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-};
-#elif DEVICE_VERSION == MOTOR
-const mb_parameter_descriptor_t device_parameters[] = {
-    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("V"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 0, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-    { CID_HOLD_DATA_1, STR("Data_channel_1"), STR("A"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 1, 1,
-            HOLD_OFFSET(holding_data1), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-};
-#elif DEVICE_VERSION == FREEZER
-const mb_parameter_descriptor_t device_parameters[] = {
-    // { CID, Param Name, Units, Modbus Slave Addr, Modbus Reg Type, Reg Start, Reg Size, Instance Offset, Data Type, Data Size, Parameter Options, Access Mode}
-    { CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING, 7, 1,
-            HOLD_OFFSET(holding_data0), PARAM_TYPE_U16, 2, OPTS( -40, 100, 1 ), PAR_PERMS_READ_WRITE_TRIGGER },
-};
-#elif DEVICE_VERSION == RECORD
-const mb_parameter_descriptor_t device_parameters[] = {
-    {   CID_HOLD_DATA_0, STR("Data_channel_0"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x2000,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data0),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-    {   CID_HOLD_DATA_1, STR("Data_channel_1"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x2002,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data1),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-    {   CID_HOLD_DATA_2, STR("Data_channel_2"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x2004,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data2),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-    {   CID_HOLD_DATA_3, STR("Data_channel_3"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x2006,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data3),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-    {   CID_HOLD_DATA_4, STR("Data_channel_4"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x2008,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data4),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-    {   CID_HOLD_DATA_5, STR("Data_channel_5"), STR("C"), MB_DEVICE_ADDR1, MB_PARAM_HOLDING,
-        0x200a,            /* 起始地址：高16位在 0x2000 */
-        2,                 /* 读 2 个寄存器 = 32 位 */
-        HOLD_OFFSET(holding_data5),         /* 指向 float 变量 */
-        PARAM_TYPE_FLOAT,                   /* 浮点 */
-        4,                                   /* 数据大小：4 字节 */
-        OPTS(-40, 100, 1),
-        PAR_PERMS_READ                       /* 只读，若确实要写再改为 READ_WRITE */
-    },
-};
-#endif
+/* ================================================================ 设备定义 */
 
-TempControlTransData tempTransData = {0, 0, -1};
-static __attribute__((unused)) ElectroFactoryData electroData = {0};
+#if defined(CONFIG_PLC_MODBUS_RTU_AIR_SWITCH)
+/*
+ * 智能空开：上位机 PowerOn / PowerOff 时写 13 号寄存器合闸 / 分闸（master_send_switch_func），
+ * 轮询只读取状态，不上报
+ */
+#define MB_BAUD     9600
+#define MB_PARITY   UART_PARITY_DISABLE
+#define MB_STOP     UART_STOP_BITS_1
+#define MB_HAS_SWITCH
 
-// Calculate number of parameters in the table
-const uint16_t num_device_parameters = (sizeof(device_parameters)/sizeof(device_parameters[0]));
+enum { CID_SWITCH };
 
-// The function to get pointer to parameter storage (instance) according to parameter description table
-static void* master_get_param_data(const mb_parameter_descriptor_t* param_descriptor)
+static const mb_parameter_descriptor_t s_params[] = {
+    { CID_SWITCH, STR("SWITCH"), STR("__"), MB_DEVICE_ADDR, MB_PARAM_HOLDING, 13, 1,
+      HOLD_OFFSET(holding_data0), PARAM_TYPE_ASCII, 2, OPTS(0, 100, 1), PAR_PERMS_READ_WRITE_TRIGGER },
+};
+
+static void OnValue(uint16_t cid, uint8_t type, uint32_t raw)
 {
-    assert(param_descriptor != NULL);
-    void* instance_ptr = NULL;
-    if (param_descriptor->param_offset != 0) {
-       switch(param_descriptor->mb_param_type)
-       {
-           case MB_PARAM_HOLDING:
-               instance_ptr = ((void*)&holding_reg_params + param_descriptor->param_offset - 1);
-               break;
-           case MB_PARAM_INPUT:
-               instance_ptr = ((void*)&input_reg_params + param_descriptor->param_offset - 1);
-               break;
-           case MB_PARAM_COIL:
-               instance_ptr = ((void*)&coil_reg_params + param_descriptor->param_offset - 1);
-               break;
-           case MB_PARAM_DISCRETE:
-               instance_ptr = ((void*)&discrete_reg_params + param_descriptor->param_offset - 1);
-               break;
-           default:
-               instance_ptr = NULL;
-               break;
-       }
-    } else {
-        ESP_LOGE(MASTER_TAG, "Wrong parameter offset for CID #%d", param_descriptor->cid);
-        assert(instance_ptr != NULL);
-    }
-    return instance_ptr;
+    (void)cid;
+    (void)type;
+    (void)raw;
 }
 
+#elif defined(CONFIG_PLC_MODBUS_RTU_TEMP_CONTROLLER)
+/* 电镀厂温控仪表：测量值、设定值、小数点位置都读到后，上报测量值 FR001 */
+#define MB_BAUD     9600
+#define MB_PARITY   UART_PARITY_DISABLE
+#define MB_STOP     UART_STOP_BITS_2
 
-#if DEVICE_VERSION == TEMP_CONTROLER
-void ParseTemperatureData(uint16_t cid, int data)
+enum { CID_PV, CID_SV, CID_DPT };
+
+static const mb_parameter_descriptor_t s_params[] = {
+    HOLD_U16(CID_PV,  "Data_channel_0", "V",  74, holding_data0),   // 测量值
+    HOLD_U16(CID_SV,  "Data_channel_1", "A",  75, holding_data1),   // 设定值
+    HOLD_U16(CID_DPT, "Data_channel_2", "__", 12, holding_data2),   // 小数点位置
+};
+
+static int s_pv = 0, s_sv = 0, s_dpt = -1;
+
+static void OnValue(uint16_t cid, uint8_t type, uint32_t raw)
 {
+    float real, set;
+    int dpt;
+
+    (void)type;
     switch (cid) {
-    case CID_HOLD_DATA_0:
-        tempTransData.PV = data;
-        break;
-    case CID_HOLD_DATA_1:
-        tempTransData.SV = data;
-        break;
-    case CID_HOLD_DATA_2:
-        tempTransData.dPt = data;
-        break;
-    default:
-        break;
+    case CID_PV:  s_pv = (int)raw;  break;
+    case CID_SV:  s_sv = (int)raw;  break;
+    case CID_DPT: s_dpt = (int)raw; break;
+    default: break;
     }
-    if (tempTransData.PV != 0 && tempTransData.SV != 0 && tempTransData.dPt != -1) {
-        if (tempTransData.dPt >= 128) {
-            tempTransData.dPt -= 128;
-            electroData.tempControl.realData = (float)tempTransData.PV / pow(10, (tempTransData.dPt) + 1);
-            electroData.tempControl.setData = (float)tempTransData.SV / pow(10, (tempTransData.dPt) + 1);
-        } else {
-            electroData.tempControl.realData = (float)tempTransData.PV / pow(10, tempTransData.dPt);
-            electroData.tempControl.setData = (float)tempTransData.SV / pow(10, tempTransData.dPt);
-        }
-        tempTransData.PV = 0;
-        tempTransData.SV = 0;
-        tempTransData.dPt = -1;
-        if (electroData.tempControl.realData != 0 && electroData.tempControl.setData != 0) {
-            IotReport_SendValue(TEMPDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.tempControl.realData);
-        }
+    if (s_pv == 0 || s_sv == 0 || s_dpt == -1) {
+        return;
+    }
+
+    // 小数点位置 >= 128 时实际位数为 (dpt - 128) + 1
+    dpt = (s_dpt >= 128) ? (s_dpt - 128 + 1) : s_dpt;
+    real = (float)s_pv / pow(10, dpt);
+    set = (float)s_sv / pow(10, dpt);
+    s_pv = 0;
+    s_sv = 0;
+    s_dpt = -1;
+    if (real != 0 && set != 0) {
+        IotReport_SendValue(TEMPDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", real);
     }
 }
-#elif DEVICE_VERSION == MOTOR
-void ParseMotorData(uint16_t cid, int data)
+
+#elif defined(CONFIG_PLC_MODBUS_RTU_RECTIFIER)
+/* 电镀厂整流机：电压 FR001、电流 FR002，每轮读完电流后、两者都不为 0 时上报 */
+#define MB_BAUD     19200
+#define MB_PARITY   UART_PARITY_EVEN
+#define MB_STOP     UART_STOP_BITS_1
+
+enum { CID_VOLTAGE, CID_CURRENT };
+
+static const mb_parameter_descriptor_t s_params[] = {
+    HOLD_U16(CID_VOLTAGE, "Data_channel_0", "V", 0, holding_data0),
+    HOLD_U16(CID_CURRENT, "Data_channel_1", "A", 1, holding_data1),
+};
+
+static float s_voltage, s_current;
+
+static void OnValue(uint16_t cid, uint8_t type, uint32_t raw)
 {
-    switch (cid) {
-    case CID_HOLD_DATA_0:
-        electroData.motorData.voltage = (float)data;
-        break;
-    case CID_HOLD_DATA_1:
-        electroData.motorData.current = (float)data;
-        break;
-    default:
-        break;
+    (void)type;
+    if (cid == CID_VOLTAGE) {
+        s_voltage = (float)raw;
+        return;
     }
-    if (electroData.motorData.voltage != 0 && electroData.motorData.current != 0) {
-        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.motorData.voltage);
-        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR002", "%.1f", electroData.motorData.current);
+    s_current = (float)raw;
+    // 原实现在读到电压和电流后各上报一次（每轮重复两遍），改为每轮只上报一次
+    if (s_voltage != 0 && s_current != 0) {
+        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", s_voltage);
+        IotReport_SendValue(MOTORDEVTYPEID, DEVTYPENAME, "FR002", "%.1f", s_current);
     }
 }
-#elif DEVICE_VERSION == FREEZER
-void ParseFreezerData(uint16_t cid, int data)
+
+#elif defined(CONFIG_PLC_MODBUS_RTU_FREEZER)
+/* 电镀厂冷冻机：温度（原始值 / 10）FR001，不为 0 时上报 */
+#define MB_BAUD     4800
+#define MB_PARITY   UART_PARITY_DISABLE
+#define MB_STOP     UART_STOP_BITS_1
+
+enum { CID_TEMPERATURE };
+
+static const mb_parameter_descriptor_t s_params[] = {
+    HOLD_U16(CID_TEMPERATURE, "Data_channel_0", "C", 7, holding_data0),
+};
+
+static float s_temperature;
+
+static void OnValue(uint16_t cid, uint8_t type, uint32_t raw)
 {
-    switch (cid) {
-    case CID_HOLD_DATA_0:
-        electroData.freezerData.temperature = (float)data / 10;
-        break;
-    default:
-        break;
+    (void)type;
+    if (cid == CID_TEMPERATURE) {
+        s_temperature = (float)raw / 10;
     }
-    if (electroData.freezerData.temperature != 0) {
-        IotReport_SendValue(FREEZERDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", electroData.freezerData.temperature);
+    if (s_temperature != 0) {
+        IotReport_SendValue(FREEZERDEVTYPEID, DEVTYPENAME, "FR001", "%.1f", s_temperature);
     }
 }
-#elif DEVICE_VERSION == RECORD
-void ParseRecordData(uint16_t cid, float data)
+
+#else
+/* 无纸记录仪（默认）：6 个温区温度，浮点，第 n 个温区上报为 FR00n，值为 0 时不上报 */
+#define MB_BAUD     9600
+#define MB_PARITY   UART_PARITY_DISABLE
+#define MB_STOP     UART_STOP_BITS_1
+
+static const mb_parameter_descriptor_t s_params[] = {
+    HOLD_FLOAT(0, "Data_channel_0", "C", 0x2000, holding_data0),
+    HOLD_FLOAT(1, "Data_channel_1", "C", 0x2002, holding_data1),
+    HOLD_FLOAT(2, "Data_channel_2", "C", 0x2004, holding_data2),
+    HOLD_FLOAT(3, "Data_channel_3", "C", 0x2006, holding_data3),
+    HOLD_FLOAT(4, "Data_channel_4", "C", 0x2008, holding_data4),
+    HOLD_FLOAT(5, "Data_channel_5", "C", 0x200A, holding_data5),
+};
+
+static void OnValue(uint16_t cid, uint8_t type, uint32_t raw)
 {
-    // 无纸记录仪：第 cid 个温区上报为 FR(cid+1)
-    if (data != 0) {
-        IotReport_SendPoint(TEMPDEVTYPEID, DEVTYPENAME, cid + 1, "%.2f", data);   // 温度记录 -> WK
+    float value;
+
+    if (type != PARAM_TYPE_FLOAT) {
+        return;
+    }
+    memcpy(&value, &raw, sizeof(value));
+    if (value != 0) {
+        IotReport_SendPoint(TEMPDEVTYPEID, DEVTYPENAME, cid + 1, "%.2f", value);   // 温度记录 -> WK
     }
 }
 #endif
-// User operation function to read slave values and check alarm
+
+#define MB_PARAM_COUNT  (sizeof(s_params) / sizeof(s_params[0]))
+
+/* ================================================================ 轮询 */
+
+// 读一遍所有 CID，周期由调用方 plc_poll_task 控制
 void master_operation_func(void *arg)
 {
-    esp_err_t err = ESP_OK;
-    float value = 0;
-    int dvalue = 0;
-    bool alarm_state = false;
-    const mb_parameter_descriptor_t* param_descriptor = NULL;
-    int high_first = 1;
-    uint16_t highword = 0;
-    uint16_t lowword = 0;
+    (void)arg;
 
-    // 每次调用只轮询一遍所有 CID，周期由调用方 plc_poll_task 控制。
-    // 原实现在这里 for(;;) 死循环，会永久阻塞轮询任务；且 err 一旦变成
-    // ESP_ERR_NOT_FOUND 就再也不会进入内层循环
-    {
-        // Read all found characteristics from slave(s)
-        for (uint16_t cid = 0; (err != ESP_ERR_NOT_FOUND) && cid < MASTER_MAX_CIDS; cid++)
-        {
-            // Get data from parameters description table
-            // and use this information to fill the characteristics description table
-            // and having all required fields in just one table
-            err = mbc_master_get_cid_info(cid, &param_descriptor);
-            
-            if ((err != ESP_ERR_NOT_FOUND) && (param_descriptor != NULL)) {
-                void* temp_data_ptr = master_get_param_data(param_descriptor);
-                assert(temp_data_ptr);
-                uint8_t type = 0;
-    
-                err = mbc_master_get_parameter(cid, (char*)param_descriptor->param_key,
-                                                    (uint8_t*)&dvalue, &type);
-                if (err == ESP_OK) {
-                    if (type == PARAM_TYPE_FLOAT) {
-                        if (high_first) {
-                                highword = (dvalue >> 16) & 0xffff;
-                                lowword =  dvalue & 0xffff;
-                                dvalue = lowword << 16 | highword;
-                        } 
-                        memcpy(temp_data_ptr, &dvalue, sizeof(float));   // 按位拷贝，不做数值转换
-                        value = *((float *)&dvalue);
-                        if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
-                            (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %f (0x%x) read successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            value,
-                                            *(uint32_t*)temp_data_ptr);
-#if DEVICE_VERSION == RECORD
-                            ParseRecordData(param_descriptor->cid, value);
-#endif
-                        }
-                    } else {
-                        *(uint16_t* )temp_data_ptr = dvalue;
-                        if ((param_descriptor->mb_param_type == MB_PARAM_HOLDING) ||
-                            (param_descriptor->mb_param_type == MB_PARAM_INPUT)) {
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %d (0x%x) read successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            dvalue,
-                                            *(uint32_t*)temp_data_ptr);
-#if DEVICE_VERSION == TEMP_CONTROLER
-                            ParseTemperatureData(param_descriptor->cid, dvalue);
-#elif DEVICE_VERSION == MOTOR
-                            ParseMotorData(param_descriptor->cid, dvalue);
-#elif DEVICE_VERSION == FREEZER
-                            ParseFreezerData(param_descriptor->cid, dvalue);
-#endif
-                        } else {
-                            uint16_t state = *(uint16_t*)temp_data_ptr;
-                            const char* rw_str = (state & param_descriptor->param_opts.opt1) ? "ON" : "OFF";
-                            ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = %s (0x%x) read successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            (const char*)rw_str,
-                                            *(uint16_t*)temp_data_ptr);
-                            if (state & param_descriptor->param_opts.opt1) {
-                                alarm_state = true;
-                                ESP_LOGI(MASTER_TAG, "Alarm triggered by cid #%d.",
-                                        param_descriptor->cid);
-                            }
-                        }
-                    }
-                } else {
-                    ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
-                                        param_descriptor->cid,
-                                        (char*)param_descriptor->param_key,
-                                        (int)err,
-                                        (char*)esp_err_to_name(err));
-                }
-                vTaskDelay(POLL_TIMEOUT_TICS); // timeout between polls
-            }
+    for (uint16_t cid = 0; cid < MB_PARAM_COUNT; cid++) {
+        const mb_parameter_descriptor_t *desc = NULL;
+        uint32_t raw = 0;
+        uint8_t type = 0;
+        esp_err_t err;
+
+        err = mbc_master_get_cid_info(cid, &desc);
+        if (err == ESP_ERR_NOT_FOUND || desc == NULL) {
+            break;
         }
+        err = mbc_master_get_parameter(cid, (char *)desc->param_key, (uint8_t *)&raw, &type);
+        if (err != ESP_OK) {
+            ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) read fail, err = 0x%x (%s).",
+                     desc->cid, (char *)desc->param_key, (int)err, (char *)esp_err_to_name(err));
+            continue;
+        }
+
+        if (type == PARAM_TYPE_FLOAT) {
+            raw = (raw << 16) | (raw >> 16);    // 设备按高字在前发送，交换高低字
+        }
+        ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) = 0x%08x", desc->cid,
+                 (char *)desc->param_key, (char *)desc->param_units, (unsigned)raw);
+        OnValue(cid, type, raw);
     }
 }
 
+// 上位机 PowerOn / PowerOff：智能空开合闸 / 分闸，其他设备不处理
 void master_send_switch_func(int status)
 {
-#if DEVICE_VERSION == AIR_SWITCH
-    esp_err_t err = ESP_OK;
-    float value = 0;
-    bool alarm_state = false;
-    const mb_parameter_descriptor_t* param_descriptor = NULL;
+#ifdef MB_HAS_SWITCH
+    const mb_parameter_descriptor_t *desc = NULL;
+    uint8_t value[4] = { 0x00, (status == 1) ? 0xFF : 0x00, 0x00, 0x00 };
+    uint8_t type = 0;
+    esp_err_t err;
 
-    err = mbc_master_get_cid_info(CID_HOLD_WRITE_REG_1, &param_descriptor);
-    if ((err != ESP_ERR_NOT_FOUND) && (param_descriptor != NULL)) {
-        void* temp_data_ptr = master_get_param_data(param_descriptor);
-        assert(temp_data_ptr);
-        uint8_t type = 0;
-        if ((param_descriptor->param_type == PARAM_TYPE_ASCII) &&
-            (param_descriptor->cid == CID_HOLD_WRITE_REG_1)) {
-            if (status == 1) {
-                ((uint8_t* )temp_data_ptr)[0] = 0x00;
-                ((uint8_t* )temp_data_ptr)[1] = 0xFF;
-            } else {
-                ((uint8_t* )temp_data_ptr)[0] = 0x00;
-                ((uint8_t* )temp_data_ptr)[1] = 0x00;
-            }
-            
-            err = mbc_master_set_parameter(CID_HOLD_WRITE_REG_1, (char*)param_descriptor->param_key,
-                                                (uint8_t*)temp_data_ptr, &type);
-            if (err == ESP_OK) {
-                ESP_LOGI(MASTER_TAG, "Characteristic #%d %s (%s) value = (0x%08x), write successful.",
-                                            param_descriptor->cid,
-                                            (char*)param_descriptor->param_key,
-                                            (char*)param_descriptor->param_units,
-                                            *(uint32_t*)temp_data_ptr);
-            } else {
-                ESP_LOGE(MASTER_TAG, "Characteristic #%d (%s) write fail, err = 0x%x (%s).",
-                                        param_descriptor->cid,
-                                        (char*)param_descriptor->param_key,
-                                        (int)err,
-                                        (char*)esp_err_to_name(err));
-            }
-        }
+    err = mbc_master_get_cid_info(CID_SWITCH, &desc);
+    if (err == ESP_ERR_NOT_FOUND || desc == NULL) {
+        return;
     }
+    err = mbc_master_set_parameter(CID_SWITCH, (char *)desc->param_key, value, &type);
+    if (err == ESP_OK) {
+        ESP_LOGI(MASTER_TAG, "switch %s written", status == 1 ? "on" : "off");
+    } else {
+        ESP_LOGE(MASTER_TAG, "switch write fail, err = 0x%x (%s).", (int)err, (char *)esp_err_to_name(err));
+    }
+#else
+    (void)status;
 #endif
 }
 
-// Modbus master initialization
+/* ================================================================ 初始化 */
+
 esp_err_t master_init(void)
 {
-#if DEVICE_VERSION == AIR_SWITCH
     const uart_config_t uart_config = {
-        .baud_rate = AIR_SWITCH_SPEED,
+        .baud_rate = MB_BAUD,
         .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
+        .parity = MB_PARITY,
+        .stop_bits = MB_STOP,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
-#elif DEVICE_VERSION == TEMP_CONTROLER
-    const uart_config_t uart_config = {
-        .baud_rate = TEMP_CONTROLER_SPEED,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_2,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#elif DEVICE_VERSION == MOTOR
-    const uart_config_t uart_config = {
-        .baud_rate = MOTOR_SPEED,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#elif DEVICE_VERSION == FREEZER
-    const uart_config_t uart_config = {
-        .baud_rate = FREEZER_SPEED,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#elif DEVICE_VERSION == RECORD
-    const uart_config_t uart_config = {
-        .baud_rate = RECORD_SPEED,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
-    };
-#endif
-    
-    // Initialize and start Modbus controller
     mb_communication_info_t comm = {
-            .port = MB_PORT_NUM,
-// #if CONFIG_MB_COMM_MODE_ASCII
-//             .mode = MB_MODE_ASCII,
-// #elif CONFIG_MB_COMM_MODE_RTU
-            .mode = MB_MODE_RTU,
-//#endif
-            .baudrate = uart_config.baud_rate,
-            .parity = MB_PARITY_NONE
+        .port = MB_PORT_NUM,
+        .mode = MB_MODE_RTU,
+        .baudrate = uart_config.baud_rate,
+        .parity = MB_PARITY_NONE,           // 校验位和停止位在下面 uart_param_config 中按设备设置
     };
-    void* master_handler = NULL;
+    void *master_handler = NULL;
 
     esp_err_t err = mbc_master_init(MB_PORT_SERIAL_MASTER, &master_handler);
     MASTER_CHECK((master_handler != NULL), ESP_ERR_INVALID_STATE,
-                                "mb controller initialization fail.");
+                 "mb controller initialization fail.");
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-                            "mb controller initialization fail, returns(0x%x).",
-                            (uint32_t)err);
-    err = mbc_master_setup((void*)&comm);
+                 "mb controller initialization fail, returns(0x%x).", (uint32_t)err);
+    err = mbc_master_setup((void *)&comm);
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-                            "mb controller setup fail, returns(0x%x).",
-                            (uint32_t)err);
+                 "mb controller setup fail, returns(0x%x).", (uint32_t)err);
 
-    // Set UART pin numbers
     err = uart_set_pin(MB_PORT_NUM, MB_UART_TXD_PIN, MB_UART_RXD_PIN, MB_UART_RTS_PIN, UART_PIN_NO_CHANGE);
+    MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
+                 "mb serial set pin failure, uart_set_pin() returned (0x%x).", (uint32_t)err);
 
     err = mbc_master_start();
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-                            "mb controller start fail, returns(0x%x).",
-                            (uint32_t)err);
+                 "mb controller start fail, returns(0x%x).", (uint32_t)err);
 
-    MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-            "mb serial set pin failure, uart_set_pin() returned (0x%x).", (uint32_t)err);
     uart_param_config(MB_PORT_NUM, &uart_config);
-    // Set driver mode to Half Duplex
     err = uart_set_mode(MB_PORT_NUM, UART_MODE_RS485_HALF_DUPLEX);
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-            "mb serial set mode failure, uart_set_mode() returned (0x%x).", (uint32_t)err);
+                 "mb serial set mode failure, uart_set_mode() returned (0x%x).", (uint32_t)err);
 
     vTaskDelay(5);
-    err = mbc_master_set_descriptor(&device_parameters[0], num_device_parameters);
+    err = mbc_master_set_descriptor(&s_params[0], MB_PARAM_COUNT);
     MASTER_CHECK((err == ESP_OK), ESP_ERR_INVALID_STATE,
-                                "mb controller set descriptor fail, returns(0x%x).",
-                                (uint32_t)err);
-    ESP_LOGI(MASTER_TAG, "Modbus master stack initialized...");
+                 "mb controller set descriptor fail, returns(0x%x).", (uint32_t)err);
+    ESP_LOGI(MASTER_TAG, "Modbus master stack initialized, %d parameters", (int)MB_PARAM_COUNT);
     return err;
 }
