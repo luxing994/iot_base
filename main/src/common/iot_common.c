@@ -8,29 +8,6 @@
 
 RingBuffer uart2Buffer;
 
-int CalFloatStrPointPos(char *str)
-{
-    if (strstr(str, ".") != NULL) {
-        return (strlen(strstr(str, ".")) - 1);
-    } else {
-        return 0;
-    }
-}
-
-uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len)
-{
-    int i;
-    uint16_t sum = 0;
-    uint8_t checksum = 0;
-
-    for (i = 0; i < len; i++) {
-        sum += data[i];
-    }
-    checksum = sum & 0xff;
-
-    return checksum;
-}
-
 int UART_InitBuffer(void)
 {
     if (RING_InitBuffer(&uart2Buffer, UART_BUFF_SIZE) != 0) {

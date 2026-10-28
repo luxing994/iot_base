@@ -266,3 +266,60 @@ int IotBatchCollector_Get(const IotBatchCollector *collector, int frnum, double 
     *value = collector->values[frnum - 1];
     return 0;
 }
+
+/* ---------------------------------------------------------------- 安规测试仪组结果 */
+
+#define TESTER_MSG_SIZE     2048
+#define TESTER_VALUES_SIZE  (IOT_TESTER_ITEMS * IOT_TESTER_VALUES * 16)
+
+int IotReport_SendTesterGroup(const IotTesterGroup *g)
+{
+    char values[TESTER_VALUES_SIZE];
+    char tags[IOT_TESTER_ITEMS * 8];
+    char checks[IOT_TESTER_ITEMS * 8];
+    size_t vn = 0, tn = 0, cn = 0;
+    char *buf;
+    int len;
+
+    if (g == NULL) {
+        return -1;
+    }
+
+    values[0] = tags[0] = checks[0] = '\0';
+    for (int i = 0; i < IOT_TESTER_ITEMS; i++) {
+        for (int k = 0; k < IOT_TESTER_VALUES; k++) {
+            vn += snprintf(values + vn, sizeof(values) - vn, "%s%.2f",
+                           (vn == 0) ? "" : BATCH_SEPARATOR, (double)g->values[i][k]);
+            if (vn >= sizeof(values)) {
+                return -1;
+            }
+        }
+        tn += snprintf(tags + tn, sizeof(tags) - tn, "%s%d", (i == 0) ? "" : BATCH_SEPARATOR, g->tags[i]);
+        cn += snprintf(checks + cn, sizeof(checks) - cn, "%s%d", (i == 0) ? "" : BATCH_SEPARATOR, g->checks[i]);
+        if (tn >= sizeof(tags) || cn >= sizeof(checks)) {
+            return -1;
+        }
+    }
+
+    buf = malloc(TESTER_MSG_SIZE);
+    if (buf == NULL) {
+        ESP_LOGE(TAG, "no memory for tester report");
+        return -1;
+    }
+    len = snprintf(buf, TESTER_MSG_SIZE, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"
+        "    \"devStatus\": \"%s\",\n    \"devTypeId\": \"%s\",\n    \"deviceOrderWay\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
+        "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
+        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"
+        "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n}" IOT_MSG_END,
+        DEVID, IOT_TESTER_NAME, IOT_TESTER_NAME, IOT_TESTER_NAME, SAFETYTESTERTYPEID, "read", "",
+        "FR001", "group", g->groupId, values, tags, checks,
+        g->groupCheck, g->totalCheck, GetStaIp(), (long long)GetMilliTimeNow(), "no");
+    if (len < 0 || len >= TESTER_MSG_SIZE) {
+        ESP_LOGE(TAG, "tester report too long: %d", len);
+        free(buf);
+        return -1;
+    }
+
+    ESP_LOGD(TAG, "%s", buf);
+    return PostOwnedMessage(buf);
+}

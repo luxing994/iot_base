@@ -164,8 +164,6 @@ typedef struct {
 
 extern uint64_t g_baseTime;
 
-int CalFloatStrPointPos(char *str);
-uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len);
 
 /* UART1 接收缓冲（事务模式，见 serial_txn.c） */
 int UART_InitBuffer(void);

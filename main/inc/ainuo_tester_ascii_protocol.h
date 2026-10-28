@@ -1,187 +1,29 @@
 #ifndef AINUO_TESTER_ASCII_PROTOCOL_H
 #define AINUO_TESTER_ASCII_PROTOCOL_H
 
+/*
+ * 艾诺安规测试仪 ASCII 协议（RS232，8 位数据，无校验，1 位停止位，波特率见 uart_task.c）
+ *
+ * 读结果：  请求 {地址(3) 命令(1) 00}
+ *           应答 {地址(3) 命令(1) 8 行测试数据(每行 23 字符) 状态(1) 校验(2)}
+ * 下发参数：{地址(3) 7 1 参数... 组号 校验(2)}
+ *
+ * 测试项编号沿用 76T（t_tester_protocol.h 中的 TTesterTestItem）。
+ * 读写函数内部完成一次完整的串口事务（见 serial_txn.h）。
+ */
+
 #include <stdint.h>
 #include "iot_common.h"   // parametersData
 
-/*
-AINUO安全测试仪 ASCII协议
-UART传输格式
-通讯方式：RS-232
-数据位：8位
-停止位：1位
-波特率: 300、1200、2400、4800、9600、19200可选
-奇偶: 无
-*/
+#define AINUO_TESTER_ADDRESS    15
 
-#define AINUO_TESTER_ADDRESS           0x0F
-#define AINUO_TESTER_FRAME_HEAD        '{'
-#define AINUO_TESTER_FRAME_END         '}'
+/* 读当前组测试结果并上报，成功返回 0 */
+int AINUO_ReadGroup(void);
 
-#define AINUO_TESTER_GROUP_LENTH       8
-#define AINUO_TESTER_ROW_LENTH         23
+/* 下发组参数，成功返回 0 */
+int AINUO_SetGroupPara(uint16_t group);
 
-#define AINUO_TESTER_STATUS            2   // 测试完成，其他测试进行
-
-// AINUO安全测试仪命令编号
-typedef enum {
-    AINUOTTESTERREADDATA = 0,
-    AINUOTTESTERSTART,
-    AINUOTTESTERSTOP,
-    AINUOTTESTSETPARA = 7
-} AINUOTTesterMainCommandCode;
-
-typedef struct {
-    float current;
-    float resistance;
-    float testtime;
-    int result;
-} AINUOTTesterGroundingPara;
-
-typedef struct {
-    float voltage;
-    float resistance;
-    float testtime;
-    int result;
-} AINUOTTesterInsulationPara;
-
-typedef struct {
-    float voltage;
-    float current;
-    float testtime;
-    int condition;
-    int result;
-} AINUOTTesterPressurizationPara;
-
-typedef struct {
-    float voltage;
-    float current;
-    float testtime;
-    int condition;
-    int result;
-} AINUOTTesterLeakagePara;
-
-typedef struct {
-    float voltage;
-    float current;
-    float power;
-    float testtime;
-    int condition;
-    int result;
-} AINUOTTesterPowerPara;
-
-typedef struct {
-    float voltage;
-    float current1;
-    float current2;
-    float current3;
-    float testtime;
-    int condition;
-    int result;
-} AINUOTTesterStartPara;
-
-typedef struct {
-    float voltage;
-    float current;
-    float testtime;
-    int condition;
-    int result;
-} AINUOTTesterDCVoltagePara;
-
-typedef struct {
-    float voltage;
-    float resistance;
-    float testtime;
-    int result;
-} AINUOTTesterShortCircuitPara;
-
-typedef struct {
-    float current;
-    float resistance1;
-    float resistance2;
-    float testtime;
-} AINUOTTesterSetGroundingPara;
-
-typedef struct {
-    float voltage;
-    float resistance1;
-    float resistance2;
-    float testtime;
-    float delaytime;
-    float uptime;
-} AINUOTTesterSetInsulationPara;
-
-typedef struct {
-    float voltage;
-    float current1;
-    float current2;
-    float testtime;
-    int condition;
-    float uptime;
-    float downtime;
-    int startpoint;
-} AINUOTTesterSetPressurizationPara;
-
-typedef struct {
-    float voltage;
-    float current1;
-    float current2;
-    float testtime;
-    int condition;
-} AINUOTTesterSetLeakagePara;
-
-typedef struct {
-    float voltage;
-    float power1;
-    float power2;
-    float testtime;
-} AINUOTTesterSetPowerPara;
-
-typedef struct {
-    float voltage;
-    float current1;
-    float current2;
-    float testtime;
-} AINUOTTesterSetStartPara;
-
-typedef struct {
-    float voltage;
-    float current;
-    float testtime;
-    int condition;
-    float uptime;
-    int startpoint;
-    float delaytime;
-} AINUOTTesterSetDCVoltagePara;
-
-typedef struct {
-    float voltage;
-    float resistance;
-    float testtime;
-} AINUOTTesterSetShortCircuitPara;
-
-typedef struct {
-    int compensate;
-    int failitem;
-    int ofrequence;
-    int loadground;
-    int utensiltype;
-} AINUOTTesterSetCommonPara;
-
-extern AINUOTTesterSetGroundingPara ainuosetgroudingtestdata;
-extern AINUOTTesterSetPressurizationPara ainuosetpressurizationtestdata;
-extern AINUOTTesterSetInsulationPara ainuosetinsulationtestdata;
-extern AINUOTTesterSetLeakagePara ainuosetleakagetestdata;
-extern AINUOTTesterSetPowerPara ainuosetpowertestdata;
-extern AINUOTTesterSetStartPara ainuosetstarttestdata;
-extern AINUOTTesterSetDCVoltagePara ainuosetdcvoltagetestdata;
-extern AINUOTTesterSetShortCircuitPara ainuosetshortcircuittestdata;
-extern AINUOTTesterSetCommonPara ainuosetcommontestdata;
-
-void AINUO_TTesterReadCurrentGroup(void);
-void AINUO_TTesterSetGroupPara(uint16_t group);
-void AINUO_TTesterGetJsonData(char *str);
-int AINUO_TTesterResolve(void *ctx);     // 串口事务解析函数（见 serial_txn.h）
+/* 把上位机 group 命令中一个测试项的参数保存下来，下发时使用 */
 void AINUO_TTesterApplyItemParams(int item, parametersData *para);
 
 #endif

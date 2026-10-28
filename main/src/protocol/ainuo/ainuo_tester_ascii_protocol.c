@@ -1,60 +1,130 @@
-#include <stdio.h>  
-#include <stdlib.h>  
-#include <string.h>  
-#include <ctype.h>  
-#include <math.h>
-#include "driver/uart.h"
-#include "esp_system.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "esp_log.h"
 #include "ainuo_tester_ascii_protocol.h"
 #include "t_tester_protocol.h"
-#include "iot_common.h"
-#include "tcp_client.h"
-#include "iot_time.h"
+#include "iot_report.h"
+#include "proto_util.h"
+#include "serial_txn.h"
 
-AINUOTTesterGroundingPara ainuogroudingtestdata = {0};
-AINUOTTesterInsulationPara ainuoinsulationtestdata = {0};
-AINUOTTesterPressurizationPara ainuopressurizationtestdata = {0};
-AINUOTTesterLeakagePara ainuoleakagetestdata = {0};
-AINUOTTesterPowerPara ainuopowertestdata = {0};
-AINUOTTesterStartPara ainuostarttestdata = {0};
-AINUOTTesterDCVoltagePara ainuodcvoltagetestdata = {0};
-AINUOTTesterShortCircuitPara ainuoshortcircuittestdata = {0};
+static const char *TAG = "AINUO";
 
-AINUOTTesterSetGroundingPara ainuosetgroudingtestdata = {0};
-AINUOTTesterSetPressurizationPara ainuosetpressurizationtestdata = {0};
-AINUOTTesterSetInsulationPara ainuosetinsulationtestdata = {0};
-AINUOTTesterSetLeakagePara ainuosetleakagetestdata = {0};
-AINUOTTesterSetPowerPara ainuosetpowertestdata = {0};
-AINUOTTesterSetStartPara ainuosetstarttestdata = {0};
-AINUOTTesterSetDCVoltagePara ainuosetdcvoltagetestdata = {0};
-AINUOTTesterSetShortCircuitPara ainuosetshortcircuittestdata = {0};
-AINUOTTesterSetCommonPara ainuosetcommontestdata = {0};
-int ainuotesterstatus = 0;
+#define AINUO_FRAME_HEAD        '{'
+#define AINUO_FRAME_END         '}'
+#define AINUO_ROW_LEN           23      // 每个测试项一行
+#define AINUO_DATA_LEN          (IOT_TESTER_ITEMS * AINUO_ROW_LEN + 1)     // 8 行 + 状态
+#define AINUO_SEND_MAX          512
 
-char g_ainuosenddatabuff[512] = {0};
-char g_ainuoreaddatabuff[256] = {0};
-char g_ainuottesterjsondatabuff[2048] = {0};
-const char *AINUOTAG = "AINUO_TTest";
+/* 命令 */
+#define AINUOTTESTERREADDATA    0
+#define AINUOTTESTSETPARA       7
 
-static int AINUO_TTesterPackSendCommandData(int address, int command)
+/* ================================================================ 组参数（上位机下发） */
+
+typedef struct {
+    float current;
+    float resistance1;
+    float resistance2;
+    float testtime;
+} AINUOTTesterSetGroundingPara;
+
+typedef struct {
+    float voltage;
+    float resistance1;
+    float resistance2;
+    float testtime;
+    float delaytime;
+    float uptime;
+} AINUOTTesterSetInsulationPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float testtime;
+    int condition;
+    float uptime;
+    float downtime;
+    int startpoint;
+} AINUOTTesterSetPressurizationPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float testtime;
+    int condition;
+} AINUOTTesterSetLeakagePara;
+
+typedef struct {
+    float voltage;
+    float power1;
+    float power2;
+    float testtime;
+} AINUOTTesterSetPowerPara;
+
+typedef struct {
+    float voltage;
+    float current1;
+    float current2;
+    float testtime;
+} AINUOTTesterSetStartPara;
+
+typedef struct {
+    float voltage;
+    float current;
+    float testtime;
+    int condition;
+    float uptime;
+    int startpoint;
+    float delaytime;
+} AINUOTTesterSetDCVoltagePara;
+
+typedef struct {
+    float voltage;
+    float resistance;
+    float testtime;
+} AINUOTTesterSetShortCircuitPara;
+
+typedef struct {
+    int compensate;
+    int failitem;
+    int ofrequence;
+    int loadground;
+    int utensiltype;
+} AINUOTTesterSetCommonPara;
+
+static AINUOTTesterSetGroundingPara ainuosetgroudingtestdata;
+static AINUOTTesterSetPressurizationPara ainuosetpressurizationtestdata;
+static AINUOTTesterSetInsulationPara ainuosetinsulationtestdata;
+static AINUOTTesterSetLeakagePara ainuosetleakagetestdata;
+static AINUOTTesterSetPowerPara ainuosetpowertestdata;
+static AINUOTTesterSetStartPara ainuosetstarttestdata;
+static AINUOTTesterSetDCVoltagePara ainuosetdcvoltagetestdata;
+static AINUOTTesterSetShortCircuitPara ainuosetshortcircuittestdata;
+static AINUOTTesterSetCommonPara ainuosetcommontestdata;
+
+// 末尾追加 "校验(2)}"：校验为 '{' 之后所有字符累加的低 8 位
+static int AinuoFinish(char *buf, size_t size, int len)
 {
-    int len;
-    
-    len = sprintf(g_ainuosenddatabuff, "{%03d%1d00}", address, command);
-    if (len != 8) {
+    uint8_t sum;
+
+    if (len < 1 || (size_t)len + 3 >= size) {
         return -1;
     }
-
-    return 0;
+    sum = Proto_Sum8((const uint8_t *)&buf[1], (size_t)len - 1);
+    Proto_PutHex((uint8_t *)&buf[len], sum, 2);
+    buf[len + 2] = AINUO_FRAME_END;
+    buf[len + 3] = '\0';
+    return len + 3;
 }
 
-static int AINUO_TTesterPackSendSetCommandData(int address, int group)
+static int AinuoPackSetCommand(char *buf, size_t size, int address, int group)
 {
-    uint8_t checksum;
-    char addstring[16] = {0};
-    
-    (void)sprintf(g_ainuosenddatabuff, "{%03d%1d1%04d%04d%04d%04d01%04d%04d%04d%04d01%04d%04d%04d%04d%01d1%04d%04d%04d%04d%01d1%04d%04d%04d%04d0"
+    int len;
+
+    len = snprintf(buf, size, "{%03d%1d1%04d%04d%04d%04d01%04d%04d%04d%04d01%04d%04d%04d%04d%01d1%04d%04d%04d%04d%01d1%04d%04d%04d%04d0"
     "1%04d%04d%04d%04d01%04d%04d0000%04d%01d1%04d%04d0000%04d0%01d%01d%01d%01d0000%08d00000000%04d%04d%04d%04d%04d%04d%04d%04d%01d",
     address, AINUOTTESTSETPARA, (int)(ainuosetgroudingtestdata.current * 100), (int)ainuosetgroudingtestdata.resistance1, \
     (int)ainuosetgroudingtestdata.resistance2, (int)(ainuosetgroudingtestdata.testtime * 10), \
@@ -73,271 +143,140 @@ static int AINUO_TTesterPackSendSetCommandData(int address, int group)
     ainuosetcommontestdata.compensate, (int)(ainuosetinsulationtestdata.uptime * 10), (int)(ainuosetinsulationtestdata.delaytime * 10), \
     (int)(ainuosetpressurizationtestdata.uptime * 10), ainuosetpressurizationtestdata.startpoint, (int)(ainuosetpressurizationtestdata.downtime * 10), \
     (int)(ainuosetdcvoltagetestdata.uptime * 10), ainuosetdcvoltagetestdata.startpoint, (int)(ainuosetdcvoltagetestdata.delaytime * 10), group);
+    if (len < 0 || (size_t)len >= size) {
+        return -1;
+    }
+    return AinuoFinish(buf, size, len);
+}
 
-    checksum = CalSumCheckDataLow((uint8_t *)&g_ainuosenddatabuff[1], strlen(g_ainuosenddatabuff) - 1);
-    
-    (void)sprintf(addstring, "%02X}", checksum);
-    strcat(g_ainuosenddatabuff, addstring);
+/* ================================================================ 应答 */
 
+typedef struct {
+    char cmd;
+    char data[AINUO_DATA_LEN];
+} AinuoCtx;
+
+static int AinuoParse(void *arg)
+{
+    AinuoCtx *ctx = arg;
+    char addr[4] = { 0 };
+    char tail[3];       // 校验(2) '}'
+
+    if (SerialRx_SeekAny(AINUO_FRAME_HEAD, AINUO_FRAME_HEAD) < 0 || SerialRx_Read(addr, 3) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    if (atoi(addr) != AINUO_TESTER_ADDRESS) {
+        return SERIAL_PARSE_SKIP;       // 不是本机地址的帧头，跳过继续找
+    }
+    if (SerialRx_Read(&ctx->cmd, 1) != 0 ||
+        SerialRx_Read(ctx->data, sizeof(ctx->data)) != 0 ||
+        SerialRx_Read(tail, sizeof(tail)) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    return (tail[2] == AINUO_FRAME_END) ? SERIAL_PARSE_OK : SERIAL_PARSE_ERROR;
+}
+
+/* ================================================================ 读组结果 */
+
+/*
+ * 每行：[0] 序号 [1..4] 值1 [5..8] 值2 [9..12] 值3 [13..16] 值4 [17..20] 测试时间 [21] 条件 [22] 结果
+ * 上报的 5 个值 = 值1~值4 按下表换算（0 表示该项不上报此值，填 0），第 5 个为测试时间 / 10
+ * 行顺序：接地 绝缘 耐压 泄漏 功率 启动 直流耐压 短路
+ */
+static const float s_rowDivisor[IOT_TESTER_ITEMS][4] = {
+    { 100, 10,  0,   0   },     // 接地：电流 电阻
+    { 1,   10,  0,   0   },     // 绝缘：电压 电阻
+    { 1,   100, 0,   0   },     // 耐压：电压 电流
+    { 10,  1,   0,   0   },     // 泄漏：电压 电流
+    { 10,  100, 10,  0   },     // 功率：电压 电流 功率
+    { 10,  100, 100, 100 },     // 启动：电压 电流1 电流2 电流3
+    { 1,   1,   0,   0   },     // 直流耐压：电压 电流
+    { 10,  10,  0,   0   },     // 短路：电压 电阻
+};
+
+/* ParameterTags：各行对应的测试项编号（与 76T 编号一致） */
+static const int s_rowTags[IOT_TESTER_ITEMS] = {
+    TTESTERGROUNDING, TTESTERINSULATION, TTESTERPRESSURIZATION, TTESTERLEAKAGE,
+    TTESTERPOWER, TTESTERSTARTUP, TTESTERDCVOLTAGE, TTESTEROPENSHORT,
+};
+
+static int AinuoField(const char *p)
+{
+    char s[5];
+
+    memcpy(s, p, 4);
+    s[4] = '\0';
+    return atoi(s);
+}
+
+static void AinuoDecode(const char *data, IotTesterGroup *g)
+{
+    int result[IOT_TESTER_ITEMS];
+    int qualified;
+
+    memset(g, 0, sizeof(*g));
+    for (int i = 0; i < IOT_TESTER_ITEMS; i++) {
+        const char *row = &data[i * AINUO_ROW_LEN];
+
+        for (int k = 0; k < 4; k++) {
+            const float div = s_rowDivisor[i][k];
+            g->values[i][k] = (div != 0) ? (float)AinuoField(&row[1 + k * 4]) / div : 0.0f;
+        }
+        g->values[i][4] = (float)AinuoField(&row[17]) / 10;
+        result[i] = row[22] - '0';          // 1 合格
+        g->tags[i] = s_rowTags[i];
+        g->checks[i] = result[i] + 4;       // 上报：5 合格，其他不合格
+        ESP_LOGI(TAG, "item %d: %.2f %.2f %.2f %.2f time %.1f result %d", s_rowTags[i],
+                 g->values[i][0], g->values[i][1], g->values[i][2], g->values[i][3], g->values[i][4], result[i]);
+    }
+
+    // 沿用原实现的判断：启动（第 6 行）未参与，第 2 行绝缘判断了两次
+    qualified = result[0] == 1 && result[1] == 1 && result[2] == 1 && result[3] == 1 &&
+                result[4] == 1 && result[1] == 1 && result[6] == 1 && result[7] == 1;
+    g->groupCheck = qualified ? 5 : 6;
+    g->totalCheck = g->groupCheck;
+}
+
+int AINUO_ReadGroup(void)
+{
+    char req[16];
+    AinuoCtx ctx;
+    IotTesterGroup g;
+    int len;
+
+    len = snprintf(req, sizeof(req), "{%03d%1d00}", AINUO_TESTER_ADDRESS, AINUOTTESTERREADDATA);
+    if (SerialTxn_Request(req, (size_t)len, AinuoParse, &ctx, SERIAL_TXN_TESTER_TIMEOUT_MS) != 0) {
+        return -1;
+    }
+    if (ctx.cmd - '0' != AINUOTTESTERREADDATA) {
+        ESP_LOGW(TAG, "unexpected command %c", ctx.cmd);
+        return -1;
+    }
+    AinuoDecode(ctx.data, &g);
+    return IotReport_SendTesterGroup(&g);
+}
+
+int AINUO_SetGroupPara(uint16_t group)
+{
+    char buf[AINUO_SEND_MAX];
+    AinuoCtx ctx;
+    int len;
+
+    len = AinuoPackSetCommand(buf, sizeof(buf), AINUO_TESTER_ADDRESS, group);
+    if (len < 0) {
+        ESP_LOGE(TAG, "set command too long");
+        return -1;
+    }
+    if (SerialTxn_Request(buf, (size_t)len, AinuoParse, &ctx, SERIAL_TXN_TESTER_TIMEOUT_MS) != 0) {
+        ESP_LOGE(TAG, "set group %u: no response", group);
+        return -1;
+    }
     return 0;
 }
 
-static void AINUO_TTesterResolveGroundingData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuogroudingtestdata.current = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[5], 4);
-    ainuogroudingtestdata.resistance = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[17], 4);
-    ainuogroudingtestdata.testtime = atoi(strdata) / 10.0;
-    ainuogroudingtestdata.result = data[22] - '0';
-}
+/* ================================================================ 上位机参数 */
 
-static void AINUO_TTesterResolveInsulationData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuoinsulationtestdata.voltage = (float)atoi(strdata);
-    memcpy(strdata, &data[5], 4);
-    ainuoinsulationtestdata.resistance = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[17], 4);
-    ainuoinsulationtestdata.testtime = atoi(strdata) / 10.0;
-    ainuoinsulationtestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolvePressurizationData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuopressurizationtestdata.voltage = (float)atoi(strdata);
-    memcpy(strdata, &data[5], 4);
-    ainuopressurizationtestdata.current = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[17], 4);
-    ainuopressurizationtestdata.testtime = atoi(strdata) / 10.0;
-    ainuopressurizationtestdata.condition = data[21] - '0';
-    ainuopressurizationtestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolveLeakageData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuoleakagetestdata.voltage = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[5], 4);
-    ainuoleakagetestdata.current = (float)atoi(strdata);
-    memcpy(strdata, &data[17], 4);
-    ainuoleakagetestdata.testtime = atoi(strdata) / 10.0;
-    ainuoleakagetestdata.condition = data[21] - '0';
-    ainuoleakagetestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolvePowerData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuopowertestdata.voltage = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[5], 4);
-    ainuopowertestdata.current = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[9], 4);
-    ainuopowertestdata.power = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[17], 4);
-    ainuopowertestdata.testtime = atoi(strdata) / 10.0;
-    ainuopowertestdata.condition = data[21] - '0';
-    ainuopowertestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolveStartData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuostarttestdata.voltage = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[5], 4);
-    ainuostarttestdata.current1 = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[9], 4);
-    ainuostarttestdata.current2 = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[13], 4);
-    ainuostarttestdata.current3 = atoi(strdata) / 100.0;
-    memcpy(strdata, &data[17], 4);
-    ainuostarttestdata.testtime = atoi(strdata) / 10.0;
-    ainuostarttestdata.condition = data[21] - '0';
-    ainuostarttestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolveDCVoltageData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuodcvoltagetestdata.voltage = (float)atoi(strdata);
-    memcpy(strdata, &data[5], 4);
-    ainuodcvoltagetestdata.current = (float)atoi(strdata);
-    memcpy(strdata, &data[17], 4);
-    ainuodcvoltagetestdata.testtime = atoi(strdata) / 10.0;
-    ainuodcvoltagetestdata.condition = data[21] - '0';
-    ainuodcvoltagetestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolveShortCircuitData(uint8_t *data)
-{
-    char strdata[5] = {0};
-    
-    memcpy(strdata, &data[1], 4);
-    ainuoshortcircuittestdata.voltage = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[5], 4);
-    ainuoshortcircuittestdata.resistance = atoi(strdata) / 10.0;
-    memcpy(strdata, &data[17], 4);
-    ainuoshortcircuittestdata.testtime = atoi(strdata) / 10.0;
-    ainuoshortcircuittestdata.result = data[22] - '0';
-}
-
-static void AINUO_TTesterResolveTestData(void)
-{
-    AINUO_TTesterResolveGroundingData((uint8_t *)&g_ainuoreaddatabuff[0]);
-    AINUO_TTesterResolveInsulationData((uint8_t *)&g_ainuoreaddatabuff[23]);
-    AINUO_TTesterResolvePressurizationData((uint8_t *)&g_ainuoreaddatabuff[46]);
-    AINUO_TTesterResolveLeakageData((uint8_t *)&g_ainuoreaddatabuff[69]);
-    AINUO_TTesterResolvePowerData((uint8_t *)&g_ainuoreaddatabuff[92]);
-    AINUO_TTesterResolveStartData((uint8_t *)&g_ainuoreaddatabuff[115]);
-    AINUO_TTesterResolveDCVoltageData((uint8_t *)&g_ainuoreaddatabuff[138]);
-    AINUO_TTesterResolveShortCircuitData((uint8_t *)&g_ainuoreaddatabuff[161]);
-
-    ainuotesterstatus = g_ainuoreaddatabuff[184] - '0';
-}
-
-static void AINUO_TTesterPackJsonFrame(void)
-{
-    char ttesterparadatajsondatabuff[512] = {0};
-    char ttesterparaunitjsondatabuff[128] = {0};
-    char ttestertestresultjsondatabuff[128] = {0};
-    int groupret, allret;
-    
-    if ((ainuogroudingtestdata.result == 1) && (ainuoinsulationtestdata.result == 1) && (ainuopressurizationtestdata.result == 1) && (ainuoleakagetestdata.result == 1) \
-    && (ainuopowertestdata.result == 1) && (ainuoinsulationtestdata.result == 1) && (ainuodcvoltagetestdata.result == 1) && (ainuoshortcircuittestdata.result == 1)) {
-        groupret = 5;
-        allret = 5;
-    } else {
-        groupret = 6;
-        allret = 6;
-    }
-
-    (void)sprintf(ttesterparadatajsondatabuff, "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
-                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
-                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f",
-            ainuogroudingtestdata.current, ainuogroudingtestdata.resistance, 0.0, 0.0, ainuogroudingtestdata.testtime, \
-            ainuoinsulationtestdata.voltage, ainuoinsulationtestdata.resistance, 0.0, 0.0, ainuoinsulationtestdata.testtime, \
-            ainuopressurizationtestdata.voltage, ainuopressurizationtestdata.current, 0.0, 0.0, ainuopressurizationtestdata.testtime, \
-            ainuoleakagetestdata.voltage, ainuoleakagetestdata.current, 0.0, 0.0, ainuoleakagetestdata.testtime, \
-            ainuopowertestdata.voltage, ainuopowertestdata.current, ainuopowertestdata.power, 0.0, ainuopowertestdata.testtime, \
-            ainuostarttestdata.voltage, ainuostarttestdata.current1, ainuostarttestdata.current2, ainuostarttestdata.current3, ainuostarttestdata.testtime, \
-            ainuodcvoltagetestdata.voltage, ainuodcvoltagetestdata.current, 0.0, 0.0, ainuodcvoltagetestdata.testtime, \
-            ainuoshortcircuittestdata.voltage, ainuoshortcircuittestdata.resistance, 0.0, 0.0, ainuoshortcircuittestdata.testtime);
-    (void)sprintf(ttesterparaunitjsondatabuff, "2__3__1__4__5__6__8__7");   // 2：接地 3：绝缘 1：耐压 4：泄露 5：功率 6：启动 7：直耐 8：短路
-    (void)sprintf(ttestertestresultjsondatabuff, "%d__%d__%d__%d__%d__%d__%d__%d", (ainuogroudingtestdata.result) + 4, (ainuoinsulationtestdata.result) + 4, \
-    (ainuopressurizationtestdata.result) + 4, (ainuoleakagetestdata.result) + 4, (ainuopowertestdata.result) + 4, (ainuostarttestdata.result) + 4, \
-    (ainuodcvoltagetestdata.result) + 4, (ainuoshortcircuittestdata.result) + 4);   // 0: 未判断 1：合格 其他：不合格
-    (void)sprintf(g_ainuottesterjsondatabuff, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devStatus\": \"%s\",\n    \"devTypeId\": \"%s\",\n    \"deviceOrderWay\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
-		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"  
-                "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n};;**##",
-            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, SAFETYTESTERTYPEID, "read", T_TESTER_ORDERNAME, \
-            T_TESTER_ORDERID, T_TESTER_ORDERMODE, 0, ttesterparadatajsondatabuff, ttesterparaunitjsondatabuff, ttestertestresultjsondatabuff, \
-            groupret, allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
-}
-
-void AINUO_TTesterReadCurrentGroup(void)
-{
-    AINUO_TTesterPackSendCommandData(AINUO_TESTER_ADDRESS, AINUOTTESTERREADDATA);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&g_ainuosenddatabuff, strlen(g_ainuosenddatabuff));
-}
-
-void AINUO_TTesterSetGroupPara(uint16_t group)
-{
-    AINUO_TTesterPackSendSetCommandData(AINUO_TESTER_ADDRESS, group);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)g_ainuosenddatabuff, strlen(g_ainuosenddatabuff));
-}
-
-void AINUO_TTesterGetJsonData(char *str)
-{
-    strcpy(str, g_ainuottesterjsondatabuff);
-}
-
-int AINUO_TTesterResolve(void *ctx)
-{
-	char curData[5] = {0};
-    char sum[2] = {0};
-    char end, command;
-    int address = -1, ret, i;
-
-	while ((curData[0] != AINUO_TESTER_FRAME_HEAD) || (address != AINUO_TESTER_ADDRESS)) {
-        ret = UART_ReadBufferBytes((uint8_t *)&curData[0], 4);
-        sscanf(&curData[1], "%d", &address);
-        if (ret != 0) {
-            return -1;
-        }
-	}
-
-    ret = UART_ReadBufferBytes((uint8_t *)&command, 1);
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = UART_ReadBufferBytes((uint8_t *)&g_ainuoreaddatabuff, AINUO_TESTER_GROUP_LENTH * AINUO_TESTER_ROW_LENTH + 1);
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = UART_ReadBufferBytes((uint8_t *)&sum, 2);
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = UART_ReadBufferBytes((uint8_t *)&end, 1);
-    if (ret != 0 || end != AINUO_TESTER_FRAME_END) {
-        return -1;
-    }
-
-    switch (command - '0') {
-        case AINUOTTESTERREADDATA: {
-        AINUO_TTesterResolveTestData();     
-            break;
-        }
-        default: {
-            break;
-        } 
-    }
-
-    ESP_LOGI(AINUOTAG, "number:1 item:grounding 1(current):%f 2(resistance):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:NaN result:%d", 
-        ainuogroudingtestdata.current, ainuogroudingtestdata.resistance, ainuogroudingtestdata.testtime, ainuogroudingtestdata.result);
-    ESP_LOGI(AINUOTAG, "number:2 item:insulation 1(voltage):%f 2(resistance):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:NaN result:%d", 
-        ainuoinsulationtestdata.voltage, ainuoinsulationtestdata.resistance, ainuoinsulationtestdata.testtime, ainuoinsulationtestdata.result);
-    ESP_LOGI(AINUOTAG, "number:3 item:pressurization 1(voltage):%f 2(current):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:%d result:%d", 
-        ainuopressurizationtestdata.voltage, ainuopressurizationtestdata.current, ainuopressurizationtestdata.testtime, \
-        ainuopressurizationtestdata.condition, ainuopressurizationtestdata.result);
-    ESP_LOGI(AINUOTAG, "number:4 item:leakage 1(voltage):%f 2(current):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:%d result:%d", 
-        ainuoleakagetestdata.voltage, ainuoleakagetestdata.current, ainuoleakagetestdata.testtime, ainuoleakagetestdata.condition, ainuoleakagetestdata.result);
-    ESP_LOGI(AINUOTAG, "number:5 item:power 1(voltage):%f 2(current):%f 3(power):%f 4(void):NaN 5(testtime):%f condition:%d result:%d", 
-        ainuopowertestdata.voltage, ainuopowertestdata.current, ainuopowertestdata.power, ainuopowertestdata.testtime, ainuopowertestdata.condition, ainuopowertestdata.result);
-    ESP_LOGI(AINUOTAG, "number:6 item:start 1(voltage):%f 2(current1):%f 3(current2):%f 4(current3):%f 5(testtime):%f condition:%d result:%d", 
-        ainuostarttestdata.voltage, ainuostarttestdata.current1, ainuostarttestdata.current2, ainuostarttestdata.current3, \
-        ainuostarttestdata.testtime, ainuostarttestdata.condition, ainuostarttestdata.result);
-    ESP_LOGI(AINUOTAG, "number:7 item:DC voltage 1(voltage):%f 2(current):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:%d result:%d", 
-        ainuodcvoltagetestdata.voltage, ainuodcvoltagetestdata.current, ainuodcvoltagetestdata.testtime, ainuodcvoltagetestdata.condition, ainuodcvoltagetestdata.result);
-    ESP_LOGI(AINUOTAG, "number:8 item:short circuit 1(voltage):%f 2(resistance):%f 3(void):NaN 4(void):NaN 5(testtime):%f condition:NaN result:%d", 
-        ainuoshortcircuittestdata.voltage, ainuoshortcircuittestdata.resistance, ainuoshortcircuittestdata.testtime, ainuoshortcircuittestdata.result);
-
-    AINUO_TTesterPackJsonFrame();
-	return 0;
-}
-
-// 把上位机 group 命令中一个测试项的参数写入对应的设置结构体（原位于 tcp_server.c）
+// 把上位机 group 命令中一个测试项的参数写入对应的设置结构体
 void AINUO_TTesterApplyItemParams(int item, parametersData *para)
 {
     switch (item) {

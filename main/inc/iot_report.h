@@ -97,4 +97,23 @@ int IotBatchCollector_Update(IotBatchCollector *collector, int frnum, double val
 /* 读取最近一次缓存的值，frnum 无效时返回 -1 */
 int IotBatchCollector_Get(const IotBatchCollector *collector, int frnum, double *value);
 
+/*
+ * 安规测试仪一组测试的结果（76T / 艾诺共用）：
+ * 8 个测试项，每项 5 个测量值，ParameterValues / ParameterTags / ParameterChecks 用 "__" 连接
+ */
+#define IOT_TESTER_ITEMS    8
+#define IOT_TESTER_VALUES   5
+#define IOT_TESTER_NAME     "TTester"       // 报文中 devNumber / devName / devStatus 字段
+
+typedef struct {
+    int groupId;
+    float values[IOT_TESTER_ITEMS][IOT_TESTER_VALUES];
+    int tags[IOT_TESTER_ITEMS];     // 各位置的测试项编号
+    int checks[IOT_TESTER_ITEMS];   // 各测试项结果
+    int groupCheck;                 // 本组结果
+    int totalCheck;                 // 总结果
+} IotTesterGroup;
+
+int IotReport_SendTesterGroup(const IotTesterGroup *g);
+
 #endif

@@ -215,17 +215,11 @@ static void ApplyChargeSetting(void)
 static void ApplyTesterGroup(void)
 {
 #ifdef CONFIG_TESTER_76T
-    SerialTxn_Begin();
-    TTesterSetGroupPara(HostCmd_GetTesterGroup());
-    SerialTxn_Wait(TTesterResolve, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
-    SerialTxn_End();
+    TTester_SetGroupPara((uint16_t)HostCmd_GetTesterGroup());
 #endif
 
 #ifdef CONFIG_TESTER_AINUO
-    SerialTxn_Begin();
-    AINUO_TTesterSetGroupPara(HostCmd_GetTesterGroup());
-    SerialTxn_Wait(AINUO_TTesterResolve, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
-    SerialTxn_End();
+    AINUO_SetGroupPara((uint16_t)HostCmd_GetTesterGroup());
 #endif
 }
 

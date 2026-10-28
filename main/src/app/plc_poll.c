@@ -222,47 +222,6 @@ static void ModbusNetReport(const PlcPoint *p, const PlcValue *v)
 
 /* ============================================================ 串口轮询任务 */
 
-#if defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
-static char s_testerJson[2048];
-
-// 测试仪：发读命令 -> 等应答 -> 上报协议层生成的 JSON
-static void PollTester(void (*request)(uint16_t group), uint16_t group,
-                       SerialParseFn parse, void (*get_json)(char *str))
-{
-    int ret;
-
-    SerialTxn_Begin();
-    request(group);
-    ret = SerialTxn_Wait(parse, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
-    SerialTxn_End();
-
-    if (ret == 0) {
-        get_json(s_testerJson);
-        IOT_PostMessage(s_testerJson);
-    }
-}
-#endif
-
-#if defined(CONFIG_TESTER_76T)
-static void TTesterRequest(uint16_t group)
-{
-    // 上位机下发过 group 命令后读该组历史结果，否则读当前组
-    if (group == 0) {
-        TTesterReadCurrentGroup();
-    } else {
-        TTesterReadHistoryGroup(group);
-    }
-}
-#endif
-
-#if defined(CONFIG_TESTER_AINUO)
-static void AinuoRequest(uint16_t group)
-{
-    (void)group;
-    AINUO_TTesterReadCurrentGroup();
-}
-#endif
-
 void plc_poll_task(void *pvParameters)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -295,11 +254,11 @@ void plc_poll_task(void *pvParameters)
 #endif
 
 #if defined(CONFIG_TESTER_76T)
-        PollTester(TTesterRequest, HostCmd_GetTesterGroup(), TTesterResolve, TTesterGetJsonData);
+        TTester_ReadGroup((uint16_t)HostCmd_GetTesterGroup());   // 0 读当前组，否则读上位机指定组的历史结果
 #endif
 
 #if defined(CONFIG_TESTER_AINUO)
-        PollTester(AinuoRequest, 0, AINUO_TTesterResolve, AINUO_TTesterGetJsonData);
+        AINUO_ReadGroup();
 #endif
 
 #if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)

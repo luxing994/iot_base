@@ -116,17 +116,17 @@ static int ParseGroupCommand(const cJSON *root)
 {
     const cJSON *type = cJSON_GetObjectItem(root, "parameterType");
     const cJSON *params = cJSON_GetObjectItem(root, "parameters");
-    int expected = 0, bytes = 0, actual = 0;
+    int expected = 0, actual = 0;
     int i, j, row;
 
     if (cJSON_IsString(type) && type->valuestring != NULL) {
         ESP_LOGI(TAG, "parameterType: %s", type->valuestring);
-        TTesterGetSetParaStatus(type->valuestring);
-        for (i = 0; i < CMD_PARA_GROUPS; i++) {
-            expected += ttestparanum[tterterparasetstatus[i]];
-            bytes += ttestparabytenum[tterterparasetstatus[i]];
+        if (TTester_SetItemList(type->valuestring) != 0) {
+            return -1;
         }
-        TTesterGetSetParaByteNum(bytes);
+        for (i = 0; i < CMD_PARA_GROUPS; i++) {
+            expected += TTester_ItemParaNum(TTester_GetItem(i));
+        }
     }
 
     // 没有 parameters 时沿用上一次的参数（只切换组号）
@@ -145,11 +145,13 @@ static int ParseGroupCommand(const cJSON *root)
 
     memset(s_groupParams, 0, sizeof(s_groupParams));
     for (i = 0, row = 0; i < CMD_PARA_GROUPS; i++) {
-        if (tterterparasetstatus[i] == 0) {
+        const int item = TTester_GetItem(i);
+
+        if (item == TTESTEREMPTY) {
             continue;
         }
         const cJSON *items = cJSON_GetArrayItem(params, row++);
-        for (j = 0; j < ttestparanum[tterterparasetstatus[i]] && j < CMD_PARA_ITEMS; j++) {
+        for (j = 0; j < TTester_ItemParaNum(item) && j < CMD_PARA_ITEMS; j++) {
             const cJSON *item = cJSON_GetArrayItem(items, j);
             parametersData *p = &s_groupParams[i][j];
 
@@ -163,10 +165,10 @@ static int ParseGroupCommand(const cJSON *root)
     // 各测试项参数的字段映射由测试仪模块负责
     for (i = 0; i < CMD_PARA_GROUPS; i++) {
 #ifdef CONFIG_TESTER_76T
-        TTesterApplyItemParams(tterterparasetstatus[i], s_groupParams[i]);
+        TTesterApplyItemParams(TTester_GetItem(i), s_groupParams[i]);
 #endif
 #ifdef CONFIG_TESTER_AINUO
-        AINUO_TTesterApplyItemParams(tterterparasetstatus[i], s_groupParams[i]);
+        AINUO_TTesterApplyItemParams(TTester_GetItem(i), s_groupParams[i]);
 #endif
     }
 

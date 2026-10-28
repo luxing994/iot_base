@@ -1,838 +1,508 @@
-#include <stdio.h>  
-#include <stdlib.h>  
-#include <string.h>  
-#include <ctype.h>  
 #include <math.h>
-#include "driver/uart.h"
-#include "esp_system.h"
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include "t_tester_protocol.h"
-#include "iot_common.h"
-#include "tcp_client.h"
-#include "iot_time.h"
+#include "iot_report.h"
+#include "proto_util.h"
+#include "serial_txn.h"
 
-/*
+static const char *TAG = "TTESTER";
+
+#define T_HEAD              'I'
+#define T_END               'D'
+#define T_PROTOCOL          '1'
+#define T_ADDRESS           1
+#define T_HEADER_LEN        6       // 'I' '1' 地址(2) 长度 保留
+#define T_FRAME_MAX         200
+
+/* 主命令 */
+#define T_CMD_RESPONSE      2       // 测试仪对命令的应答
+#define T_CMD_SET_PARA      3
+#define T_CMD_READ          4
+#define T_CMD_READ_RESPONSE 7       // 测试仪返回读取的数据
+
+/* 读命令的子命令 */
+#define T_READ_CURRENT_GROUP    199
+#define T_READ_HISTORY_GROUP    150
+
+/* 设置命令的子命令 */
+#define T_SET_GROUP_PARA        0x63
+#define T_SET_COMMON_PARA       0x01
+
+/* 组结果：每个测试项 组号 序号 测试项 结果 数据(10) */
+#define T_ITEM_RESULT_LEN       14
+
+/* 最后一项结果字节的高 4 位：组结果 + 总结果 */
+#define T_GROUP_QUALIFY         0x10
+#define T_GROUP_UNQUALIFY       0x20
+#define T_ALL_QUALIFY           0x40
+#define T_ALL_UNQUALIFY         0x80
+
+#define T_RESULT_QUALIFY        5
+#define T_RESULT_UNQUALIFY      6
+
+/* ================================================================ 组参数（下发格式） */
+
+#pragma pack(1)
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t uptime[2];
+    uint8_t downtime[2];
+    uint8_t testtime[2];
+    uint8_t curtozero[2];
+    uint8_t teststatus;
+    uint8_t testmode;
+    uint8_t curset[2];
+    uint8_t suspendtime[2];
+} TTesterSetPressurizationPara;
+
+typedef struct {
+    uint8_t curset[2];
+    uint8_t resupperlim[2];
+    uint8_t reslowerlim[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+} TTesterSetGroundingPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t resupperlim[2];
+    uint8_t reslowerlim[2];
+    uint8_t testtime[2];
+    uint8_t delaytime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+    uint8_t res1tozero[2];
+    uint8_t res2tozero[2];
+} TTesterSetInsulationPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t testtime[2];
+    uint8_t teststatus;
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t res0tozero[2];
+    uint8_t res1tozero[2];
+    uint8_t res2tozero[2];
+    uint8_t curtozero[2];
+} TTesterSetLeakagePara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t powerupperlim[2];
+    uint8_t powerlowerlim[2];
+    uint8_t delaytime[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t voltype;
+} TTesterSetPowerPara;
+
+typedef struct {
+    uint8_t voltage[2];
+    uint8_t volupperlim[2];
+    uint8_t vollowerlim[2];
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t delaytime[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+    uint8_t voltype;
+} TTesterSetStartupPara;
+
+typedef struct {
+    uint8_t curupperlim[2];
+    uint8_t curlowerlim[2];
+    uint8_t testtime[2];
+    uint8_t testmode;
+    uint8_t suspendtime[2];
+} TTesterSetOpenshortPara;
+
+typedef struct {
+    uint8_t frequence;
+    uint8_t failitem;
+    uint8_t grouplink;
+    uint8_t utensiltype;
+} TTesterSetCommonPara;
+#pragma pack()
+
+static TTesterSetPressurizationPara s_press;
+static TTesterSetGroundingPara s_ground;
+static TTesterSetInsulationPara s_insul;
+static TTesterSetLeakagePara s_leak;
+static TTesterSetPowerPara s_power;
+static TTesterSetStartupPara s_startup;
+static TTesterSetOpenshortPara s_openshort;
+static TTesterSetCommonPara s_common;
+
+/* 各测试项：上位机参数个数、下发时的参数区（直流耐压 76T 不支持，只发测试项编号 0） */
+typedef struct {
+    uint8_t paraNum;
+    const void *para;
+    uint8_t paraSize;
+} TItemDef;
+
+static const TItemDef s_itemDefs[TTESTERCOMMON + 1] = {
+    [TTESTEREMPTY]          = { 0,  NULL,         0 },
+    [TTESTERPRESSURIZATION] = { 11, &s_press,     sizeof(s_press) },
+    [TTESTERGROUNDING]      = { 7,  &s_ground,    sizeof(s_ground) },
+    [TTESTERINSULATION]     = { 10, &s_insul,     sizeof(s_insul) },
+    [TTESTERLEAKAGE]        = { 11, &s_leak,      sizeof(s_leak) },
+    [TTESTERPOWER]          = { 10, &s_power,     sizeof(s_power) },
+    [TTESTERSTARTUP]        = { 10, &s_startup,   sizeof(s_startup) },
+    [TTESTEROPENSHORT]      = { 5,  &s_openshort, sizeof(s_openshort) },
+    [TTESTERDCVOLTAGE]      = { 7,  NULL,         0 },
+    [TTESTERCOMMON]         = { 5,  NULL,         0 },
+};
+
+static int s_items[TTESTER_GROUP_SLOTS];
+
+int TTester_SetItemList(const char *list)
 {
-	"devId": "TTester",
-	"devNumber": "TTester",
-	"devName": "TTester",
-	"devStatus": "TTester",
-	"devTypeId": "TTester",
-    "deviceOrderWay": "read",
-	"orderName": "",
-	"orderId": "FR001",
-	"orderMode": "group",
-	"groupId": "001", 
-	"ParameterValues": "10.00__84.00__0.00__0.00__0.00__11.00__7.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.000.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.000.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00__0.00",
-	"ParameterTags": "1__2__3__4__0__0__0__0",
-	"ParameterChecks": "6__6__7__7__7__7__7__7",
-	"GroupChecks": "6",
-	"TotalChecks": "6",
-	"value": "6",
-	"devIP": "",
-	"timeStamp": "77396"
-	"valueUnit": ""
-	"expand": ""
-	"isAnswer": "yes"
-};;**##
-*/
+    int items[TTESTER_GROUP_SLOTS] = { 0 };
+    const char *p = list;
 
-TTesterNoCommandDataFrameFormat ttesterreadstatussbuff = {0};
-TTesterOneCommandDataFrameFormat ttesterreadcuritemsbuff = {0};
-TTesterOneCommandDataFrameFormat ttesterreadcurgroupbuff = {0};
-TTesterTwoCommandDataFrameFormat ttesterreadhisgroupbuff = {0};
-TTesterOneCommandDataFrameFormat ttesterselectgroupbuff = {0};
-TTesterCommonFrameFormat ttestersetgroupcommonbuff = {0};
-TTesterCommonFrameFormat ttestersetgroupbuff = {0};
-
-TTesterPressurizationPara ttesterpredata = {0};
-TTesterGroundingPara ttestergrodata = {0};
-TTesterInsulationPara ttesterrindata = {0};
-TTesterLeakagePara ttesterleadata = {0};
-TTesterPowerPara ttesterpowdata = {0};
-TTesterStartupPara ttesterstadata = {0};
-TTesterOpenshortPara ttesterosdata = {0};
-TTesterDcvoltagePara ttesterdcdata = {0};
-
-TTesterSetPressurizationPara setprepara = {0};
-TTesterSetGroundingPara setgroundpara = {0};
-TTesterSetInsulationPara setinspara = {0};
-TTesterSetLeakagePara setleapara = {0};
-TTesterSetPowerPara setpowerpara = {0};
-TTesterSetStartupPara setstartuppara = {0};
-TTesterSetOpenshortPara setopenshortpara = {0};
-TTesterSetDCVoltagePara setdcvoltagepara = {0};
-TTesterSetCommonPara setcommonpara = {0};
-int ttestparanum[10] = {0, T_TESTER_SET_PRESSURIZATION_PARA_NUM, T_TESTER_SET_GROUNDING_PARA_NUM, \
-    T_TESTER_SET_INSULATION_PARA_NUM, T_TESTER_SET_LEAKAGE_PARA_NUM, T_TESTER_SET_POWER_PARA_NUM, \
-    T_TESTER_SET_STARTUP_PARA_NUM, T_TESTER_SET_OPENSHORT_PARA_NUM, T_TESTER_SET_DCVOLTAGE_PARA_NUM, \
-    T_TESTER_SET_COMMON_PARA_NUM};
-int ttestparabytenum[10] = {1, sizeof(TTesterSetPressurizationPara) + 1, sizeof(TTesterSetGroundingPara) + 1, \
-    sizeof(TTesterSetInsulationPara) + 1, sizeof(TTesterSetLeakagePara) + 1, sizeof(TTesterSetPowerPara) + 1, \
-    sizeof(TTesterSetStartupPara) + 1, sizeof(TTesterSetOpenshortPara) + 1, 1, 0};
-int tterterparasetstatus[9] = {0};
-char ttesterjsondatabuff[2048] = {0};
-
-TTestestGroupResultPara curgrouptestdata = {0};
-uint8_t ttesterrdatabuffer[256] = {0};
-uint16_t ttestersetparabytenum = 0;
-int ttesterreadgroupnumber = 0;
-const char *TAG = "TTest_Resolve";
-
-static float TTesterResTranData(uint16_t data)
-{
-    if ((data & 0x3fff) == 0) {
-        return (float)0;
-    } else {
-        return (float)(data & 0x3fff) * pow(10.0, (float)(-(data >> 14)));
-    }
-   
-}
-
-static void TTesterPackSelectGroupFrame(uint16_t group)
-{
-    ttesterselectgroupbuff.head = T_TESTER_FRAME_HEAD;
-    ttesterselectgroupbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttesterselectgroupbuff.address[0] = 0;
-    ttesterselectgroupbuff.address[1] = T_TESTER_ADDRESS;
-    ttesterselectgroupbuff.length = sizeof(TTesterOneCommandDataFrameFormat) - 1;
-    ttesterselectgroupbuff.reserve = 0;
-    ttesterselectgroupbuff.maincode[0] = TTESTERSELECTGROUP;
-    ttesterselectgroupbuff.maincode[1] = group;
-    ttesterselectgroupbuff.end = T_TESTER_FRAME_END;
-    ttesterselectgroupbuff.sum = CalSumCheckDataLow(&ttesterselectgroupbuff.head, \
-        sizeof(TTesterOneCommandDataFrameFormat) - 1);
-}
-
-static void TTesterPackReadStatusFrame(void)
-{
-    ttesterreadstatussbuff.head = T_TESTER_FRAME_HEAD;
-    ttesterreadstatussbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttesterreadstatussbuff.address[0] = 0;
-    ttesterreadstatussbuff.address[1] = T_TESTER_ADDRESS;
-    ttesterreadstatussbuff.length = sizeof(TTesterNoCommandDataFrameFormat) - 1;
-    ttesterreadstatussbuff.reserve = 0;
-    ttesterreadstatussbuff.maincode = TTESTERINQUIRYSTATUS;
-    ttesterreadstatussbuff.end = T_TESTER_FRAME_END;
-    ttesterreadstatussbuff.sum = CalSumCheckDataLow(&ttesterreadstatussbuff.head, \
-        sizeof(TTesterNoCommandDataFrameFormat) - 1);
-}
-
-static void TTesterPackReadCurrentItemFrame(void)
-{
-    ttesterreadcuritemsbuff.head = T_TESTER_FRAME_HEAD;
-    ttesterreadcuritemsbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttesterreadcuritemsbuff.address[0] = 0;
-    ttesterreadcuritemsbuff.address[1] = T_TESTER_ADDRESS;
-    ttesterreadcuritemsbuff.length = sizeof(TTesterOneCommandDataFrameFormat) - 1;
-    ttesterreadcuritemsbuff.reserve = 0;
-    ttesterreadcuritemsbuff.maincode[0] = TTESTERDATAREAD;
-    ttesterreadcuritemsbuff.maincode[1] = T_TESTER_READ_CURRENT_TEST_DATA;
-    ttesterreadcuritemsbuff.end = T_TESTER_FRAME_END;
-    ttesterreadcuritemsbuff.sum = CalSumCheckDataLow(&ttesterreadcuritemsbuff.head, \
-        sizeof(TTesterOneCommandDataFrameFormat) - 1);
-}
-
-static void TTesterPackReadCurrentGroupFrame(void)
-{
-    ttesterreadcurgroupbuff.head = T_TESTER_FRAME_HEAD;
-    ttesterreadcurgroupbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttesterreadcurgroupbuff.address[0] = 0;
-    ttesterreadcurgroupbuff.address[1] = T_TESTER_ADDRESS;
-    ttesterreadcurgroupbuff.length = sizeof(TTesterOneCommandDataFrameFormat) - 1;
-    ttesterreadcurgroupbuff.reserve = 0;
-    ttesterreadcurgroupbuff.maincode[0] = TTESTERDATAREAD;
-    ttesterreadcurgroupbuff.maincode[1] = T_TESTER_READ_CURRENT_GROUP_TEST_DATA;
-    ttesterreadcurgroupbuff.end = T_TESTER_FRAME_END;
-    ttesterreadcurgroupbuff.sum = CalSumCheckDataLow(&ttesterreadcurgroupbuff.head, \
-        sizeof(TTesterOneCommandDataFrameFormat) - 1);
-}
-
-static void TTesterPackReadHistoryGroupFrame(uint16_t group)
-{
-    ttesterreadhisgroupbuff.head = T_TESTER_FRAME_HEAD;
-    ttesterreadhisgroupbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttesterreadhisgroupbuff.address[0] = 0;
-    ttesterreadhisgroupbuff.address[1] = T_TESTER_ADDRESS;
-    ttesterreadhisgroupbuff.length = sizeof(TTesterTwoCommandDataFrameFormat) - 1;
-    ttesterreadhisgroupbuff.reserve = 0;
-    ttesterreadhisgroupbuff.maincode[0] = TTESTERDATAREAD;
-    ttesterreadhisgroupbuff.maincode[1] = T_TESTER_READ_HISTORY_GROUP_TEST_DATA;
-    ttesterreadhisgroupbuff.maincode[2] = group;
-    ttesterreadhisgroupbuff.end = T_TESTER_FRAME_END;
-    ttesterreadhisgroupbuff.sum = CalSumCheckDataLow(&ttesterreadhisgroupbuff.head, \
-        sizeof(TTesterTwoCommandDataFrameFormat) - 1);
-}
-
-static void TTesterPackSetGroupCommonParaFrame(uint16_t group)
-{
-    int count;
-    uint8_t sum[3] = {0}; 
-    
-    ttestersetgroupcommonbuff.data = (uint8_t *)malloc(T_TESTER_SET_COMMON_DATA_LENGTH);
-    if (ttestersetgroupcommonbuff.data == NULL) {
-        ESP_LOGE(TAG, "mem error");
-        return;
-    }
-    ttestersetgroupcommonbuff.head = T_TESTER_FRAME_HEAD;
-    ttestersetgroupcommonbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttestersetgroupcommonbuff.address[0] = 0;
-    ttestersetgroupcommonbuff.address[1] = T_TESTER_ADDRESS;
-    ttestersetgroupcommonbuff.length = 0x0e;
-    ttestersetgroupcommonbuff.reserve = 0;
-    ttestersetgroupcommonbuff.data[0] = TTESTERSETPARA;
-    ttestersetgroupcommonbuff.data[1] = T_TESTER_SET_COMMON_PARA_SECOND_BYTE;
-    ttestersetgroupcommonbuff.data[2] = group;
-    count = 3;
-
-    memcpy(&ttestersetgroupcommonbuff.data[count], &setcommonpara, T_TESTER_SET_COMMON_DATA_LENGTH - 3);
-    ttestersetgroupcommonbuff.end = T_TESTER_FRAME_END;
-    sum[0] = CalSumCheckDataLow(&ttestersetgroupcommonbuff.head, 6);
-    sum[1] = CalSumCheckDataLow(&ttestersetgroupcommonbuff.data[0], T_TESTER_SET_COMMON_DATA_LENGTH);
-    sum[2] = T_TESTER_FRAME_END;
-    ttestersetgroupcommonbuff.sum = CalSumCheckDataLow(sum, sizeof(sum));
-}
-
-static void TTesterPackSetGroupParaFrame(uint16_t group)
-{
-    int i, count;
-    uint8_t sum[3] = {0}; 
-    ttestersetgroupbuff.data = (uint8_t *)malloc(3 + ttestersetparabytenum);
-    if (ttestersetgroupbuff.data == NULL) {
-        ESP_LOGE(TAG, "mem error");
-        return;
-    }
-    ttestersetgroupbuff.head = T_TESTER_FRAME_HEAD;
-    ttestersetgroupbuff.pronum = T_TESTER_PROTOCOL_NUM;
-    ttestersetgroupbuff.address[0] = 0;
-    ttestersetgroupbuff.address[1] = T_TESTER_ADDRESS;
-    ttestersetgroupbuff.length = sizeof(TTesterCommonFrameFormat) -1 - 4 + 3 + ttestersetparabytenum;
-    ttestersetgroupbuff.reserve = 0;
-    ttestersetgroupbuff.data[0] = TTESTERSETPARA;
-    ttestersetgroupbuff.data[1] = T_TESTER_SET_PARA_SECOND_BYTE;
-    ttestersetgroupbuff.data[2] = group;
-    count = 3;
-    for (i = 0; i < 8; i++) {
-        if (tterterparasetstatus[i] == TTESTERDCVOLTAGE) {
-            ttestersetgroupbuff.data[count] = 0;
-        } else {
-            ttestersetgroupbuff.data[count] = (uint8_t)(tterterparasetstatus[i]);
-        }
-        switch (tterterparasetstatus[i]) {
-            case TTESTERPRESSURIZATION: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setprepara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTERGROUNDING: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setgroundpara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTERINSULATION: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setinspara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTERLEAKAGE: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setleapara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTERPOWER: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setpowerpara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTERSTARTUP: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setstartuppara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            case TTESTEROPENSHORT: {
-                memcpy(&ttestersetgroupbuff.data[count + 1], &setopenshortpara, ttestparabytenum[tterterparasetstatus[i]] - 1);
-                break;
-            }
-            default: {
-                break;
-            }
-        }
-        count += ttestparabytenum[tterterparasetstatus[i]];
-    }
-
-    ttestersetgroupbuff.end = T_TESTER_FRAME_END;
-    sum[0] = CalSumCheckDataLow(&ttestersetgroupbuff.head, 6);
-    sum[1] = CalSumCheckDataLow(&ttestersetgroupbuff.data[0], 3 + ttestersetparabytenum);
-    sum[2] = T_TESTER_FRAME_END;
-    ttestersetgroupbuff.sum = CalSumCheckDataLow(sum, sizeof(sum));
-}
-
-static void TTesterResolveCurrentGroupDataResponse(uint8_t num, uint8_t item, uint8_t* rdata, uint16_t len)
-{
-    switch (item) {
-        case TTESTERPRESSURIZATION: {
-            ttesterpredata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterpredata.current = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterpredata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterpredata.uptime = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterpredata.downtime = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterpredata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterpredata, len * 2);
-            }
-            break;
-        }
-        case TTESTERGROUNDING: {
-            ttestergrodata.current = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttestergrodata.resistance = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttestergrodata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttestergrodata.reserve1 = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttestergrodata.reserve2 = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttestergrodata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttestergrodata, len * 2);
-            }
-            break;
-        }
-        case TTESTERINSULATION: {
-            ttesterrindata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterrindata.resistance = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterrindata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterrindata.reserve1 = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterrindata.reserve2 = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterrindata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterrindata, len * 2);
-            }
-            break;
-        }
-        case TTESTERLEAKAGE: {
-            ttesterleadata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterleadata.firecurrent = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterleadata.groundcurrent = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterleadata.testtime = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterleadata.reserve = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterleadata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterleadata, len * 2);
-            }
-            break;
-        }
-        case TTESTERPOWER: {
-            ttesterpowdata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterpowdata.current = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterpowdata.power = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterpowdata.powerf = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterpowdata.testtime = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterpowdata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterpowdata, len * 2);
-            }
-            break;
-        }
-        case TTESTERSTARTUP: {
-            ttesterstadata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterstadata.current = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterstadata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterstadata.reserve1 = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterstadata.reserve2 = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterstadata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterstadata, len * 2);
-            }
-            break;
-        }
-        case TTESTEROPENSHORT: {
-            ttesterosdata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterosdata.current = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterosdata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterosdata.reserve1 = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterosdata.reserve2 = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterosdata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterosdata, len * 2);
-            }
-            break;
-        }
-        case TTESTERDCVOLTAGE: {
-            ttesterdcdata.voltage = TTesterResTranData((rdata[0] << 8) + rdata[1]);
-            ttesterdcdata.current = TTesterResTranData((rdata[2] << 8) + rdata[3]);
-            ttesterdcdata.testtime = TTesterResTranData((rdata[4] << 8) + rdata[5]);
-            ttesterdcdata.reserve1 = TTesterResTranData((rdata[6] << 8) + rdata[7]);
-            ttesterdcdata.reserve2 = TTesterResTranData((rdata[8] << 8) + rdata[9]);
-            if (num < 7) {
-                memcpy(curgrouptestdata.itemdata[num].para, &ttesterdcdata, len * 2);
-            } else {
-                memcpy(curgrouptestdata.lastitemdata.para, &ttesterdcdata, len * 2);
-            }
-            break;
-        }
-        default: {  
-            if (num < 7) {
-                memset(curgrouptestdata.itemdata[num].para, 0, len * 2);
-            } else {
-                memset(curgrouptestdata.lastitemdata.para, 0, len * 2);
-            }
-            break;
-        }
-    }
-}
-
-static int TTesterResolveCurrentGroupResponse(uint8_t* data, uint16_t len)
-{
-    TTesterTestItemDataFormat rdata = {0};
-    int i, ret;
-    
-    if (len != (sizeof(TTesterTestItemDataFormat) * 8)) {
+    if (list == NULL) {
         return -1;
     }
-    
-    for (i = 0; i < 8; i++) {
-        memcpy(&rdata, &data[i * sizeof(TTesterTestItemDataFormat)], sizeof(TTesterTestItemDataFormat));
-        if (i < 7) {
-            curgrouptestdata.itemdata[i].group = rdata.group;
-            curgrouptestdata.itemdata[i].term = rdata.term;
-            curgrouptestdata.itemdata[i].item = rdata.item;
-            curgrouptestdata.itemdata[i].termret = rdata.result;
-            TTesterResolveCurrentGroupDataResponse(i, curgrouptestdata.itemdata[i].item, rdata.data, \ 
-                sizeof(TTesterTestItemDataFormat) - 4);
-        } else {
-            curgrouptestdata.lastitemdata.group = rdata.group;
-            curgrouptestdata.lastitemdata.term = rdata.term;
-            curgrouptestdata.lastitemdata.item = rdata.item;
-            curgrouptestdata.lastitemdata.termret = (rdata.result) & 0xf;
-            if (((rdata.result) & 0xf0) == (T_TESTER_GROUP_TEST_QUALIFY + T_TESTER_ALL_GROUP_TEST_QUALIFY)) {
-                curgrouptestdata.lastitemdata.groupret = TTESTERITEMTESTQUALIFY;
-                curgrouptestdata.lastitemdata.allret = TTESTERITEMTESTQUALIFY;
-            } else if (((rdata.result) & 0xf0) == (T_TESTER_GROUP_TEST_QUALIFY + T_TESTER_ALL_GROUP_TEST_UNQUALIFY)) {
-                curgrouptestdata.lastitemdata.groupret = TTESTERITEMTESTQUALIFY;
-                curgrouptestdata.lastitemdata.allret = TTESTERITEMTESTUNQUALIFY;
-            } else if (((rdata.result) & 0xf0) == (T_TESTER_GROUP_TEST_UNQUALIFY + T_TESTER_ALL_GROUP_TEST_UNQUALIFY)) {
-                curgrouptestdata.lastitemdata.groupret = TTESTERITEMTESTUNQUALIFY;
-                curgrouptestdata.lastitemdata.allret = TTESTERITEMTESTUNQUALIFY;
-            }
-            TTesterResolveCurrentGroupDataResponse(i, curgrouptestdata.lastitemdata.item, rdata.data, \ 
-                    sizeof(TTesterTestItemDataFormat) - 4);
-        }
-    }
+    // 以 '_' 分隔，缺少的位置按空测试项处理
+    for (int i = 0; i < TTESTER_GROUP_SLOTS && *p != '\0'; i++) {
+        char *end;
+        long v = strtol(p, &end, 10);
 
-    return 0;
-}
-
-
-static void TTesterResolveReadDataResponse(uint8_t* data, uint16_t len)
-{
-    // char *TAG = "TTester resolve command resopnse";
-    
-    switch (data[0]) {
-        case T_TESTER_READ_SELFTEST_DATA: {
-            // 获取自检数据
-            break;
-        }
-        case T_TESTER_READ_STATUS_RESPONSE: {
-            // 获取状态
-            break;
-        }
-        case T_TESTER_READ_CURRENT_TEST_DATA: {
-            // 获取当前测试项的数据
-            break;
-        }
-        case T_TESTER_READ_CURRENT_GROUP_TEST_DATA: {
-            TTesterResolveCurrentGroupResponse(&data[1], len - 1);
-            break;
-        }
-        case T_TESTER_READ_HISTORY_GROUP_TEST_DATA: {
-            // 获取历史测试数据
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-}
-
-static void TTesterResolveCommandResponse(uint8_t* data, uint16_t len)
-{
-    // char *TAG = "TTester resolve command resopnse";
-    
-    switch (data[0]) {
-        case TTESTERCOMMANDFRAMEERROR: {
-            // ESP_LOGE(TAG, "command frame error");
-            break;
-        }
-        case TTESTERCOMMANDRECEIVESUCCESS: {
-            // ESP_LOGE(TAG, "command receive success");
-            break;
-        }
-        case TTESTERCOMMANDREFUSE: {
-            // ESP_LOGE(TAG, "command refuse");
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-}
-
-
-static void TTesterPackJsonFrame(void)
-{
-    char ttesterparadatajsondatabuff[512] = {0};
-    char ttesterparaunitjsondatabuff[128] = {0};
-    char ttestertestresultjsondatabuff[64] = {0};
-    
-    (void)sprintf(ttesterparadatajsondatabuff, "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
-                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__"
-                "%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f__%.2f",
-            *((float *)(&(curgrouptestdata.itemdata[0].para[0]))), *((float *)(&(curgrouptestdata.itemdata[0].para[4]))), *((float *)(&(curgrouptestdata.itemdata[0].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[0].para[12]))), *((float *)(&(curgrouptestdata.itemdata[0].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[1].para[0]))), *((float *)(&(curgrouptestdata.itemdata[1].para[4]))), *((float *)(&(curgrouptestdata.itemdata[1].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[1].para[12]))), *((float *)(&(curgrouptestdata.itemdata[1].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[2].para[0]))), *((float *)(&(curgrouptestdata.itemdata[2].para[4]))), *((float *)(&(curgrouptestdata.itemdata[2].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[2].para[12]))), *((float *)(&(curgrouptestdata.itemdata[2].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[3].para[0]))), *((float *)(&(curgrouptestdata.itemdata[3].para[4]))), *((float *)(&(curgrouptestdata.itemdata[3].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[3].para[12]))), *((float *)(&(curgrouptestdata.itemdata[3].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[4].para[0]))), *((float *)(&(curgrouptestdata.itemdata[4].para[4]))), *((float *)(&(curgrouptestdata.itemdata[4].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[4].para[12]))), *((float *)(&(curgrouptestdata.itemdata[4].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[5].para[0]))), *((float *)(&(curgrouptestdata.itemdata[5].para[4]))), *((float *)(&(curgrouptestdata.itemdata[5].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[5].para[12]))), *((float *)(&(curgrouptestdata.itemdata[5].para[16]))), \
-            *((float *)(&(curgrouptestdata.itemdata[6].para[0]))), *((float *)(&(curgrouptestdata.itemdata[6].para[4]))), *((float *)(&(curgrouptestdata.itemdata[6].para[8]))), \
-            *((float *)(&(curgrouptestdata.itemdata[6].para[12]))), *((float *)(&(curgrouptestdata.itemdata[6].para[16]))), \
-            *((float *)(&(curgrouptestdata.lastitemdata.para[0]))), *((float *)(&(curgrouptestdata.lastitemdata.para[4]))), *((float *)(&(curgrouptestdata.lastitemdata.para[8]))), \
-            *((float *)(&(curgrouptestdata.lastitemdata.para[12]))), *((float *)(&(curgrouptestdata.lastitemdata.para[16]))));
-    (void)sprintf(ttesterparaunitjsondatabuff, "%d__%d__%d__%d__%d__%d__%d__%d", curgrouptestdata.itemdata[0].item, curgrouptestdata.itemdata[1].item, \
-    curgrouptestdata.itemdata[2].item, curgrouptestdata.itemdata[3].item, curgrouptestdata.itemdata[4].item, curgrouptestdata.itemdata[5].item, \
-    curgrouptestdata.itemdata[6].item, curgrouptestdata.lastitemdata.item);
-    (void)sprintf(ttestertestresultjsondatabuff, "%d__%d__%d__%d__%d__%d__%d__%d", curgrouptestdata.itemdata[0].termret, curgrouptestdata.itemdata[1].termret, \
-    curgrouptestdata.itemdata[2].termret, curgrouptestdata.itemdata[3].termret, curgrouptestdata.itemdata[4].termret, curgrouptestdata.itemdata[5].termret, \
-    curgrouptestdata.itemdata[6].termret, curgrouptestdata.lastitemdata.termret);
-    (void)sprintf(ttesterjsondatabuff, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n"  
-		        "    \"devStatus\": \"%s\",\n    \"devTypeId\": \"%s\",\n    \"deviceOrderWay\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
-                "    \"orderMode\":\"%s\",\n    \"groupId\":\"%03d\",\n    \"ParameterValues\":\"%s\",\n    \"ParameterTags\":\"%s\",\n    \"ParameterChecks\":\"%s\",\n"
-		        "    \"GroupChecks\":\"%d\",\n    \"TotalChecks\":\"%d\",\n    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStamp\":\"%lld\",\n    \"valueUnit\":\"\",\n"  
-                "    \"expand\":\"\",\n    \"isAnswer\":\"%s\"\n};;**##",
-            DEVID, T_TESTER_DEVNUMBER, T_TESTER_DEVNAME, T_TESTER_DEVSTATUS, SAFETYTESTERTYPEID, "read", T_TESTER_ORDERNAME, \
-            T_TESTER_ORDERID, T_TESTER_ORDERMODE, ttesterreadgroupnumber, ttesterparadatajsondatabuff, ttesterparaunitjsondatabuff, ttestertestresultjsondatabuff, \
-            curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, GetStaIp(), GetMilliTimeNow(), T_TESTER_ISANSWER_NO);
-}
-
-uint16_t TTesterStrChangeToUint(char *str)
-{
-    int pos, rdata;
-    
-    pos = CalFloatStrPointPos(str);
-    rdata = (int)(atof(str) * pow(10, pos));
-    return ((rdata & 0x3fff) | (pos << 14)); 
-}
-
-void TTesterGetSetParaByteNum(uint16_t num)
-{
-    ttestersetparabytenum = num;
-}
-
-int TTesterGetSetParaStatus(char *str)
-{
-    char *strarry[sizeof(tterterparasetstatus) / sizeof(int)];
-    char *token;
-    int i = 0;
-
-    if (str == NULL) {
-        return -1;
-    }
-
-    token = strtok(str, "_");
-    while (token != NULL) {
-        strarry[i] = token;
-        token = strtok(NULL, "_");
-        i++;
-    }
-
-    for (i = 0; i < sizeof(tterterparasetstatus) / sizeof(int); i++) {
-        tterterparasetstatus[i] = atoi(strarry[i]);
-        // ESP_LOGI(TAG, "size:%d tterterparasetstatus[%d]:%d strarry[%d]:%s", sizeof(tterterparasetstatus) / sizeof(int), i, tterterparasetstatus[i], i, strarry[i]);
-    }
-
-    return 0;
-}
-
-void TTesterSelectGroup(uint16_t group)
-{
-    TTesterPackSelectGroupFrame(group);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterselectgroupbuff, sizeof(TTesterOneCommandDataFrameFormat));
-}
-
-void TTesterInquiryStatus(void)
-{
-    TTesterPackReadStatusFrame();
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadstatussbuff, sizeof(TTesterNoCommandDataFrameFormat));
-}
-
-void TTesterReadCurrentItem(void)
-{
-    TTesterPackReadCurrentItemFrame();
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadcuritemsbuff, sizeof(TTesterOneCommandDataFrameFormat));
-}
-
-void TTesterReadCurrentGroup(void)
-{
-    TTesterPackReadCurrentGroupFrame();
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadcurgroupbuff, sizeof(TTesterOneCommandDataFrameFormat));
-}
-
-void TTesterReadHistoryGroup(uint16_t group)
-{
-    ttesterreadgroupnumber = group;
-    TTesterPackReadHistoryGroupFrame(group);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&ttesterreadhisgroupbuff, sizeof(TTesterTwoCommandDataFrameFormat));
-}
-
-void TTesterSetGroupPara(uint16_t group)
-{
-    TTesterPackSetGroupCommonParaFrame(group);
-    TTesterPackSetGroupParaFrame(group);
-
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupcommonbuff.head, 6);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&(ttestersetgroupcommonbuff.data[0]), T_TESTER_SET_COMMON_DATA_LENGTH);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupcommonbuff.end, 2);
-    vTaskDelay(10);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupbuff.head, 6);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&(ttestersetgroupbuff.data[0]), 3 + ttestersetparabytenum);
-    uart_write_bytes(UART_NUM_1, (uint8_t *)&ttestersetgroupbuff.end, 2);
-}
-
-void TTesterGetJsonData(char *str)
-{
-    strcpy(str, ttesterjsondatabuff);
-}
-
-int TTesterResolve(void *ctx)
-{
-	uint8_t curData[4] = {0};
-    uint8_t length, sum;
-	int ret, i;
-
-	while ((curData[0] != T_TESTER_FRAME_HEAD) && (curData[1] != T_TESTER_PROTOCOL_NUM) \
-        && (curData[3] != T_TESTER_ADDRESS)) {
-        ret = UART_ReadBufferBytes(&curData[0], 4);
-        if (ret != 0) {
+        if (end == p || v < TTESTEREMPTY || v > TTESTERCOMMON) {
+            ESP_LOGE(TAG, "bad item list: %s", list);
             return -1;
         }
-	}
-
-    ret = UART_ReadBufferBytes(&length, 1);
-    if (ret != 0) {
-        return -1;
-    }
-
-    length -= 6;
-    ret = UART_ReadBufferBytes(ttesterrdatabuffer, length);
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = UART_ReadBufferBytes(&curData[0], 2);
-    if (ret != 0) {
-        return -1;
-    }
-    sum = curData[1];
-
-    switch (ttesterrdatabuffer[1]) {
-        case TTESTERDATAREVRESPONSE: {
-            TTesterResolveCommandResponse(&ttesterrdatabuffer[2], length - 2);
-            break;
+        items[i] = (int)v;
+        p = end;
+        while (*p == '_') {
+            p++;
         }
-        case TTESTERDATAREADRESPONSE: {
-            TTesterResolveReadDataResponse(&ttesterrdatabuffer[2], length - 2);
-            break;
-        }
-        default: {
-            break;
-        } 
     }
-
-    for (i = 0; i < 7; i++) {
-         ESP_LOGI(TAG, "group:%d term:%d item:%d result:%d 1:%f 2:%f 3:%f 4:%f 5:%f", curgrouptestdata.itemdata[i].group, \
-            curgrouptestdata.itemdata[i].term, curgrouptestdata.itemdata[i].item, curgrouptestdata.itemdata[i].termret, \
-            *((float *)(&(curgrouptestdata.itemdata[i].para[0]))), *((float *)(&(curgrouptestdata.itemdata[i].para[4]))), \
-            *((float *)(&(curgrouptestdata.itemdata[i].para[8]))), *((float *)(&(curgrouptestdata.itemdata[i].para[12]))), \
-            *((float *)(&(curgrouptestdata.itemdata[i].para[16]))));
-    }
-    ESP_LOGI(TAG, "group:%d term:%d item:%d termresult:%d groupresult:%d allresult:%d 1:%f 2:%f 3:%f 4:%f 5:%f", \
-        curgrouptestdata.lastitemdata.group, curgrouptestdata.lastitemdata.term, curgrouptestdata.lastitemdata.item, \
-        curgrouptestdata.lastitemdata.termret, curgrouptestdata.lastitemdata.groupret, curgrouptestdata.lastitemdata.allret, \
-        *((float *)(&(curgrouptestdata.lastitemdata.para[0]))), *((float *)(&(curgrouptestdata.lastitemdata.para[4]))), \
-        *((float *)(&(curgrouptestdata.lastitemdata.para[8]))), *((float *)(&(curgrouptestdata.lastitemdata.para[12]))), \
-        *((float *)(&(curgrouptestdata.lastitemdata.para[16]))));
-
-    TTesterPackJsonFrame();
-	return 0;
+    memcpy(s_items, items, sizeof(s_items));
+    return 0;
 }
 
+int TTester_GetItem(int slot)
+{
+    return (slot >= 0 && slot < TTESTER_GROUP_SLOTS) ? s_items[slot] : TTESTEREMPTY;
+}
 
-// 把上位机 group 命令中一个测试项的参数写入对应的设置结构体（原位于 tcp_server.c）
-void TTesterApplyItemParams(int item, parametersData *para)
+int TTester_ItemParaNum(int item)
+{
+    return (item >= TTESTEREMPTY && item <= TTESTERCOMMON) ? s_itemDefs[item].paraNum : 0;
+}
+
+/*
+ * 上位机参数字符串 -> 测试仪 16 位格式：低 14 位为去掉小数点后的整数，高 2 位为小数位数
+ * 例如 "1.25" -> 125 | (2 << 14)
+ */
+static uint16_t TTesterStrToCode(const char *str)
+{
+    const char *dot = strchr(str, '.');
+    int decimals = (dot != NULL) ? (int)strlen(dot + 1) : 0;
+    int v = (int)(atof(str) * pow(10, decimals));
+
+    return (uint16_t)((v & 0x3FFF) | (decimals << 14));
+}
+
+static void PutCode(uint8_t dst[2], const parametersData *para)
+{
+    uint16_t code = TTesterStrToCode(para->value);
+
+    dst[0] = (uint8_t)(code >> 8);
+    dst[1] = (uint8_t)code;
+}
+
+void TTesterApplyItemParams(int item, parametersData *p)
 {
     switch (item) {
-    case TTESTERPRESSURIZATION: {
-        setprepara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setprepara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setprepara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setprepara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setprepara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setprepara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setprepara.uptime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setprepara.uptime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setprepara.downtime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
-        setprepara.downtime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
-        setprepara.testtime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
-        setprepara.testtime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
-        setprepara.curtozero[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setprepara.curtozero[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
-        setprepara.teststatus = atoi(para[7].value);
-        setprepara.testmode = atoi(para[8].value);
-        setprepara.curset[0] = TTesterStrChangeToUint(para[9].value) >> 8;
-        setprepara.curset[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
-        setprepara.suspendtime[0] = TTesterStrChangeToUint(para[10].value) >> 8;
-        setprepara.suspendtime[1] = TTesterStrChangeToUint(para[10].value) & 0xff;
+    case TTESTERPRESSURIZATION:
+        PutCode(s_press.voltage, &p[0]);
+        PutCode(s_press.curupperlim, &p[1]);
+        PutCode(s_press.curlowerlim, &p[2]);
+        PutCode(s_press.uptime, &p[3]);
+        PutCode(s_press.downtime, &p[4]);
+        PutCode(s_press.testtime, &p[5]);
+        PutCode(s_press.curtozero, &p[6]);
+        s_press.teststatus = atoi(p[7].value);
+        s_press.testmode = atoi(p[8].value);
+        PutCode(s_press.curset, &p[9]);
+        PutCode(s_press.suspendtime, &p[10]);
+        break;
+    case TTESTERGROUNDING:
+        PutCode(s_ground.curset, &p[0]);
+        PutCode(s_ground.resupperlim, &p[1]);
+        PutCode(s_ground.reslowerlim, &p[2]);
+        PutCode(s_ground.testtime, &p[3]);
+        s_ground.testmode = atoi(p[4].value);
+        PutCode(s_ground.suspendtime, &p[5]);
+        PutCode(s_ground.res0tozero, &p[6]);
+        break;
+    case TTESTERINSULATION:
+        PutCode(s_insul.voltage, &p[0]);
+        PutCode(s_insul.resupperlim, &p[1]);
+        PutCode(s_insul.reslowerlim, &p[2]);
+        PutCode(s_insul.testtime, &p[3]);
+        PutCode(s_insul.delaytime, &p[4]);
+        s_insul.testmode = atoi(p[5].value);
+        PutCode(s_insul.suspendtime, &p[6]);
+        PutCode(s_insul.res0tozero, &p[7]);
+        PutCode(s_insul.res1tozero, &p[8]);
+        PutCode(s_insul.res2tozero, &p[9]);
+        break;
+    case TTESTERLEAKAGE:
+        PutCode(s_leak.voltage, &p[0]);
+        PutCode(s_leak.curupperlim, &p[1]);
+        PutCode(s_leak.curlowerlim, &p[2]);
+        PutCode(s_leak.testtime, &p[3]);
+        s_leak.teststatus = atoi(p[4].value);
+        s_leak.testmode = atoi(p[5].value);
+        PutCode(s_leak.suspendtime, &p[6]);
+        PutCode(s_leak.res0tozero, &p[7]);
+        PutCode(s_leak.res1tozero, &p[8]);
+        PutCode(s_leak.res2tozero, &p[9]);
+        PutCode(s_leak.curtozero, &p[10]);
+        break;
+    case TTESTERPOWER:
+        PutCode(s_power.voltage, &p[0]);
+        PutCode(s_power.curupperlim, &p[1]);
+        PutCode(s_power.curlowerlim, &p[2]);
+        PutCode(s_power.powerupperlim, &p[3]);
+        PutCode(s_power.powerlowerlim, &p[4]);
+        PutCode(s_power.delaytime, &p[5]);
+        PutCode(s_power.testtime, &p[6]);
+        s_power.testmode = atoi(p[7].value);
+        PutCode(s_power.suspendtime, &p[8]);
+        s_power.voltype = atoi(p[9].value);
+        break;
+    case TTESTERSTARTUP:
+        PutCode(s_startup.voltage, &p[0]);
+        PutCode(s_startup.volupperlim, &p[1]);
+        PutCode(s_startup.vollowerlim, &p[2]);
+        PutCode(s_startup.curupperlim, &p[3]);
+        PutCode(s_startup.curlowerlim, &p[4]);
+        PutCode(s_startup.delaytime, &p[5]);
+        PutCode(s_startup.testtime, &p[6]);
+        s_startup.testmode = atoi(p[7].value);
+        PutCode(s_startup.suspendtime, &p[8]);
+        s_startup.voltype = atoi(p[9].value);
+        break;
+    case TTESTEROPENSHORT:
+        PutCode(s_openshort.curupperlim, &p[0]);
+        PutCode(s_openshort.curlowerlim, &p[1]);
+        PutCode(s_openshort.testtime, &p[2]);
+        s_openshort.testmode = atoi(p[3].value);
+        PutCode(s_openshort.suspendtime, &p[4]);
+        break;
+    case TTESTERCOMMON:
+        s_common.failitem = atoi(p[1].value);
+        s_common.frequence = atoi(p[2].value);
+        s_common.grouplink = atoi(p[3].value);
+        s_common.utensiltype = atoi(p[4].value);
+        break;
+    default:    // 空项、直流耐压：无参数
+        break;
+    }
+}
 
-        break;
-    }
-    case TTESTERGROUNDING: {
-        setgroundpara.curset[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setgroundpara.curset[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setgroundpara.resupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setgroundpara.resupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setgroundpara.reslowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setgroundpara.reslowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setgroundpara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setgroundpara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setgroundpara.testmode = atoi(para[4].value);
-        setgroundpara.suspendtime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
-        setgroundpara.suspendtime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
-        setgroundpara.res0tozero[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setgroundpara.res0tozero[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
+/* ================================================================ 帧收发 */
 
-        break;
-    }
-    case TTESTERINSULATION: {
-        setinspara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setinspara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setinspara.resupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setinspara.resupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setinspara.reslowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setinspara.reslowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setinspara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setinspara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setinspara.delaytime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
-        setinspara.delaytime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
-        setinspara.testmode = atoi(para[5].value);
-        setinspara.suspendtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setinspara.suspendtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
-        setinspara.res0tozero[0] = TTesterStrChangeToUint(para[7].value) >> 8;
-        setinspara.res0tozero[1] = TTesterStrChangeToUint(para[7].value) & 0xff;
-        setinspara.res1tozero[0] = TTesterStrChangeToUint(para[8].value) >> 8;
-        setinspara.res1tozero[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
-        setinspara.res2tozero[0] = TTesterStrChangeToUint(para[9].value) >> 8;
-        setinspara.res2tozero[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
+static size_t TBuild(uint8_t *f, const uint8_t *payload, size_t plen)
+{
+    f[0] = T_HEAD;
+    f[1] = T_PROTOCOL;
+    f[2] = 0;
+    f[3] = T_ADDRESS;
+    f[4] = (uint8_t)(T_HEADER_LEN + plen + 1);     // 帧总长 - 1
+    f[5] = 0;
+    memcpy(&f[T_HEADER_LEN], payload, plen);
+    f[T_HEADER_LEN + plen] = T_END;
+    f[T_HEADER_LEN + plen + 1] = Proto_Sum8(f, T_HEADER_LEN + plen + 1);
+    return T_HEADER_LEN + plen + 2;
+}
 
+typedef struct {
+    uint8_t body[256];      // 保留 主命令 数据...
+    int dlen;               // 主命令之后的数据长度
+} TCtx;
 
-        break;
-    }
-    case TTESTERLEAKAGE: {
-        setleapara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setleapara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setleapara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setleapara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setleapara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setleapara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setleapara.testtime[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setleapara.testtime[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setleapara.teststatus = atoi(para[4].value);
-        setleapara.testmode = atoi(para[5].value);
-        setleapara.suspendtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setleapara.suspendtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
-        setleapara.res0tozero[0] = TTesterStrChangeToUint(para[7].value) >> 8;
-        setleapara.res0tozero[1] = TTesterStrChangeToUint(para[7].value) & 0xff;
-        setleapara.res1tozero[0] = TTesterStrChangeToUint(para[8].value) >> 8;
-        setleapara.res1tozero[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
-        setleapara.res2tozero[0] = TTesterStrChangeToUint(para[9].value) >> 8;
-        setleapara.res2tozero[1] = TTesterStrChangeToUint(para[9].value) & 0xff;
-        setleapara.curtozero[0] = TTesterStrChangeToUint(para[10].value) >> 8;
-        setleapara.curtozero[1] = TTesterStrChangeToUint(para[10].value) & 0xff;
+static int TParse(void *arg)
+{
+    TCtx *ctx = arg;
+    uint8_t h[4];           // 协议号 地址(2) 长度
+    uint8_t tail[2];        // 'D' 和校验
+    int blen;
 
+    if (SerialRx_SeekAny(T_HEAD, T_HEAD) < 0 || SerialRx_Read(h, sizeof(h)) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    if (h[0] != T_PROTOCOL || h[2] != T_ADDRESS || h[3] < T_HEADER_LEN + 2) {
+        return SERIAL_PARSE_SKIP;       // 不是帧头（数据中的 'I'），跳过继续找
+    }
+    blen = h[3] - (T_HEADER_LEN - 1) - 1;      // 保留 + 主命令 + 数据
+    if (SerialRx_Read(ctx->body, blen) != 0 || SerialRx_Read(tail, sizeof(tail)) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    if (tail[0] != T_END) {
+        return SERIAL_PARSE_ERROR;
+    }
+    ctx->dlen = blen - 2;
+    return SERIAL_PARSE_OK;
+}
 
-        break;
-    }
-    case TTESTERPOWER: {
-        setpowerpara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setpowerpara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setpowerpara.curupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setpowerpara.curupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setpowerpara.curlowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setpowerpara.curlowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setpowerpara.powerupperlim[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setpowerpara.powerupperlim[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setpowerpara.powerlowerlim[0] = TTesterStrChangeToUint(para[4].value) >> 8;
-        setpowerpara.powerlowerlim[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
-        setpowerpara.delaytime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
-        setpowerpara.delaytime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
-        setpowerpara.testtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setpowerpara.testtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
-        setpowerpara.testmode = atoi(para[7].value);
-        setpowerpara.suspendtime[0] = TTesterStrChangeToUint(para[8].value) >> 8;
-        setpowerpara.suspendtime[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
-        setpowerpara.voltype = atoi(para[9].value);
+/* ================================================================ 读组结果 */
 
-        break;
-    }
-    case TTESTERSTARTUP: {
-        setstartuppara.voltage[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setstartuppara.voltage[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setstartuppara.volupperlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setstartuppara.volupperlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setstartuppara.vollowerlim[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setstartuppara.vollowerlim[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setstartuppara.curupperlim[0] = TTesterStrChangeToUint(para[3].value) >> 8;
-        setstartuppara.curupperlim[1] = TTesterStrChangeToUint(para[3].value) & 0xff;
-        setstartuppara.curlowerlim[0] = TTesterStrChangeToUint(para[4].value) >> 8;
-        setstartuppara.curlowerlim[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
-        setstartuppara.delaytime[0] = TTesterStrChangeToUint(para[5].value) >> 8;
-        setstartuppara.delaytime[1] = TTesterStrChangeToUint(para[5].value) & 0xff;
-        setstartuppara.testtime[0] = TTesterStrChangeToUint(para[6].value) >> 8;
-        setstartuppara.testtime[1] = TTesterStrChangeToUint(para[6].value) & 0xff;
-        setstartuppara.testmode = atoi(para[7].value);
-        setstartuppara.suspendtime[0] = TTesterStrChangeToUint(para[8].value) >> 8;
-        setstartuppara.suspendtime[1] = TTesterStrChangeToUint(para[8].value) & 0xff;
-        setstartuppara.voltype = atoi(para[9].value);
+static IotTesterGroup s_group;
 
-        break;
-    }
-    case TTESTEROPENSHORT: {
-        setopenshortpara.curupperlim[0] = TTesterStrChangeToUint(para[0].value) >> 8;
-        setopenshortpara.curupperlim[1] = TTesterStrChangeToUint(para[0].value) & 0xff;
-        setopenshortpara.curlowerlim[0] = TTesterStrChangeToUint(para[1].value) >> 8;
-        setopenshortpara.curlowerlim[1] = TTesterStrChangeToUint(para[1].value) & 0xff;
-        setopenshortpara.testtime[0] = TTesterStrChangeToUint(para[2].value) >> 8;
-        setopenshortpara.testtime[1] = TTesterStrChangeToUint(para[2].value) & 0xff;
-        setopenshortpara.testmode = atoi(para[3].value);
-        setopenshortpara.suspendtime[0] = TTesterStrChangeToUint(para[4].value) >> 8;
-        setopenshortpara.suspendtime[1] = TTesterStrChangeToUint(para[4].value) & 0xff;
+// 测量值：低 14 位为数值，高 2 位为小数位数
+static float TTesterValue(uint16_t raw)
+{
+    static const float div[4] = { 1.0f, 10.0f, 100.0f, 1000.0f };
+    return (float)(raw & 0x3FFF) / div[raw >> 14];
+}
 
-        break;
+static int TParseGroupResult(const uint8_t *d, int len)
+{
+    if (len != IOT_TESTER_ITEMS * T_ITEM_RESULT_LEN) {
+        ESP_LOGE(TAG, "group result length %d", len);
+        return -1;
     }
-    case TTESTERDCVOLTAGE: {
-        break;
+
+    for (int i = 0; i < IOT_TESTER_ITEMS; i++) {
+        const uint8_t *r = &d[i * T_ITEM_RESULT_LEN];
+        const uint8_t item = r[2];
+        const uint8_t result = r[3];
+        const int measured = (item >= TTESTERPRESSURIZATION && item <= TTESTERDCVOLTAGE);
+
+        s_group.tags[i] = item;
+        s_group.checks[i] = (i < IOT_TESTER_ITEMS - 1) ? result : (result & 0x0F);
+        for (int k = 0; k < IOT_TESTER_VALUES; k++) {
+            s_group.values[i][k] = measured ? TTesterValue(Proto_Be16(&r[4 + k * 2])) : 0.0f;
+        }
+        ESP_LOGI(TAG, "item %d: type %d result 0x%02X %.2f %.2f %.2f %.2f %.2f", i, item, result,
+                 s_group.values[i][0], s_group.values[i][1], s_group.values[i][2],
+                 s_group.values[i][3], s_group.values[i][4]);
+
+        if (i == IOT_TESTER_ITEMS - 1) {
+            // 组结果和总结果在最后一项结果字节的高 4 位，其他组合保持上次的值
+            switch (result & 0xF0) {
+            case T_GROUP_QUALIFY + T_ALL_QUALIFY:
+                s_group.groupCheck = T_RESULT_QUALIFY;
+                s_group.totalCheck = T_RESULT_QUALIFY;
+                break;
+            case T_GROUP_QUALIFY + T_ALL_UNQUALIFY:
+                s_group.groupCheck = T_RESULT_QUALIFY;
+                s_group.totalCheck = T_RESULT_UNQUALIFY;
+                break;
+            case T_GROUP_UNQUALIFY + T_ALL_UNQUALIFY:
+                s_group.groupCheck = T_RESULT_UNQUALIFY;
+                s_group.totalCheck = T_RESULT_UNQUALIFY;
+                break;
+            default:
+                break;
+            }
+        }
     }
-    case TTESTERCOMMON: {
-        setcommonpara.failitem = atoi(para[1].value);
-        setcommonpara.frequence = atoi(para[2].value);
-        setcommonpara.grouplink = atoi(para[3].value);
-        setcommonpara.utensiltype = atoi(para[4].value);
-        break;
+    return 0;
+}
+
+int TTester_ReadGroup(uint16_t group)
+{
+    uint8_t payload[3] = { T_CMD_READ, T_READ_CURRENT_GROUP, 0 };
+    size_t plen = 2;
+    uint8_t f[T_FRAME_MAX];
+    size_t n;
+    TCtx ctx;
+
+    if (group != 0) {
+        payload[1] = T_READ_HISTORY_GROUP;
+        payload[2] = (uint8_t)group;
+        plen = 3;
     }
-    default: {
-        break;
+    n = TBuild(f, payload, plen);
+    if (SerialTxn_Request(f, n, TParse, &ctx, SERIAL_TXN_TESTER_TIMEOUT_MS) != 0) {
+        return -1;
     }
+    if (ctx.body[1] != T_CMD_READ_RESPONSE || ctx.dlen < 1) {
+        ESP_LOGW(TAG, "unexpected response, command %d", ctx.body[1]);
+        return -1;
     }
+
+    // 目前只解析当前组结果；历史组应答沿用原实现，上报最近一次的组结果
+    if (ctx.body[2] == T_READ_CURRENT_GROUP &&
+        TParseGroupResult(&ctx.body[3], ctx.dlen - 1) != 0) {
+        return -1;
+    }
+    s_group.groupId = group;
+    return IotReport_SendTesterGroup(&s_group);
+}
+
+/* ================================================================ 下发组参数 */
+
+int TTester_SetGroupPara(uint16_t group)
+{
+    uint8_t payload[T_FRAME_MAX - T_HEADER_LEN - 2];
+    uint8_t f[T_FRAME_MAX];
+    size_t n, plen;
+    TCtx ctx;
+    int ret;
+
+    // 通用参数帧
+    payload[0] = T_CMD_SET_PARA;
+    payload[1] = T_SET_COMMON_PARA;
+    payload[2] = (uint8_t)group;
+    memcpy(&payload[3], &s_common, sizeof(s_common));
+    plen = 3 + sizeof(s_common);
+    n = TBuild(f, payload, plen);
+
+    SerialTxn_Begin();
+    SerialTxn_Send(f, n);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // 组参数帧：前 8 个位置依次为 测试项编号 + 该项参数
+    payload[1] = T_SET_GROUP_PARA;
+    plen = 3;
+    for (int i = 0; i < IOT_TESTER_ITEMS; i++) {
+        const int item = s_items[i];
+        const TItemDef *def = &s_itemDefs[item];
+
+        if (item == TTESTERCOMMON) {
+            continue;
+        }
+        payload[plen++] = (item == TTESTERDCVOLTAGE) ? 0 : (uint8_t)item;
+        if (def->para != NULL) {
+            memcpy(&payload[plen], def->para, def->paraSize);
+            plen += def->paraSize;
+        }
+    }
+    n = TBuild(f, payload, plen);
+    SerialTxn_Send(f, n);
+
+    ret = SerialTxn_Wait(TParse, &ctx, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_End();
+
+    if (ret != 0) {
+        ESP_LOGE(TAG, "set group %u: no response", group);
+        return -1;
+    }
+    if (ctx.body[1] == T_CMD_RESPONSE && ctx.dlen >= 1) {
+        ESP_LOGI(TAG, "set group %u: response code %d", group, ctx.body[2]);   // 1 成功，0 帧错误，2 拒绝
+    }
+    return 0;
 }

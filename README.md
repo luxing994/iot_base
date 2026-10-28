@@ -24,7 +24,7 @@ main/
 │   ├── plc_report.c      ★ 选择单值 / 变化 / 批量上报
 │   └── ota_task.c        HTTP OTA
 ├── src/common/
-│   ├── iot_report.c      ★ 统一拼装上报 JSON（单值报文、批量报文、批量采集器）
+│   ├── iot_report.c      ★ 统一拼装上报 JSON（单值报文、批量报文、批量采集器、安规测试仪组结果）
 │   ├── iot_common.c      串口接收缓冲封装、上报队列
 │   ├── serial_txn.c      串口同步事务（加锁、等待完整应答、回滚 / 提交）
 │   ├── net_io.c          网口 PLC 收发（按长度收全、超时）
