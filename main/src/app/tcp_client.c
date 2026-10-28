@@ -210,8 +210,8 @@ typedef void (*LinkRecvHandler)(char *data, int len);
 // 端口 PORT1 收到的是纯时间戳
 static void HandleTimestampData(char *data, int len)
 {
-    g_baseTime = atoll(data);
-    ESP_LOGI("TIMESTAMP_CMD", "time:%lld  timenow:%lld\n", g_baseTime, GetMilliTimeNow());
+    CalBaseTime((uint64_t)atoll(data));
+    ESP_LOGI("TIMESTAMP_CMD", "timenow:%lld", (long long)GetMilliTimeNow());
 }
 
 static void HandleTcpCommand(const char *cmd_line)
@@ -231,8 +231,8 @@ static void HandleTcpCommand(const char *cmd_line)
             free(u);
         }
     } else if (strncmp(cmd_line, prefixtime, strlen(prefixtime)) == 0) {
-        g_baseTime = atoll(cmd_line + strlen(prefixtime));
-        ESP_LOGI("TIMESTAMP_CMD", "time:%lld  timenow:%lld\n", g_baseTime, GetMilliTimeNow());
+        CalBaseTime((uint64_t)atoll(cmd_line + strlen(prefixtime)));
+        ESP_LOGI("TIMESTAMP_CMD", "timenow:%lld", (long long)GetMilliTimeNow());
     } else {
         ESP_LOGI("OTA_CMD", "UNKNOW COMMAND:%s", cmd_line);
     }

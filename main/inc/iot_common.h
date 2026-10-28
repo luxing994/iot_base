@@ -130,7 +130,6 @@ typedef struct {
     float setchargeamount;
 } SNSetCaclReFillingMachine;
 
-extern uint64_t g_baseTime;
 
 
 /* UART1 接收缓冲（事务模式，见 serial_txn.c） */

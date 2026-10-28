@@ -63,7 +63,7 @@ int get_random_range_freq(int min_val, int max_val)
     int current_value = 0;
     static int seeded = 0;
 
-    uint64_t now = GetMilliTimeNow();   // 微秒
+    uint64_t now = GetMilliTimeNow();   // 毫秒
 
     // 参数保护
     if (min_val > max_val)

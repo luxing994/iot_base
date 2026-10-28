@@ -1,33 +1,46 @@
+/*
+ * 开关量输入
+ *
+ *   GPIO38  计数传感器：上升沿计数，置 xEventGroup1 的 BIT_16，cmd_task 上报累计次数
+ *   GPIO37  开关状态：  任意边沿，置 xEventGroup1 的 BIT_17，cmd_task 上报当前电平
+ *
+ * 现场接的是接近开关，输出无触点抖动，因此不做软件消抖；
+ * 若改接机械开关，需要在中断里按时间间隔过滤抖动。
+ */
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/event_groups.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "driver/uart.h"
-#include "string.h"
 #include "driver/gpio.h"
+#include "esp_attr.h"
+#include "esp_log.h"
 #include "iot_common.h"
 #include "sensor.h"
 
 #define SWITCH_SENSOR_GPIO   (GPIO_NUM_38)
 #define SWITCH_GPIO          (GPIO_NUM_37)
 
-uint32_t g_count = 0;
+static const char *TAG = "SENSOR";
+static volatile uint32_t s_count;
 
 int GetSwitchCount(void)
 {
-    return g_count;
+    return (int)s_count;
 }
 
-void switch_sensor_gpio_isr_callback(void *arg)
+static void IRAM_ATTR SwitchSensorIsr(void *arg)
 {
-    g_count++;
-    xEventGroupSetBitsFromISR(xEventGroup1, BIT_16, NULL);
+    BaseType_t woken = pdFALSE;
+
+    s_count++;
+    xEventGroupSetBitsFromISR(xEventGroup1, BIT_16, &woken);
+    portYIELD_FROM_ISR(woken);
 }
 
-void switch_gpio_isr_callback(void *arg)
+static void IRAM_ATTR SwitchIsr(void *arg)
 {
-    xEventGroupSetBitsFromISR(xEventGroup1, BIT_17, NULL);
+    BaseType_t woken = pdFALSE;
+
+    xEventGroupSetBitsFromISR(xEventGroup1, BIT_17, &woken);
+    portYIELD_FROM_ISR(woken);
 }
 
 void InitSensorGpio(void)
@@ -35,22 +48,26 @@ void InitSensorGpio(void)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << SWITCH_SENSOR_GPIO),
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = 1,
-        .pull_down_en = 0,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_POSEDGE,
     };
+    esp_err_t err;
+
     gpio_config(&io_conf);
 
-    io_conf.pin_bit_mask = (1ULL << SWITCH_GPIO),
-    io_conf.mode = GPIO_MODE_INPUT,
-    io_conf.pull_up_en = 1,
-    io_conf.pull_down_en = 0,
-    io_conf.intr_type = GPIO_INTR_ANYEDGE,
-    
+    io_conf.pin_bit_mask = (1ULL << SWITCH_GPIO);
+    io_conf.intr_type = GPIO_INTR_ANYEDGE;
     gpio_config(&io_conf);
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(SWITCH_SENSOR_GPIO, switch_sensor_gpio_isr_callback, NULL);
-    gpio_isr_handler_add(SWITCH_GPIO, switch_gpio_isr_callback, NULL);
+
+    // 其他模块可能已经安装过 ISR 服务，此时返回 ESP_ERR_INVALID_STATE，可以继续使用
+    err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "install gpio isr service failed: %d", err);
+        return;
+    }
+    gpio_isr_handler_add(SWITCH_SENSOR_GPIO, SwitchSensorIsr, NULL);
+    gpio_isr_handler_add(SWITCH_GPIO, SwitchIsr, NULL);
 }
 
 int GetSwitchSensorLevel(void)
