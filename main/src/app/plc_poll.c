@@ -78,7 +78,8 @@ static __attribute__((unused)) void PollTable(const char *protocol, const PlcPoi
         } else if (ret == PLC_ERR_UNSUPPORTED) {
             LogUnsupported(protocol, p);
         } else if (++fails >= SERIAL_OFFLINE_FAILS && i + 1 < table->count) {
-            ESP_LOGW(TAG, "%s: no response for %d points, skip the rest of this round", protocol, fails);
+            // 设备离线由 serial_txn 统一告警（只在状态变化时打印），这里只是缩短本轮
+            ESP_LOGD(TAG, "%s: no response for %d points, skip the rest of this round", protocol, fails);
             return;
         }
     }

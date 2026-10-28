@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -10,8 +11,56 @@
 #define SERIAL_TXN_POLL_MS   10     // 应答未收全时的重试间隔
 #define SERIAL_TXN_GAP_MS    10     // 两次事务之间的最小间隔（RS485 收发切换、设备处理时间）
 
-static const char *TAG = "SERIAL_TXN";
+/*
+ * 设备离线判断：连续 SERIAL_OFFLINE_TIMEOUTS 次无应答记为离线。
+ * 日志只在状态变化时打印（离线 / 恢复），离线期间每 SERIAL_REMIND_MS 提醒一次，
+ * 单次超时只打 DEBUG，避免设备没接时每次轮询都刷屏。
+ */
+#define SERIAL_OFFLINE_TIMEOUTS  3
+#define SERIAL_REMIND_MS         60000
+
+static const char *TAG = "SERIAL";
 static SemaphoreHandle_t s_lock;
+
+/* 以下状态只在持有 s_lock 的事务内访问 */
+static int s_timeouts;              // 连续超时次数
+static bool s_offline;
+static TickType_t s_offlineSince;
+static TickType_t s_lastRemind;
+
+static void OnResponse(void)
+{
+    if (s_offline) {
+        ESP_LOGI(TAG, "device responding again (was offline %u s)",
+                 (unsigned)((xTaskGetTickCount() - s_offlineSince) * portTICK_PERIOD_MS / 1000));
+    }
+    s_offline = false;
+    s_timeouts = 0;
+}
+
+static void OnTimeout(int buffered)
+{
+    const TickType_t now = xTaskGetTickCount();
+
+    ESP_LOGD(TAG, "response timeout (%d bytes buffered)", buffered);
+    if (!s_offline) {
+        if (++s_timeouts < SERIAL_OFFLINE_TIMEOUTS) {
+            return;
+        }
+        s_offline = true;
+        s_offlineSince = now;
+        s_lastRemind = now;
+        // 收到数据却解析不出应答，多半是波特率 / 校验位 / 站号不对；完全没数据则检查接线和设备电源
+        ESP_LOGW(TAG, "device not responding, keep polling (%s)",
+                 buffered > 0 ? "garbled data: check baud rate / parity / station" : "no data: check wiring / power");
+        return;
+    }
+    if (now - s_lastRemind >= pdMS_TO_TICKS(SERIAL_REMIND_MS)) {
+        s_lastRemind = now;
+        ESP_LOGW(TAG, "device still not responding (%u min)",
+                 (unsigned)((now - s_offlineSince) * portTICK_PERIOD_MS / 60000));
+    }
+}
 
 void SerialTxn_Init(void)
 {
@@ -45,6 +94,7 @@ int SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms)
 
             if (ret == SERIAL_PARSE_OK) {
                 UART_CommitBuffer();
+                OnResponse();
                 return 0;
             }
             if (ret == SERIAL_PARSE_SKIP) {
@@ -53,6 +103,7 @@ int SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms)
             }
             if (ret == SERIAL_PARSE_ERROR) {
                 UART_FlushBuffer();
+                OnResponse();       // 应答内容有误（错误码等），但设备在线
                 return -1;
             }
             UART_RollbackBuffer();
@@ -64,7 +115,7 @@ int SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms)
         vTaskDelay(pdMS_TO_TICKS(SERIAL_TXN_POLL_MS));
     }
 
-    ESP_LOGW(TAG, "response timeout (%d bytes buffered)", (int)UART_BufferedBytes());
+    OnTimeout((int)UART_BufferedBytes());
     UART_FlushBuffer();
     return -1;
 }

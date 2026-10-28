@@ -40,7 +40,6 @@ menu "Host connection"
 
         config IOT_HOST_IPV6
             bool "IPv6"
-            select EXAMPLE_CONNECT_IPV6
 
     endchoice
 
@@ -158,14 +157,111 @@ menu "Network"
 
     comment "Factory defaults - values saved on the web config page take precedence"
 
-    config IOT_ETH_MAC
-        string "Ethernet MAC address"
+    config IOT_WIFI_SSID
+        string "Wi-Fi SSID"
         default ""
         help
-            以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
-            W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
-            需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）。
-            这里是出厂默认值，现场可在配置网页修改。
+            要连接的 Wi-Fi 名称。留空表示不使用 Wi-Fi（只用以太网）。
+            出厂默认值，现场可在配置网页修改。
+
+    config IOT_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+        help
+            Wi-Fi 密码，开放网络留空。出厂默认值，现场可在配置网页修改。
+
+    config IOT_ETH_W5500
+        bool "W5500 Ethernet module"
+        default y
+        help
+            板上的 W5500 SPI 以太网模块。没有焊接以太网模块的板子关闭此项。
+
+    if IOT_ETH_W5500
+
+        config IOT_ETH_SPI_HOST
+            int "SPI host"
+            range 0 2
+            default 1
+
+        config IOT_ETH_SPI_SCLK_GPIO
+            int "SPI SCLK GPIO"
+            default 15
+
+        config IOT_ETH_SPI_MOSI_GPIO
+            int "SPI MOSI GPIO"
+            default 6
+
+        config IOT_ETH_SPI_MISO_GPIO
+            int "SPI MISO GPIO"
+            default 7
+
+        config IOT_ETH_SPI_CS_GPIO
+            int "SPI CS GPIO"
+            default 16
+
+        config IOT_ETH_SPI_INT_GPIO
+            int "Interrupt GPIO"
+            default 5
+
+        config IOT_ETH_RST_GPIO
+            int "Reset GPIO (-1: not connected)"
+            default 4
+
+        config IOT_ETH_SPI_CLOCK_MHZ
+            int "SPI clock (MHz)"
+            range 5 80
+            default 40
+
+        config IOT_ETH_MAC
+            string "Ethernet MAC address"
+            default ""
+            help
+                以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
+                W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
+                需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）。
+                出厂默认值，现场可在配置网页修改。
+
+        config IOT_ETH_DHCP
+            bool "Obtain IP address automatically (DHCP)"
+            default y
+            help
+                关闭时使用下面的静态地址。出厂默认值，现场可在配置网页修改。
+
+        config IOT_ETH_STATIC_IP
+            string "Static IP"
+            default "192.168.1.200"
+            depends on !IOT_ETH_DHCP
+
+        config IOT_ETH_STATIC_MASK
+            string "Subnet mask"
+            default "255.255.255.0"
+            depends on !IOT_ETH_DHCP
+
+        config IOT_ETH_STATIC_GATEWAY
+            string "Gateway"
+            default "192.168.1.1"
+            depends on !IOT_ETH_DHCP
+
+        config IOT_ETH_STATIC_DNS
+            string "DNS server"
+            default "192.168.1.1"
+            depends on !IOT_ETH_DHCP
+
+    endif # IOT_ETH_W5500
+
+    config IOT_AP_PASSWORD
+        string "Config hotspot password"
+        default "12345678"
+        help
+            配置热点 IoTGW-xxxx 的密码，至少 8 位。出厂默认值，现场可在配置网页修改。
+            热点只在以下情况打开：出厂状态（从未保存过配置）、5 秒内连按 3 次复位键
+            （或快速断电上电 3 次）；10 分钟内没有人连接则自动关闭。网络断开不会打开热点。
+
+    config IOT_WEB_PASSWORD
+        string "Config web page password"
+        default "admin"
+        help
+            配置网页的登录密码。出厂默认值，现场可在配置网页修改。
 
 endmenu
 

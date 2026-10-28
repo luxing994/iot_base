@@ -74,7 +74,7 @@ static int CreateListenSocket(int addr_family, uint16_t port, const char *tag)
         close(sock);
         return -1;
     }
-    ESP_LOGI(tag, "Socket listening on port %d", port);
+    ESP_LOGI(tag, "listening on port %u", port);
 
     return sock;
 }
@@ -104,7 +104,7 @@ static void LogPeer(const struct sockaddr_storage *addr, const char *tag)
         inet6_ntoa_r(((const struct sockaddr_in6 *)addr)->sin6_addr, addr_str, sizeof(addr_str) - 1);
     }
 #endif
-    ESP_LOGI(tag, "Socket accepted ip address: %s", addr_str);
+    ESP_LOGI(tag, "host %s connected", addr_str);
 }
 
 // 监听 -> 逐个接受连接并交给 handler；出错时重新建立监听（原实现 accept 失败后任务直接退出）
@@ -216,7 +216,7 @@ static void HandleCommandConnection(int sock, const char *tag)
             return;
         }
         if (n == 0) {
-            ESP_LOGW(tag, "Connection closed");
+            ESP_LOGI(tag, "host disconnected");
             return;
         }
 
@@ -230,7 +230,7 @@ static void HandleCommandConnection(int sock, const char *tag)
 
 void tcp_server_task(void *pvParameters)
 {
-    TcpServerLoop((int)pvParameters, PORT, "tcp_server", HandleCommandConnection);
+    TcpServerLoop((int)pvParameters, PORT, "CMD", HandleCommandConnection);
 }
 
 /* ------------------------------------------------------------- 文件端口 */
@@ -249,7 +249,7 @@ static void HandleFileConnection(int sock, const char *tag)
             return;
         }
         if (len == 0) {
-            ESP_LOGW(tag, "Connection closed");
+            ESP_LOGI(tag, "host disconnected");
             return;
         }
         buf[len] = '\0';
@@ -259,6 +259,6 @@ static void HandleFileConnection(int sock, const char *tag)
 
 void tcp_server1_task(void *pvParameters)
 {
-    TcpServerLoop((int)pvParameters, PORT1, "tcp_server1", HandleFileConnection);
+    TcpServerLoop((int)pvParameters, PORT1, "FILE", HandleFileConnection);
 }
 #endif /* CONFIG_IOT_FILE_SERVER */

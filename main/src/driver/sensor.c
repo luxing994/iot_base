@@ -11,14 +11,12 @@
 #include "freertos/event_groups.h"
 #include "driver/gpio.h"
 #include "esp_attr.h"
-#include "esp_log.h"
 #include "iot_common.h"
 #include "sensor.h"
 
 #define SWITCH_SENSOR_GPIO   (GPIO_NUM_38)
 #define SWITCH_GPIO          (GPIO_NUM_37)
 
-static const char *TAG = "SENSOR";
 static volatile uint32_t s_count;
 
 int GetSwitchCount(void)
@@ -52,7 +50,6 @@ void InitSensorGpio(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_POSEDGE,
     };
-    esp_err_t err;
 
     gpio_config(&io_conf);
 
@@ -60,12 +57,7 @@ void InitSensorGpio(void)
     io_conf.intr_type = GPIO_INTR_ANYEDGE;
     gpio_config(&io_conf);
 
-    // 其他模块可能已经安装过 ISR 服务，此时返回 ESP_ERR_INVALID_STATE，可以继续使用
-    err = gpio_install_isr_service(0);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "install gpio isr service failed: %d", err);
-        return;
-    }
+    // GPIO ISR 服务由 app_main 统一安装（W5500 中断也要用），这里只挂回调
     gpio_isr_handler_add(SWITCH_SENSOR_GPIO, SwitchSensorIsr, NULL);
     gpio_isr_handler_add(SWITCH_GPIO, SwitchIsr, NULL);
 }

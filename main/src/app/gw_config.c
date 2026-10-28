@@ -27,13 +27,24 @@ static const char *TAG = "GW_CONFIG";
 #define DEF_FILE_PORT       8767
 #endif
 
-/* Wi-Fi 账号暂时沿用联网示例组件中的配置（联网管理改造后改为本项目自己的选项） */
-#ifdef CONFIG_EXAMPLE_WIFI_SSID
-#define DEF_WIFI_SSID       CONFIG_EXAMPLE_WIFI_SSID
-#define DEF_WIFI_PASS       CONFIG_EXAMPLE_WIFI_PASSWORD
-#else
-#define DEF_WIFI_SSID       ""
-#define DEF_WIFI_PASS       ""
+#ifdef CONFIG_IOT_ETH_DHCP
+#define DEF_ETH_DHCP        true
+#define DEF_ETH_IP          "192.168.1.200"
+#define DEF_ETH_MASK        "255.255.255.0"
+#define DEF_ETH_GATEWAY     "192.168.1.1"
+#define DEF_ETH_DNS         "192.168.1.1"
+#elif defined(CONFIG_IOT_ETH_STATIC_IP)
+#define DEF_ETH_DHCP        false
+#define DEF_ETH_IP          CONFIG_IOT_ETH_STATIC_IP
+#define DEF_ETH_MASK        CONFIG_IOT_ETH_STATIC_MASK
+#define DEF_ETH_GATEWAY     CONFIG_IOT_ETH_STATIC_GATEWAY
+#define DEF_ETH_DNS         CONFIG_IOT_ETH_STATIC_DNS
+#else   /* 未启用以太网 */
+#define DEF_ETH_DHCP        true
+#define DEF_ETH_IP          ""
+#define DEF_ETH_MASK        ""
+#define DEF_ETH_GATEWAY     ""
+#define DEF_ETH_DNS         ""
 #endif
 
 #ifdef CONFIG_IOT_ETH_MAC
@@ -42,17 +53,8 @@ static const char *TAG = "GW_CONFIG";
 #define DEF_ETH_MAC         ""
 #endif
 
-#ifdef CONFIG_IOT_AP_PASSWORD
 #define DEF_AP_PASS         CONFIG_IOT_AP_PASSWORD
-#else
-#define DEF_AP_PASS         "12345678"
-#endif
-
-#ifdef CONFIG_IOT_WEB_PASSWORD
 #define DEF_WEB_PASS        CONFIG_IOT_WEB_PASSWORD
-#else
-#define DEF_WEB_PASS        "admin"
-#endif
 
 /* 网口 PLC：未启用该连接方式时 menuconfig 中没有对应选项 */
 #ifdef CONFIG_PLC_FX_IPV4_ADDR
@@ -92,14 +94,14 @@ static const GwConfig s_defaults = {
     .advertisedPort = CONFIG_IOT_ADVERTISED_PORT,
     .filePort = DEF_FILE_PORT,
 
-    .wifiSsid = DEF_WIFI_SSID,
-    .wifiPass = DEF_WIFI_PASS,
+    .wifiSsid = CONFIG_IOT_WIFI_SSID,
+    .wifiPass = CONFIG_IOT_WIFI_PASSWORD,
     .ethMac = DEF_ETH_MAC,
-    .ethDhcp = true,
-    .ethIp = "192.168.1.200",
-    .ethMask = "255.255.255.0",
-    .ethGateway = "192.168.1.1",
-    .ethDns = "192.168.1.1",
+    .ethDhcp = DEF_ETH_DHCP,
+    .ethIp = DEF_ETH_IP,
+    .ethMask = DEF_ETH_MASK,
+    .ethGateway = DEF_ETH_GATEWAY,
+    .ethDns = DEF_ETH_DNS,
 
     .fxIp = DEF_FX_IP,
     .fxPort = DEF_FX_PORT,
@@ -222,7 +224,7 @@ void GwConfig_Init(void)
     }
     s_loaded = true;
 
-    ESP_LOGI(TAG, "%s config: devId %s, host %s:%u/%u/%u, wifi \"%s\", eth %s",
+    ESP_LOGD(TAG, "%s config: devId %s, host %s:%u/%u/%u, wifi \"%s\", eth %s",
              s_saved ? "saved" : "factory", s_config.devId, s_config.hostAddr,
              s_config.hostReportPort, s_config.hostLinkPort, s_config.hostOtaPort,
              s_config.wifiSsid, s_config.ethDhcp ? "dhcp" : s_config.ethIp);
