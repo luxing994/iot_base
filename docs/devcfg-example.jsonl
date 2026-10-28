@@ -1,0 +1,10 @@
+{"t":"meta","schema":1,"rev":"20261028-1","source":"示例：弯管机（三菱 FX3U，RS485）","created":"2026-10-28 22:00:00","library":"2026.10"}
+{"t":"device","name":"1#弯管机","number":"DEMO-PLC-001","orderName":"DEMO-ORDER","category":"plc","brand":"三菱","model":"FX3U","protocol":"fx_link","iface":"rs485","baud":9600,"dataBits":7,"parity":"E","stopBits":1,"station":0,"pollMs":1000,"report":"each","devTypeName":"FXPLC"}
+{"t":"gateway","devId":"JXGS001","hostAddr":"192.168.8.254","hostReportPort":0,"hostLinkPort":8766,"hostOtaPort":0,"cmdPort":8765}
+{"t":"point","src":"点位!2","fr":1,"name":"报警状态","cat":"alarm","area":"Y","addr":"30","type":"bit"}
+{"t":"point","src":"点位!3","fr":2,"name":"自动运行","cat":"state","area":"Y","addr":"31","type":"bit"}
+{"t":"point","src":"点位!4","fr":3,"name":"停止","cat":"state","area":"Y","addr":"32","type":"bit"}
+{"t":"point","src":"点位!5","fr":4,"name":"当前产量","cat":"count","area":"D","addr":214,"type":"i32"}
+{"t":"point","src":"点位!6","fr":5,"name":"产量设定","cat":"param","area":"D","addr":216,"type":"i32"}
+{"t":"point","src":"点位!7","fr":6,"name":"总产量","cat":"count","area":"D","addr":218,"type":"i32"}
+{"t":"point","src":"点位!8","fr":7,"name":"每分钟循环次数","cat":"param","area":"D","addr":94,"type":"i32","unit":"1/min"}

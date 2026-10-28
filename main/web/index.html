@@ -118,6 +118,13 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
 .mon .tx{color:var(--pri)}.mon .rx{color:var(--ok)}
 .mon pre{margin:4px 0 0;font:12px/1.45 Consolas,Menlo,monospace;white-space:pre-wrap;word-break:break-all;background:#f5f7fa;padding:6px 8px;border-radius:4px}
 #monList{max-height:60vh}
+.tbl{overflow-x:auto;margin-top:4px}
+.tbl table{border-collapse:collapse;width:100%;font-size:14px;white-space:nowrap}
+.tbl th{color:var(--mut);font-weight:400;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px}
+.tbl td{padding:6px 8px;border-top:1px solid var(--line)}
+.tbl tr:first-child td{border-top:0}
+.errs{margin:10px 0 0;padding:8px 12px;border-radius:8px;background:#fdf0f0;color:var(--bad);font-size:13px;max-height:260px;overflow-y:auto}
+.errs div{padding:2px 0}
 .danger{border:1px solid #f3d4d4}
 </style>
 </head>
@@ -147,6 +154,7 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
 <nav>
   <button data-tab="st" class="on">状态</button>
   <button data-tab="dg">诊断</button>
+  <button data-tab="acq">采集</button>
   <button data-tab="mon" class="fac-only hide">报文</button>
   <button data-tab="set">设置</button>
   <button data-tab="sys">系统</button>
@@ -210,6 +218,30 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
   </div>
   <div class="card">
     <div id="monList" class="evs"><p class="hint">暂无数据</p></div>
+  </div>
+</div>
+
+<!-- ============ 采集（设备配置） ============ -->
+<div id="tab-acq" class="hide">
+  <div class="card">
+    <h2>采集设备</h2>
+    <div id="acqDev"></div>
+  </div>
+  <div class="card hide" id="acqPtsCard">
+    <h2>数据点 <small id="acqPtsN"></small></h2>
+    <div class="tbl"><table><thead><tr><th>编号</th><th>名称</th><th>地址</th><th>类型</th><th>单位</th><th>上报</th></tr></thead><tbody id="acqPts"></tbody></table></div>
+  </div>
+  <div class="card fac-only hide">
+    <h2>导入设备配置</h2>
+    <input type="file" id="acqFile" accept=".jsonl,.json,.txt">
+    <div class="btns">
+      <button class="sec" id="btnAcqCheck">校验</button>
+      <button id="btnAcqImport">导入并重启</button>
+      <span class="sp" style="flex:1"></span>
+      <button class="sec" id="btnAcqExport">导出当前配置</button>
+      <button class="bad" id="btnAcqClear">删除配置</button>
+    </div>
+    <div id="acqErrs" class="errs hide"></div>
   </div>
 </div>
 
@@ -298,16 +330,12 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
 <div id="tab-fac" class="hide">
   <p class="hint" style="margin:0 4px 12px">出厂参数出货时逐台设置，客户不能修改，客户恢复出厂也不会清除。</p>
   <div class="card">
-    <h2>设备标识</h2>
+    <h2>网关编号</h2>
     <div class="grid">
-      <div><label class="f">设备号<em>devId，每台唯一</em></label><input data-fk="devId" maxlength="31" data-req="设备号 devId"></div>
-      <div><label class="f">设备编号<em>devNumber</em></label><input data-fk="devNumber" maxlength="31"></div>
-      <div><label class="f">设备名称<em>devName</em></label><input data-fk="devName" maxlength="31"></div>
-      <div><label class="f">设备类型<em>devTypeId</em></label><input data-fk="devTypeId" maxlength="31"></div>
-      <div><label class="f">订单名称<em>orderName</em></label><input data-fk="orderName" maxlength="31"></div>
+      <div><label class="f">网关编号<em>devId，每台唯一</em></label><input data-fk="devId" maxlength="31" data-req="网关编号 devId"></div>
     </div>
     <p class="hint" id="facHost"></p>
-    <p class="hint">devName、devTypeId、orderName 填入上线包和心跳包；devTypeId、orderName 也是上位机下发命令之前数据报文的默认值。</p>
+    <p class="hint">被采集设备的编号、名称、类型、订单（devNumber、devName、devTypeId、orderName）随“采集”页导入的设备配置设置。</p>
   </div>
   <div class="card">
     <h2>上位机端口<small>网关主动连接，填 0 表示不使用</small></h2>
@@ -420,7 +448,8 @@ function loadStatus() {
     show('#hdrId', !!s.devId);
     show('#stSetup', !s.saved);
     var dev = [
-      ['设备号', esc(s.devId)],
+      ['网关编号', esc(s.devId)],
+      ['设备编号', esc(s.devNumber)],
       ['采集设备', esc(s.collect)]
     ];
     if (s.serial) {
@@ -431,7 +460,6 @@ function loadStatus() {
     dev.push(['运行时间', dur(s.uptime)]);
     if (s.role === 'factory') {
       // 售后排查用，客户不需要
-      dev.push(['devNumber', esc(s.devNumber)]);
       dev.push(['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值']);
       dev.push(['上次复位原因', esc(s.reset)]);
       dev.push(['空闲内存', Math.round(s.heap / 1024) + ' KB']);
@@ -901,6 +929,84 @@ $('#btnMonExp').onclick = function () {
   document.body.appendChild(a); a.click(); a.remove();
 };
 
+/* ---------------- 采集（设备配置，格式见 docs/devcfg.md） ---------------- */
+
+var MODE_TEXT = { cycle: '定时', change: '变化' };
+
+function loadAcq() {
+  api('/api/devcfg').then(function (c) {
+    if (!c.loaded) {
+      $('#acqDev').innerHTML = '<p class="hint">' + esc(c.problem) + '</p>';
+      show('#acqPtsCard', false);
+      return;
+    }
+    var d = c.device, m = c.meta;
+    $('#acqDev').innerHTML = rows([
+      ['名称', esc(d.name)],
+      ['设备编号', esc(d.number) + (d.devName !== d.number ? '，报文名称 ' + esc(d.devName) : '') + (d.orderName ? ' <span class="hint">' + esc(d.orderName) + '</span>' : '')],
+      ['类别', esc(d.categoryText) + (d.brand || d.model ? ' · ' + esc((d.brand + ' ' + d.model).trim()) : '')],
+      ['协议', esc(d.protocolName)],
+      ['通信', esc(d.link) + (d.iface !== 'eth' ? '<br><span class="hint">拨码开关须拨到 ' + esc(d.ifaceText) + '</span>' : '')],
+      ['采集周期', d.pollMs + ' ms，' + (d.report === 'batch' ? '批量上报' : '逐点上报')],
+      ['配置版本', esc(m.rev) + (m.source ? ' <span class="hint">' + esc(m.source) + '</span>' : '')]
+    ]);
+    show('#acqPtsCard', d.needPoints);
+    $('#acqPtsN').textContent = c.points.length + ' 个';
+    $('#acqPts').innerHTML = c.points.map(function (p) {
+      return '<tr><td>FR' + ('00' + p.fr).slice(-3) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.addr) + '</td><td>' + esc(p.type) +
+        '</td><td>' + esc(p.unit) + '</td><td>' + (MODE_TEXT[p.mode] || '') + '</td></tr>';
+    }).join('');
+  }).catch(function (e) { msg(e.message, true); });
+}
+
+function lineText(e) {
+  return (e.line ? '第 ' + e.line + ' 行' + (e.src ? '（' + esc(e.src) + '）' : '') + '：' : '') + esc(e.msg);
+}
+
+// 提交配置原文：check 为 true 只校验；返回网关的应答（失败时已显示错误）
+function acqPost(text, check) {
+  return fetch('/api/devcfg' + (check ? '?check=1' : ''), {
+    method: 'POST', headers: { 'X-Token': token, 'Content-Type': 'application/x-ndjson' }, body: text
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (r.ok) { return j; }
+      if (j.errors && j.errors.length) {
+        $('#acqErrs').innerHTML = j.errors.map(function (e) { return '<div>' + lineText(e) + '</div>'; }).join('');
+        show('#acqErrs', true);
+      }
+      throw new Error(j.error || ('请求失败 HTTP ' + r.status));
+    });
+  });
+}
+
+// 校验；导入时先校验，再确认（含警告，如网关编号不一致），最后提交
+function acqSend(importIt) {
+  var f = $('#acqFile').files[0], text;
+  if (!f) { return msg('请先选择配置文件', true); }
+  show('#acqErrs', false);
+  f.text().then(function (t) { text = t; return acqPost(text, true); }).then(function (j) {
+    var warn = (j.warnings || []).map(function (e) { return '· ' + e.msg; }).join('\n');
+    if (!importIt) {
+      msg('校验通过：' + j.summary);
+      if (warn) { alert('注意：\n' + warn); }
+      return;
+    }
+    if (!confirm('校验通过：' + j.summary + (warn ? '\n\n注意：\n' + warn : '') + '\n\n导入后网关将重启并按新配置采集，确认继续？')) { return; }
+    return acqPost(text, false).then(function () { restarting(true); });
+  }).catch(function (e) { msg(e.message, true); });
+}
+
+$('#btnAcqCheck').onclick = function () { acqSend(false); };
+$('#btnAcqImport').onclick = function () { acqSend(true); };
+$('#btnAcqExport').onclick = function () {
+  download('/api/devcfg/file', 'devcfg.jsonl').catch(function (e) { msg(e.message, true); });
+};
+$('#btnAcqClear').onclick = function () {
+  if (confirm('删除设备配置后网关将重启并停止采集，确认继续？')) {
+    api('/api/devcfg/clear', {}).then(function () { restarting(false); }).catch(function (e) { msg(e.message, true); });
+  }
+};
+
 /* ---------------- 页面 ---------------- */
 
 function setTab(t) {
@@ -911,7 +1017,7 @@ function setTab(t) {
   }
   tab = t;
   $$('nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
-  ['st', 'dg', 'mon', 'set', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
+  ['st', 'dg', 'acq', 'mon', 'set', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
   updateBar();
   stopLog();
   clearTimeout(dgTimer);
@@ -921,6 +1027,7 @@ function setTab(t) {
   if (t === 'st') { stTimer = setInterval(loadStatus, 5000); }
   if (t === 'dg') { loadDiag(); }
   if (t === 'mon') { monRenderChs(); monStartPoll(); }
+  if (t === 'acq') { loadAcq(); }
   window.scrollTo(0, 0);
 }
 

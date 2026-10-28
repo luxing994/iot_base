@@ -77,8 +77,9 @@ const GwConfig *GwConfig_Get(void);
 
 /*
  * 参数分两区：
- *   出厂参数（devId、devNumber、上位机端口、本机命令 / 文件端口、以太网 MAC、配置热点密码）：出货时用出厂密码在
+ *   出厂参数（devId、上位机端口、本机命令 / 文件端口、以太网 MAC、配置热点密码）：出货时用出厂密码在
  *     配置网页设置，客户不能修改，恢复出厂不清除
+ *     devNumber、devName、devTypeId、orderName 仍保存在出厂区，只作为没有设备配置时的默认值（见 devcfg.h）
  *   客户参数（其余）：现场安装时设置，恢复出厂时清除
  */
 typedef enum {

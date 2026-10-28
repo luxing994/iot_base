@@ -23,9 +23,10 @@
 #include <stdarg.h>
 #include "sdkconfig.h"
 #include "gw_config.h"
+#include "devcfg.h"
 
 #define IOT_MSG_END              ";;**##"
-#define IOT_DEV_NUMBER           (GwConfig_Get()->devNumber)   // 报文 devNumber 字段默认值（运行参数，见 gw_config.h）
+#define IOT_DEV_NUMBER           (DevCfg_DevNumber())          // 报文 devNumber：被采集设备的编号（设备配置，见 devcfg.h）
 #define IOT_BATCH_ORDER_ID       "BatchParameters"
 #define IOT_BATCH_MAX_POINTS     40
 

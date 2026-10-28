@@ -1,12 +1,15 @@
 # Name,   Type, SubType, Offset,   Size, Flags
 # Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
-# spiffs   : 未挂载文件系统，用作事件日志和异常重启前日志（main/src/app/event_log.c）
-# coredump : 程序崩溃时系统自动保存的现场（main/src/app/diag.c 读取摘要，网页可下载）
-nvs,      data, nvs,     ,        0x4000,
-otadata,  data, ota,     ,        0x2000,
-phy_init, data, phy,     ,        0x1000,
-factory,  app,  factory, ,        1M,
-ota_0,    app,  ota_0,   ,        1M,
-ota_1,    app,  ota_1,   ,        1M,
-spiffs,   data, spiffs,  ,        0x50000,
-coredump, data, coredump,,        0x10000,
+# ota_0 / ota_1 : 两个固件槽，OTA 轮流写入（不再保留 factory 槽，固件需要更大空间）
+# spiffs   : 未挂载文件系统，用作事件日志和异常重启前日志（main/diag/event_log.c）
+# coredump : 程序崩溃时系统自动保存的现场（main/diag/diag.c 读取摘要，网页可下载）
+# devcfg   : 设备配置（main/config/devcfg.c，格式见 docs/devcfg.md），两个 64 KB 槽轮流写
+# nvs、spiffs、coredump 的位置与旧分区表相同，改分区表后网页参数和事件记录不丢失
+nvs,      data, nvs,     0x9000,   0x4000,
+otadata,  data, ota,     0xd000,   0x2000,
+phy_init, data, phy,     0xf000,   0x1000,
+ota_0,    app,  ota_0,   0x10000,  0x180000,
+ota_1,    app,  ota_1,   0x190000, 0x180000,
+spiffs,   data, spiffs,  0x310000, 0x50000,
+coredump, data, coredump,0x360000, 0x10000,
+devcfg,   data, 0x40,    0x370000, 0x20000,

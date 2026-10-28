@@ -18,6 +18,8 @@
 #include "sdkconfig.h"
 #include "app_info.h"
 #include "gw_config.h"
+#include "devcfg.h"
+#include "proto_lib.h"
 #include "net_manager.h"
 #include "tcp_client.h"
 #include "web_config.h"
@@ -310,7 +312,7 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     }
     cJSON_AddStringToObject(root, "role", s_tokenFactory ? "factory" : "user");
     cJSON_AddStringToObject(root, "devId", cfg->devId);
-    cJSON_AddStringToObject(root, "devNumber", cfg->devNumber);
+    cJSON_AddStringToObject(root, "devNumber", DevCfg_DevNumber());
     cJSON_AddStringToObject(root, "hostAddr", cfg->hostAddr);
     cJSON_AddStringToObject(root, "hostname", NetMgr_GetHostname());
     cJSON_AddBoolToObject(root, "viaAp", FromConfigAp(req));     // 当前是否经配置热点访问
@@ -827,6 +829,163 @@ static esp_err_t MonitorStopHandler(httpd_req_t *req)
     return SendOk(req);
 }
 
+/* ------------------------------------------------------------ 设备配置（格式见 docs/devcfg.md） */
+
+static ChunkOut *BeginChunks(httpd_req_t *req, const char *type)
+{
+    ChunkOut *o = malloc(sizeof(*o));
+
+    if (o != NULL) {
+        o->req = req;
+        o->n = 0;
+        httpd_resp_set_type(req, type);
+        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    }
+    return o;
+}
+
+static esp_err_t EndChunks(ChunkOut *o)
+{
+    if (o->n > 0) {
+        httpd_resp_send_chunk(o->req, o->buf, o->n);
+    }
+    httpd_resp_send_chunk(o->req, NULL, 0);
+    free(o);
+    return ESP_OK;
+}
+
+// 当前配置摘要（客户账号只读查看）
+static esp_err_t DevCfgGetHandler(httpd_req_t *req)
+{
+    ChunkOut *o;
+
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    o = BeginChunks(req, "application/json; charset=utf-8");
+    if (o == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    DevCfg_WriteJson(ChunkWrite, o);
+    return EndChunks(o);
+}
+
+// 下载配置原文（厂家账号）
+static esp_err_t DevCfgFileHandler(httpd_req_t *req)
+{
+    static char disposition[80];
+    ChunkOut *o;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    o = BeginChunks(req, "application/x-ndjson; charset=utf-8");
+    if (o == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    snprintf(disposition, sizeof(disposition), "attachment; filename=\"devcfg-%s.jsonl\"", NetMgr_GetHostname());
+    httpd_resp_set_hdr(req, "Content-Disposition", disposition);
+    esp_err_t err = DevCfg_WriteFile(ChunkWrite, o);
+    if (err == ESP_ERR_NOT_FOUND) {
+        free(o);        // 还没有发送任何内容，可以改发错误应答
+        httpd_resp_set_hdr(req, "Content-Disposition", "inline");
+        return SendError(req, "404 Not Found", "没有采集配置");
+    }
+    return EndChunks(o);
+}
+
+// 导入配置（厂家账号）：?check=1 只校验；否则校验通过后保存并重启
+static esp_err_t DevCfgPostHandler(httpd_req_t *req)
+{
+    char query[16];
+    char val[4];
+    bool check = false;
+    char *buf;
+    size_t got = 0;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "check", val, sizeof(val)) == ESP_OK) {
+        check = (strcmp(val, "1") == 0);
+    }
+    if (req->content_len == 0 || req->content_len > 60 * 1024) {
+        return SendError(req, "400 Bad Request", "配置文件为空或超过 60 KB");
+    }
+    buf = malloc(1024);
+    DevCfgImport *imp = (buf != NULL) ? DevCfg_ImportBegin(!check) : NULL;
+    if (imp == NULL) {
+        free(buf);
+        return httpd_resp_send_500(req);
+    }
+    while (got < req->content_len) {
+        size_t want = req->content_len - got;
+        int n = httpd_req_recv(req, buf, want < 1024 ? want : 1024);
+        if (n == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        }
+        if (n <= 0) {
+            break;      // 连接已断开：按不完整处理，不会提交
+        }
+        DevCfg_ImportFeed(imp, buf, (size_t)n);
+        got += (size_t)n;
+    }
+    free(buf);
+    if (got < req->content_len) {
+        DevCfg_ImportFeed(imp, "\n{\"t\":\"?\"}", 10);     // 收到的不完整：加一行无效内容使校验失败，不会提交
+    }
+
+    cJSON *errors = NULL;
+    cJSON *warnings = NULL;
+    const char *summary = NULL;
+    esp_err_t err = DevCfg_ImportEnd(imp, &errors, &warnings, &summary);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddItemToObject(root, "warnings", warnings);
+    if (err != ESP_OK) {
+        cJSON_AddStringToObject(root, "error", summary);
+        cJSON_AddItemToObject(root, "errors", errors);
+        httpd_resp_set_status(req, "400 Bad Request");
+        return SendJson(req, root);
+    }
+    cJSON_Delete(errors);
+    cJSON_AddBoolToObject(root, "ok", true);
+    cJSON_AddBoolToObject(root, "check", check);
+    cJSON_AddStringToObject(root, "summary", summary);
+    if (check) {
+        return SendJson(req, root);
+    }
+    EvLog_Add(EV_INFO | EV_OP, "采集配置已导入（%s），重启生效", summary);
+    SendJson(req, root);
+    ScheduleRestart("device config imported");
+    return ESP_OK;
+}
+
+static esp_err_t DevCfgClearHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (DevCfg_Clear() != ESP_OK) {
+        return SendError(req, "500 Internal Server Error", "删除失败");
+    }
+    EvLog_Add(EV_WARN | EV_OP, "采集配置已删除（factory），重启后停止采集");
+    SendOk(req);
+    ScheduleRestart("device config cleared");
+    return ESP_OK;
+}
+
+static esp_err_t ProtocolsHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "schema", 1);
+    cJSON_AddItemToObject(root, "protocols", ProtoLib_ToJson());
+    return SendJson(req, root);
+}
+
 static esp_err_t IndexHandler(httpd_req_t *req)
 {
     if (!CheckSource(req)) {
@@ -862,6 +1021,11 @@ void WebConfig_Start(void)
         { .uri = "/api/monitor",       .method = HTTP_GET,  .handler = MonitorGetHandler },
         { .uri = "/api/monitor/start", .method = HTTP_POST, .handler = MonitorStartHandler },
         { .uri = "/api/monitor/stop",  .method = HTTP_POST, .handler = MonitorStopHandler },
+        { .uri = "/api/devcfg",           .method = HTTP_GET,  .handler = DevCfgGetHandler },
+        { .uri = "/api/devcfg",           .method = HTTP_POST, .handler = DevCfgPostHandler },
+        { .uri = "/api/devcfg/file",      .method = HTTP_GET,  .handler = DevCfgFileHandler },
+        { .uri = "/api/devcfg/clear",     .method = HTTP_POST, .handler = DevCfgClearHandler },
+        { .uri = "/api/devcfg/protocols", .method = HTTP_GET,  .handler = ProtocolsHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;

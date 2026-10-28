@@ -168,9 +168,17 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
 完整分析可在“诊断”页下载 core dump 后执行 `espcoredump.py info_corefile -t raw -c coredump.bin build/iot_base.elf`。
 **每次发布固件请保存对应的 `build/iot_base.elf`**（按报告中的 ELF SHA256 对应），否则崩溃地址无法解析。
 
-Flash 分区：`spiffs` 分区（未挂载文件系统）存事件和异常重启前日志，`coredump` 分区存崩溃现场。
-修改过分区表，**已有设备需用 `idf.py flash` 完整烧录一次**（OTA 只更新程序，不更新分区表；
-未更新分区表的设备照常工作，只是没有 core dump）。
+Flash 分区（4 MB）：`ota_0` / `ota_1` 两个 1.5 MB 固件槽（已取消 factory 槽）；`spiffs` 分区（未挂载文件系统）存事件和
+异常重启前日志；`coredump` 分区存崩溃现场；`devcfg` 分区存设备配置。
+分区表改动后，**设备需用 `idf.py flash` 完整烧录一次**（OTA 只更新程序，不更新分区表）；nvs 等分区位置未变，网页参数和事件记录保留。
+
+## 设备配置（采集）
+
+采集什么设备、怎么通信、读哪些点由**设备配置**描述，厂家账号在配置网页“采集”页导入，无需 menuconfig 和重新编译。
+格式规范见 [docs/devcfg.md](docs/devcfg.md)，示例见 [docs/devcfg-example.jsonl](docs/devcfg-example.jsonl)。
+固件支持的协议、存储区、数据类型见 `main/protocol/proto_lib.c`（网页接口 `GET /api/devcfg/protocols`）。
+
+> 过渡阶段（P0）：设备配置可以导入、校验、查看和导出，但采集仍按 menuconfig 运行；P1 起改为按设备配置采集。
 
 ## 配置与编译
 

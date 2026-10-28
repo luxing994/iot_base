@@ -391,6 +391,17 @@ static bool IsUnicastMac(const char *s)
     return GwConfig_ParseMac(s, mac) && (mac[0] & 0x01) == 0;
 }
 
+// 会写入上报报文的文字：只允许可见英文字符，且不含 " 和 \（避免上位机解码乱码、破坏 JSON）
+static bool IsMsgText(const char *s)
+{
+    for (; *s != '\0'; s++) {
+        if ((unsigned char)*s < 0x20 || (unsigned char)*s > 0x7E || *s == '"' || *s == '\\') {
+            return false;
+        }
+    }
+    return true;
+}
+
 esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
 {
     const char *reason = NULL;
@@ -401,7 +412,9 @@ esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
 #endif
 
     if (cfg->devId[0] == '\0') {
-        reason = "设备号不能为空";
+        reason = "网关编号不能为空";
+    } else if (!IsMsgText(cfg->devId)) {
+        reason = "网关编号只能使用英文字母、数字和英文符号（不能有中文、双引号、反斜杠）";
     } else if (cfg->hostAddr[0] == '\0') {
         reason = "上位机地址不能为空";
 #ifdef CONFIG_IOT_HOST_IPV4

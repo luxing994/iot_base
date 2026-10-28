@@ -4,6 +4,7 @@
 #include "sdkconfig.h"
 #include "ringbuffer.h"
 #include "gw_config.h"
+#include "devcfg.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -60,11 +61,11 @@ extern EventGroupHandle_t xEventGroup3;
 
 #define ID           "123"
 #define DEVID        (GwConfig_Get()->devId)    // 运行参数（gw_config.h），出厂默认值见 menuconfig
-#define DEVNAME      (GwConfig_Get()->devName)     // 出厂参数，默认值见 menuconfig
-#define DEVTYPEID    (GwConfig_Get()->devTypeId)
+#define DEVNAME      (DevCfg_DevName())            // 设备配置，没有时为 menuconfig 默认值
+#define DEVTYPEID    (DevCfg_DevTypeId())
 #define DEVTYPENAME  "Hello"
 #define ORDERID      "Hello"
-#define ORDERNAME    (GwConfig_Get()->orderName)
+#define ORDERNAME    (DevCfg_OrderName())
 #define INITORDERID  "FR000"
 #define FILETRANSSIZE 240
 #define DEVTIMEMODE  "yes"

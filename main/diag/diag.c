@@ -27,6 +27,7 @@
 #include "app_info.h"
 #include "event_log.h"
 #include "gw_config.h"
+#include "devcfg.h"
 #include "iot_common.h"
 #include "iot_time.h"
 #include "log_buffer.h"
@@ -251,6 +252,16 @@ static void CheckSerial(Checks *c)
     }
 }
 
+// 设备配置（P0 阶段采集仍按 menuconfig 运行，未导入只作提示）
+static void CheckDevCfg(Checks *c)
+{
+    const DevCfg *cfg = DevCfg_Get();
+
+    if (cfg == NULL) {
+        Add(c, "info", "采集配置", "厂家账号在“采集”页导入设备配置表。", "%s", DevCfg_ProblemText());
+    }
+}
+
 static void CheckSystem(Checks *c, const NetStatus *st)
 {
     uint32_t posted, dropped, queued;
@@ -297,6 +308,7 @@ cJSON *Diag_Check(int *errors, int *warns)
     CheckNetwork(&c, &st);
     CheckLinks(&c, st.ethUp || st.wifiUp);
     CheckSerial(&c);
+    CheckDevCfg(&c);
     CheckSystem(&c, &st);
     if (errors != NULL) {
         *errors = c.errors;
@@ -391,7 +403,7 @@ static void ExportHeader(Out *o)
 
     Put(o, "==================== IoT 网关诊断信息 ====================\n");
     Printf(o, "导出时间    : %s%s\n", now, IotTime_IsSynced() ? "" : "（未校时）");
-    Printf(o, "设备        : devId %s, devNumber %s, http://%s.local\n", cfg->devId, cfg->devNumber, NetMgr_GetHostname());
+    Printf(o, "设备        : devId %s, devNumber %s, http://%s.local\n", cfg->devId, DevCfg_DevNumber(), NetMgr_GetHostname());
     Printf(o, "固件        : %s, 版本 %s, 编译 %s %s, IDF %s\n", FW_VERSION, app->version, app->date, app->time, app->idf_ver);
     Printf(o, "ELF SHA256  : %s（排查崩溃时用于找到对应的 elf 文件）\n", elf);
     Printf(o, "芯片        : ESP32-S3 rev %d, Wi-Fi MAC %s, 以太网 MAC %s\n", chip.revision, mac, ethMac);

@@ -419,7 +419,7 @@ menu "Factory parameters"
     comment "Defaults - set per unit on the web page factory tab"
     comment "Customers cannot change them; factory reset keeps them"
 
-    comment "--- Device identity ---"
+    comment "--- Device identity (devNumber, devName, devTypeId, orderName: from device config once imported) ---"
 
     config IOT_DEVICE_ID
         string "Device ID (devId)"

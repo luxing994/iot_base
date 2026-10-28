@@ -25,6 +25,7 @@
 #include "master.h"
 #include "serial_txn.h"
 #include "gw_config.h"
+#include "devcfg.h"
 #include "host_cmd.h"
 #include "net_manager.h"
 #include "app_info.h"
@@ -231,8 +232,16 @@ static void PrintBanner(void)
     ESP_LOGI(TAG, " reset     : %s", App_ResetText());
     ESP_LOGI(TAG, " config    : factory %s, user %s", GwConfig_IsFactorySaved() ? "web" : "menuconfig",
              GwConfig_IsSaved() ? "web" : "menuconfig (not configured)");
-    ESP_LOGI(TAG, " device    : devId %s, devNumber %s", c->devId, c->devNumber);
+    ESP_LOGI(TAG, " device    : devId %s, devNumber %s", c->devId, DevCfg_DevNumber());
     ESP_LOGI(TAG, " collect   : %s", App_CollectText());
+    if (DevCfg_Get() != NULL) {
+        char link[64];
+        DevCfg_LinkText(&DevCfg_Get()->dev, link, sizeof(link));
+        ESP_LOGI(TAG, " devcfg    : rev %s, %s, %s, %s, %u points", DevCfg_Get()->rev, DevCfg_Get()->dev.name,
+                 DevCfg_Get()->dev.proto->id, link, (unsigned)DevCfg_Get()->count);
+    } else {
+        ESP_LOGI(TAG, " devcfg    : %s", DevCfg_ProblemText());
+    }
     if (UART_InterfaceText() != NULL) {
         // 现场常把网关上的 232/485 拨码开关拨错，启动时明确提示
         ESP_LOGI(TAG, " serial    : %s  (switch must be on %s)", UART_InterfaceText(), UART_InterfaceName());
@@ -300,6 +309,7 @@ void app_main(void)
 
     // 运行参数（设备号、上位机地址、PLC 地址等）从 NVS 加载，之后各模块只读
     GwConfig_Init();
+    DevCfg_Init();          // 设备配置（采集什么设备、读哪些点）
     HostCmd_Init();
 
     QuietSystemLogs();

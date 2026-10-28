@@ -6,8 +6,9 @@ idf_component_register(
         "core/iot_common.c"
         "core/ringbuffer.c"
         "core/iot_time.c"
-        # config：运行参数（NVS）
+        # config：运行参数（NVS）、设备配置（devcfg 分区）
         "config/gw_config.c"
+        "config/devcfg.c"
         # net：以太网 / Wi-Fi / 配置热点 / mDNS
         "net/net_manager.c"
         # host：与上位机通信
@@ -26,6 +27,7 @@ idf_component_register(
         "collect/net_io.c"
         # protocol：设备通信协议
         "protocol/proto_util.c"
+        "protocol/proto_lib.c"
         "protocol/fx/fx_plc_protocol.c"
         "protocol/hostlink/hl_plc_protocol.c"
         "protocol/ppi/ppi_plc_protocol.c"
