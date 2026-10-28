@@ -38,6 +38,9 @@ typedef struct {
     bool wifiUp;            // Wi-Fi 已有 IP
     char wifiIp[16];
     int8_t wifiRssi;
+    uint8_t wifiReason;     // 最近一次断开原因（0 表示没有断开过）
+    uint32_t wifiDrops;     // 连上后又断开的次数
+    uint32_t ethDowns;      // 网线断开次数
     bool apOn;
     int apClients;
     char apSsid[33];
@@ -62,6 +65,9 @@ void NetMgr_GetLocalIp(const char *peer, char *buf, size_t size);
  * 局域网电脑可访问 http://<名称>.local。devId 修改后重启生效
  */
 const char *NetMgr_GetHostname(void);
+
+/* Wi-Fi 断开原因的中文说明 */
+const char *NetMgr_WifiReasonText(uint8_t reason);
 
 /* 打开配置热点 */
 void NetMgr_OpenConfigAp(NetApReason reason);

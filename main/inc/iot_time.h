@@ -15,4 +15,8 @@ void CalBaseTime(uint64_t abstime);
 /* 当前时间（Unix 毫秒） */
 uint64_t GetMilliTimeNow(void);
 
+/* 是否已与上位机校时（未校时 GetMilliTimeNow() 返回的是开机时长） */
+#include <stdbool.h>
+bool IotTime_IsSynced(void);
+
 #endif

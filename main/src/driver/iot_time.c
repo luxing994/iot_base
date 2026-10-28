@@ -2,6 +2,7 @@
 #include "freertos/task.h"      // taskENTER_CRITICAL / taskEXIT_CRITICAL
 #include "esp_timer.h"
 #include "iot_time.h"
+#include "event_log.h"
 
 #define BASE_TIME_TOLERANCE_MS 10
 
@@ -29,14 +30,30 @@ uint64_t GetMilliTimeNow(void)
 void CalBaseTime(uint64_t abstime)
 {
     const int64_t uptime = UptimeMs();
+    bool first;
 
     if (abstime == 0) {
         return;     // 解析失败（atoll 返回 0），忽略
     }
     taskENTER_CRITICAL(&s_lock);
+    first = (s_offsetMs == 0);
     int64_t diff = (int64_t)abstime - (s_offsetMs + uptime);
     if (diff > BASE_TIME_TOLERANCE_MS || diff < -BASE_TIME_TOLERANCE_MS) {
         s_offsetMs = (int64_t)abstime - uptime;
     }
     taskEXIT_CRITICAL(&s_lock);
+
+    if (first) {
+        EvLog_Add(EV_INFO, "已与上位机校时");
+    }
+}
+
+bool IotTime_IsSynced(void)
+{
+    bool synced;
+
+    taskENTER_CRITICAL(&s_lock);
+    synced = (s_offsetMs != 0);
+    taskEXIT_CRITICAL(&s_lock);
+    return synced;
 }

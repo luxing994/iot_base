@@ -20,6 +20,7 @@
 #endif
 #include "gw_config.h"
 #include "net_manager.h"
+#include "event_log.h"
 
 static const char *TAG = "NET";
 
@@ -52,6 +53,9 @@ static volatile bool s_staConnected;
 static volatile bool s_staUp;
 static char s_staIp[16];
 static int s_staFails;
+static uint32_t s_staDrops;            // 连上后又断开的次数
+static uint8_t s_staLastReason;         // 最近一次断开原因（wifi_err_reason_t）
+static uint32_t s_ethDowns;             // 网线断开次数
 static TickType_t s_staRetryAt;         // 0：不需要重连
 
 static volatile bool s_apOn;
@@ -118,6 +122,23 @@ void NetMgr_CountBoot(void)
 }
 
 /* ================================================================ Wi-Fi / 热点 */
+
+const char *NetMgr_WifiReasonText(uint8_t reason)
+{
+    switch (reason) {
+    case 0:                                  return "";
+    case WIFI_REASON_NO_AP_FOUND:            return "找不到该 Wi-Fi（名称不对或信号太弱）";
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:      return "认证失败（多为密码错误）";
+    case WIFI_REASON_BEACON_TIMEOUT:         return "信号丢失";
+    case WIFI_REASON_ASSOC_LEAVE:            return "主动断开";
+    case WIFI_REASON_ASSOC_EXPIRE:
+    case WIFI_REASON_AUTH_EXPIRE:            return "路由器长时间无响应";
+    case WIFI_REASON_ASSOC_TOOMANY:          return "路由器连接数已满";
+    default:                                 return "其他原因";
+    }
+}
 
 static const char *WifiReasonText(uint8_t reason)
 {
@@ -218,6 +239,14 @@ static void OnWifiEvent(void *arg, esp_event_base_t base, int32_t id, void *data
             ESP_LOGW(TAG, "wifi: disconnected (reason %d %s), retry every %d s",
                      e->reason, WifiReasonText(e->reason), WIFI_RETRY_MS / 1000);
         }
+        // 事件只记"已连上后断开"和"开机后第一次连不上"，重连失败不重复记
+        if (s_staUp) {
+            s_staDrops++;
+            EvLog_Add(EV_WARN, "Wi-Fi 已断开：%s", NetMgr_WifiReasonText(e->reason));
+        } else if (s_staFails == 0) {
+            EvLog_Add(EV_ERROR, "Wi-Fi 连不上“%s”：%s", GwConfig_Get()->wifiSsid, NetMgr_WifiReasonText(e->reason));
+        }
+        s_staLastReason = e->reason;
         s_staFails++;
         s_staConnected = false;
         s_staUp = false;
@@ -227,9 +256,12 @@ static void OnWifiEvent(void *arg, esp_event_base_t base, int32_t id, void *data
     case WIFI_EVENT_AP_START:
         ESP_LOGW(TAG, "config hotspot ON: \"%s\", http://%s  (%s)", s_apSsid, NET_AP_IP,
                  NetMgr_ApReasonText(s_apReason));
+        EvLog_Add(EV_INFO, "配置热点已打开：%s（%s）", s_apSsid,
+                  s_apReason == NET_AP_RESET_X3 ? "连按 3 次复位" : s_apReason == NET_AP_FACTORY ? "未完成现场配置" : "手动打开");
         break;
     case WIFI_EVENT_AP_STOP:
         ESP_LOGI(TAG, "config hotspot OFF");
+        EvLog_Add(EV_INFO, "配置热点已关闭");
         break;
     case WIFI_EVENT_AP_STACONNECTED:
         s_apClients++;
@@ -307,6 +339,7 @@ static void EthSetStaticIp(const GwConfig *cfg)
     }
     strlcpy(s_ethIp, cfg->ethIp, sizeof(s_ethIp));
     ESP_LOGI(TAG, "eth: static IP %s, mask %s, gw %s", cfg->ethIp, cfg->ethMask, cfg->ethGateway);
+    EvLog_Add(EV_INFO, "以太网使用静态 IP %s", cfg->ethIp);
 }
 
 static void OnEthEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -315,6 +348,7 @@ static void OnEthEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
     case ETHERNET_EVENT_CONNECTED:
         s_ethLink = true;
         ESP_LOGI(TAG, "eth: link up");
+        EvLog_Add(EV_INFO, "以太网已插上网线");
 #ifdef CONFIG_IOT_HOST_IPV6
         esp_netif_create_ip6_linklocal(s_ethNetif);
 #endif
@@ -327,7 +361,9 @@ static void OnEthEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
     case ETHERNET_EVENT_DISCONNECTED:
         s_ethLink = false;
         s_ethUp = false;
+        s_ethDowns++;
         ESP_LOGW(TAG, "eth: link down (cable unplugged?)");
+        EvLog_Add(EV_WARN, "以太网网线已断开");
         break;
     default:
         break;
@@ -384,6 +420,7 @@ static bool EthStart(void)
     err = esp_eth_driver_install(&ethCfg, &eth);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "eth: W5500 not responding (%s), ethernet disabled", esp_err_to_name(err));
+        EvLog_Add(EV_ERROR, "以太网模块（W5500）无响应，以太网不可用");
         return false;
     }
 
@@ -414,6 +451,7 @@ static void OnIpEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
         s_ethUp = true;
         ESP_LOGI(TAG, "eth: got IP " IPSTR ", mask " IPSTR ", gw " IPSTR,
                  IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.netmask), IP2STR(&e->ip_info.gw));
+        EvLog_Add(EV_INFO, "以太网已获取 IP " IPSTR "（网关 " IPSTR "）", IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.gw));
         break;
     }
     case IP_EVENT_ETH_LOST_IP:
@@ -430,6 +468,7 @@ static void OnIpEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
         s_staFails = 0;
         ESP_LOGI(TAG, "wifi: got IP " IPSTR ", mask " IPSTR ", gw " IPSTR,
                  IP2STR(&e->ip_info.ip), IP2STR(&e->ip_info.netmask), IP2STR(&e->ip_info.gw));
+        EvLog_Add(EV_INFO, "Wi-Fi 已连接“%s”，IP " IPSTR, GwConfig_Get()->wifiSsid, IP2STR(&e->ip_info.ip));
         break;
     }
     case IP_EVENT_STA_LOST_IP:
@@ -594,6 +633,9 @@ void NetMgr_GetStatus(NetStatus *out)
     strlcpy(out->ethIp, s_ethIp, sizeof(out->ethIp));
     out->wifiEnabled = s_staWanted;
     out->wifiUp = s_staUp;
+    out->wifiReason = s_staLastReason;
+    out->wifiDrops = s_staDrops;
+    out->ethDowns = s_ethDowns;
     strlcpy(out->wifiIp, s_staIp, sizeof(out->wifiIp));
     out->apOn = s_apOn;
     out->apClients = s_apClients;

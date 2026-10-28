@@ -21,6 +21,11 @@
 #include "net_manager.h"
 #include "tcp_client.h"
 #include "web_config.h"
+#include "event_log.h"
+#include "log_buffer.h"
+#include "diag.h"
+#include "iot_time.h"
+#include <time.h>
 
 static const char *TAG = "WEB";
 
@@ -239,6 +244,7 @@ static esp_err_t LoginHandler(httpd_req_t *req)
         if (++s_loginFails >= LOGIN_MAX_FAILS) {
             s_loginFails = 0;
             s_lockUntilMs = NowMs() + LOGIN_LOCK_MS;
+            EvLog_Add(EV_WARN, "网页登录密码连续错误 %d 次，锁定 1 分钟", LOGIN_MAX_FAILS);
         }
         return SendError(req, "401 Unauthorized", "用户名或密码错误");
     }
@@ -252,6 +258,7 @@ static esp_err_t LoginHandler(httpd_req_t *req)
     s_tokenFactory = factory;
     s_tokenUsedMs = NowMs();
     ESP_LOGI(TAG, "login ok: %s", factory ? USER_FACTORY : USER_ADMIN);
+    EvLog_Add(EV_INFO, "网页登录：%s%s", factory ? USER_FACTORY : USER_ADMIN, FromConfigAp(req) ? "（经配置热点）" : "");
 
     root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "token", s_token);
@@ -287,6 +294,14 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "collect", App_CollectText());
     cJSON_AddBoolToObject(root, "saved", GwConfig_IsSaved());
     cJSON_AddBoolToObject(root, "factorySaved", GwConfig_IsFactorySaved());
+    {
+        int errors = 0;
+        int warns = 0;
+
+        cJSON_Delete(Diag_Check(&errors, &warns));     // 状态页顶部显示"有几个问题"
+        cJSON_AddNumberToObject(root, "diagErrors", errors);
+        cJSON_AddNumberToObject(root, "diagWarns", warns);
+    }
     cJSON_AddStringToObject(root, "role", s_tokenFactory ? "factory" : "user");
     cJSON_AddStringToObject(root, "devId", cfg->devId);
     cJSON_AddStringToObject(root, "devNumber", cfg->devNumber);
@@ -421,6 +436,8 @@ static esp_err_t SaveArea(httpd_req_t *req, GwArea area)
     if (err != ESP_OK) {
         return SendError(req, "400 Bad Request", why != NULL ? why : "保存失败");
     }
+    EvLog_Add(EV_INFO, "%s已修改（%s），重启生效", (area == GW_AREA_FACTORY) ? "出厂参数" : "现场参数",
+              s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart((area == GW_AREA_FACTORY) ? "factory config saved from web" : "config saved from web");
     return ESP_OK;
@@ -485,6 +502,7 @@ static esp_err_t RebootHandler(httpd_req_t *req)
     if (!CheckAuth(req)) {
         return ESP_OK;
     }
+    EvLog_Add(EV_INFO, "网页操作重启（%s）", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart("restart requested from web");
     return ESP_OK;
@@ -498,8 +516,237 @@ static esp_err_t FactoryHandler(httpd_req_t *req)
     if (GwConfig_Reset() != ESP_OK) {
         return SendError(req, "500 Internal Server Error", "清除配置失败");
     }
+    EvLog_Add(EV_WARN, "恢复出厂设置（%s），现场参数已清除", s_tokenFactory ? USER_FACTORY : USER_ADMIN);
     SendOk(req);
     ScheduleRestart("factory reset from web");
+    return ESP_OK;
+}
+
+/* ------------------------------------------------------------ 诊断 / 日志 */
+
+static bool RequireFactory(httpd_req_t *req)
+{
+    if (!s_tokenFactory) {
+        SendError(req, "403 Forbidden", "需要用厂家账号登录");
+        return false;
+    }
+    return true;
+}
+
+static esp_err_t DiagHandler(httpd_req_t *req)
+{
+    int errors = 0;
+    int warns = 0;
+    cJSON *root;
+
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    root = cJSON_CreateObject();
+    cJSON_AddItemToObject(root, "items", Diag_Check(&errors, &warns));
+    cJSON_AddNumberToObject(root, "errors", errors);
+    cJSON_AddNumberToObject(root, "warns", warns);
+    cJSON_AddNumberToObject(root, "boot", EvLog_BootNumber());
+    cJSON_AddNumberToObject(root, "uptime", (double)(esp_timer_get_time() / 1000000));
+    cJSON_AddNumberToObject(root, "now", IotTime_IsSynced() ? (double)GetMilliTimeNow() : 0);
+    {
+        CrashInfo info;
+        size_t size = 0;
+
+        cJSON_AddBoolToObject(root, "crashLog", EvLog_ReadCrash(&info, NULL, 0));
+        cJSON_AddBoolToObject(root, "coreDump", Diag_CoreDumpInfo(&size));
+    }
+    return SendJson(req, root);
+}
+
+static esp_err_t EventsHandler(httpd_req_t *req)
+{
+    char query[16];
+    char val[8];
+    int n = 200;
+
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "n", val, sizeof(val)) == ESP_OK) {
+        n = atoi(val);
+        if (n <= 0 || n > 500) {
+            n = 200;
+        }
+    }
+    return SendJson(req, EvLog_ToJson(n));
+}
+
+static esp_err_t EventsClearHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    EvLog_Clear();
+    EvLog_Add(EV_INFO, "事件记录已清空（factory）");
+    return SendOk(req);
+}
+
+// 实时日志：返回 from 之后新增的日志，响应头 X-Log-Pos 为下次请求的 from
+static esp_err_t LogHandler(httpd_req_t *req)
+{
+    static char posText[12];
+    char query[24];
+    char val[12];
+    uint32_t from = 0;
+    uint32_t pos;
+    size_t n;
+    char *buf;
+    esp_err_t err;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "from", val, sizeof(val)) == ESP_OK) {
+        from = (uint32_t)strtoul(val, NULL, 10);
+    }
+    buf = malloc(LOG_BUF_SIZE);
+    if (buf == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    n = LogBuf_Read(from, buf, LOG_BUF_SIZE, &pos);
+    snprintf(posText, sizeof(posText), "%u", (unsigned)pos);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(req, "X-Log-Pos", posText);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    err = httpd_resp_send(req, buf, n);
+    free(buf);
+    return err;
+}
+
+/* 诊断报告：分块发送，攒满 1 KB 发一次 */
+typedef struct {
+    httpd_req_t *req;
+    size_t n;
+    char buf[1024];
+} ChunkOut;
+
+static void ChunkWrite(void *ctx, const char *text, size_t len)
+{
+    ChunkOut *o = ctx;
+
+    while (len > 0) {
+        size_t room = sizeof(o->buf) - o->n;
+        size_t k = (len < room) ? len : room;
+
+        memcpy(o->buf + o->n, text, k);
+        o->n += k;
+        text += k;
+        len -= k;
+        if (o->n == sizeof(o->buf)) {
+            httpd_resp_send_chunk(o->req, o->buf, o->n);
+            o->n = 0;
+        }
+    }
+}
+
+static esp_err_t ExportHandler(httpd_req_t *req)
+{
+    static char disposition[96];
+    ChunkOut *o;
+    char ts[24] = "";
+
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    o = malloc(sizeof(*o));
+    if (o == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    o->req = req;
+    o->n = 0;
+    if (IotTime_IsSynced()) {
+        time_t sec = (time_t)(GetMilliTimeNow() / 1000);
+        struct tm tm;
+
+        localtime_r(&sec, &tm);
+        strftime(ts, sizeof(ts), "-%Y%m%d-%H%M", &tm);
+    }
+    snprintf(disposition, sizeof(disposition), "attachment; filename=\"iotgw-%s%s.txt\"", NetMgr_GetHostname(), ts);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(req, "Content-Disposition", disposition);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+
+    ESP_LOGI(TAG, "export diagnostics");
+    Diag_Export(ChunkWrite, o);
+    if (o->n > 0) {
+        httpd_resp_send_chunk(req, o->buf, o->n);
+    }
+    httpd_resp_send_chunk(req, NULL, 0);
+    free(o);
+    return ESP_OK;
+}
+
+// 异常重启前日志（厂家账号）
+static esp_err_t CrashHandler(httpd_req_t *req)
+{
+    CrashInfo info;
+    char *buf;
+    esp_err_t err;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (!EvLog_ReadCrash(&info, NULL, 0)) {
+        return SendError(req, "404 Not Found", "没有异常重启记录");
+    }
+    buf = malloc(info.len + 128);
+    if (buf == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    int head = snprintf(buf, 128, "第 %u 次启动异常重启（%s），重启前日志：\n\n", (unsigned)info.boot, info.reason);
+    EvLog_ReadCrash(&info, buf + head, info.len + 1);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    err = httpd_resp_send(req, buf, head + info.len);
+    free(buf);
+    return err;
+}
+
+static esp_err_t CrashClearHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    EvLog_ClearCrash();
+    Diag_CoreDumpErase();
+    EvLog_Add(EV_INFO, "崩溃记录已清除（factory）");
+    return SendOk(req);
+}
+
+// core dump 原始文件（厂家账号），用 espcoredump.py info_corefile -t raw -c <文件> iot_base.elf 解析
+static esp_err_t CoreDumpHandler(httpd_req_t *req)
+{
+    char *buf;
+    size_t size;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (!Diag_CoreDumpInfo(&size)) {
+        return SendError(req, "404 Not Found", "没有 core dump");
+    }
+    buf = malloc(1024);
+    if (buf == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    httpd_resp_set_type(req, "application/octet-stream");
+    httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"coredump.bin\"");
+    for (size_t off = 0; off < size; off += 1024) {
+        size_t n = (size - off < 1024) ? size - off : 1024;
+
+        if (!Diag_CoreDumpRead(off, buf, n) || httpd_resp_send_chunk(req, buf, n) != ESP_OK) {
+            break;
+        }
+    }
+    httpd_resp_send_chunk(req, NULL, 0);
+    free(buf);
     return ESP_OK;
 }
 
@@ -527,12 +774,20 @@ void WebConfig_Start(void)
         { .uri = "/api/reboot",  .method = HTTP_POST, .handler = RebootHandler },
         { .uri = "/api/factory", .method = HTTP_POST, .handler = FactoryHandler },
         { .uri = "/api/factory-config", .method = HTTP_POST, .handler = FactoryConfigPostHandler },
+        { .uri = "/api/diag",          .method = HTTP_GET,  .handler = DiagHandler },
+        { .uri = "/api/events",        .method = HTTP_GET,  .handler = EventsHandler },
+        { .uri = "/api/events/clear",  .method = HTTP_POST, .handler = EventsClearHandler },
+        { .uri = "/api/log",           .method = HTTP_GET,  .handler = LogHandler },
+        { .uri = "/api/export",        .method = HTTP_GET,  .handler = ExportHandler },
+        { .uri = "/api/crash",         .method = HTTP_GET,  .handler = CrashHandler },
+        { .uri = "/api/crash/clear",   .method = HTTP_POST, .handler = CrashClearHandler },
+        { .uri = "/api/coredump",      .method = HTTP_GET,  .handler = CoreDumpHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;
     esp_err_t err;
 
-    config.stack_size = 6144;
+    config.stack_size = 8192;     // 导出诊断报告时调用层次较深
     config.max_open_sockets = 4;
     config.lru_purge_enable = true;     // 连接数满时关闭最久未用的连接（手机浏览器常保持多个空闲连接）
     config.max_uri_handlers = sizeof(uris) / sizeof(uris[0]);

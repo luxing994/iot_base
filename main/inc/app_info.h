@@ -11,4 +11,7 @@ const char *App_CollectText(void);
 /* 本次启动的复位原因 */
 const char *App_ResetText(void);
 
+/* 各应用任务的历史最小剩余栈，每个任务一行交给 put（诊断报告用） */
+void App_WriteTaskStacks(void (*put)(void *ctx, const char *line), void *ctx);
+
 #endif

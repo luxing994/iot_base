@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "iot_common.h"
 #include "iot_time.h"
+#include "event_log.h"
 
 RingBuffer uart2Buffer;
 
@@ -40,6 +41,17 @@ int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
  * 队列满（上位机断线、发送跟不上）时丢弃最旧的一条再入队，不阻塞调用方：
  * 原实现每条等待 100ms，断线期间会把所有采集任务拖慢；丢旧留新也保证重连后先发的是较新的数据。
  */
+static volatile uint32_t s_reportPosted;
+static volatile uint32_t s_reportDropped;
+static volatile bool s_dropping;        // 正在丢弃（只在开始丢弃时记一次事件）
+
+void IOT_GetReportStats(uint32_t *posted, uint32_t *dropped, uint32_t *queued)
+{
+    *posted = s_reportPosted;
+    *dropped = s_reportDropped;
+    *queued = (xQueue1 != NULL) ? (uint32_t)uxQueueMessagesWaiting(xQueue1) : 0;
+}
+
 int IOT_PostOwnedMessage(char *msg)
 {
     char *oldest = NULL;
@@ -48,11 +60,22 @@ int IOT_PostOwnedMessage(char *msg)
         free(msg);
         return -1;
     }
+    if (GwConfig_Get()->hostReportPort == 0) {
+        free(msg);      // 上报通道停用（端口为 0），不排队
+        return 0;
+    }
+    s_reportPosted++;
     if (xQueueSend(xQueue1, &msg, 0) == pdPASS) {
+        s_dropping = false;
         return 0;
     }
     if (xQueueReceive(xQueue1, &oldest, 0) == pdPASS) {
         free(oldest);
+        s_reportDropped++;
+        if (!s_dropping) {
+            s_dropping = true;
+            EvLog_Add(EV_WARN, "上报数据积压（上报通道未连接或发送慢），开始丢弃最旧的数据");
+        }
     }
     if (xQueueSend(xQueue1, &msg, 0) != pdPASS) {
         free(msg);

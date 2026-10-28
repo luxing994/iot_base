@@ -21,6 +21,7 @@
  * 避免一个任务的请求插进另一个任务的"请求-应答"中间。
  */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "sdkconfig.h"
@@ -45,6 +46,19 @@ void SerialTxn_Begin(void);
 void SerialTxn_Send(const void *data, size_t len);
 int  SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms);   // 成功返回 0
 void SerialTxn_End(void);
+
+/* 统计（诊断用）：txns 为 0 表示本固件没有串口设备或还没开始轮询 */
+typedef struct {
+    uint32_t txns;          // 累计事务数
+    uint32_t ok;
+    uint32_t timeouts;
+    uint32_t errors;        // 有应答但内容有误（错误码、帧格式等）
+    bool offline;           // 连续多次无应答
+    bool garbled;           // 离线时收到过无法识别的数据（多为波特率 / 校验位 / 站号不对）
+    uint32_t offlineS;      // 已离线秒数
+} SerialTxnStats;
+
+void SerialTxn_GetStats(SerialTxnStats *out);
 
 /* Begin + Send + Wait + End，成功返回 0 */
 int  SerialTxn_Request(const void *req, size_t len, SerialParseFn parse, void *ctx, int timeout_ms);

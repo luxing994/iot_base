@@ -4,6 +4,7 @@
 #include "ota_task.h"
 #include "tcp_client.h"
 #include "esp_log.h"
+#include "event_log.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
@@ -81,6 +82,7 @@ void ota_task(void *pvParameter)
     written = 0;
 
     ESP_LOGI(TAG, "STARTING OTA DOWNLOAD: %s", ota_url);
+    EvLog_Add(EV_INFO, "开始固件升级");
 
     // 配置 HTTPS OTA，若使用 HTTP 则用 esp_http_client_config_t + esp_ota_*
     esp_http_client_config_t config = {
@@ -97,11 +99,13 @@ void ota_task(void *pvParameter)
     esp_err_t ret = esp_https_ota(&config);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "OTA UPDATE SUCCEEDED, SYSTEM REBOOT");
+        EvLog_Add(EV_INFO, "固件升级成功，重启");
         OtaReport("OTA_COMPLETE:OK\r\n", strlen("OTA_COMPLETE:OK\r\n"));
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_restart();  // 切换到新固件
     } else {
         ESP_LOGE(TAG, "OTA UPDATE FAILED: %s", esp_err_to_name(ret));
+        EvLog_Add(EV_ERROR, "固件升级失败：%s", esp_err_to_name(ret));
         int l = snprintf((char *)errbuf, sizeof(errbuf), "OTA_ERROR:%s\r\n", esp_err_to_name(ret));
         OtaReport(errbuf, l);
     }

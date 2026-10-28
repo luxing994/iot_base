@@ -29,6 +29,12 @@
 #include "net_manager.h"
 #include "app_info.h"
 #include "web_config.h"
+#include "event_log.h"
+#include "log_buffer.h"
+#include "diag.h"
+#include "esp_ota_ops.h"
+#include <stdlib.h>
+#include <time.h>
 
 static const char *TAG = "BOOT";
 
@@ -113,6 +119,17 @@ static void StartHostTask(TaskFunction_t fn, const char *name, uint16_t port, co
         return;
     }
     StartTask(fn, name, 1024 * 8, NULL, PRIO_NETWORK);
+}
+
+void App_WriteTaskStacks(void (*put)(void *ctx, const char *line), void *ctx)
+{
+    char line[48];
+
+    for (int i = 0; i < s_taskCount; i++) {
+        snprintf(line, sizeof(line), "  %-16s %5u\n", pcTaskGetName(s_tasks[i]),
+                 (unsigned)uxTaskGetStackHighWaterMark(s_tasks[i]));
+        put(ctx, line);
+    }
 }
 
 #ifdef CONFIG_IOT_DEBUG_STACK_MONITOR
@@ -269,12 +286,25 @@ void app_main(void)
     // 连按复位检测：NVS 一就绪就计数，避免后面的初始化耗时导致快速连按时漏计
     NetMgr_CountBoot();
 
+    // 事件日志和运行日志缓冲尽早启动：异常复位前的日志在这里保存，之后的日志（含启动信息块）都能在网页查看
+    setenv("TZ", "CST-8", 1);   // 事件和诊断报告按北京时间显示
+    tzset();
+    EvLog_Init();
+    LogBuf_Init();
+
     // 运行参数（设备号、上位机地址、PLC 地址等）从 NVS 加载，之后各模块只读
     GwConfig_Init();
     HostCmd_Init();
 
     QuietSystemLogs();
     PrintBanner();
+    {
+        bool abnormal;
+        const char *reset = Diag_ResetText(&abnormal);
+
+        EvLog_Add(abnormal ? EV_ERROR : EV_INFO, "网关启动（%s），固件 %s %s", reset, FW_VERSION,
+                  esp_ota_get_app_description()->version);
+    }
 
     // 联网：以太网 / Wi-Fi / 配置热点，不阻塞；各通信任务在网络就绪后自行连接
     ESP_ERROR_CHECK(esp_netif_init());
@@ -338,7 +368,7 @@ void app_main(void)
     StartTask(tcp_server1_task, "file_server", 1024 * 4, (void *)AF_INET, PRIO_NETWORK);
 #endif
 
-    xTaskCreate(health_task, "health", 1024 * 3, NULL, 1, NULL);
+    xTaskCreate(health_task, "health", 1024 * 4, NULL, 1, NULL);
 #ifdef CONFIG_IOT_DEBUG_STACK_MONITOR
     xTaskCreate(stack_monitor_task, "stack_monitor", 1024 * 3, NULL, 1, NULL);
 #endif

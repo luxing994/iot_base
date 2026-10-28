@@ -47,6 +47,18 @@ button:disabled{opacity:.5}
 #cover{position:fixed;inset:0;background:#14324fe6;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:8}
 #cover div{max-width:420px}
 .hide{display:none!important}
+.sum{display:flex;align-items:center;gap:10px;cursor:pointer}
+.sum b{font-size:16px}
+.chk-item{padding:8px 0;border-top:1px solid var(--line)}
+.chk-item:first-of-type{border-top:0}
+.chk-item .adv{color:var(--mut);font-size:13px;margin:4px 0 0 15px}
+.ev{display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line);font-size:14px}
+.ev:first-of-type{border-top:0}
+.ev time{color:var(--mut);flex:none;width:9.5em;font-size:13px}
+.ev.warn span{color:var(--warn)}.ev.err span{color:var(--bad)}
+.evs{max-height:420px;overflow-y:auto}
+pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace;padding:10px;border-radius:6px;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -69,6 +81,7 @@ button:disabled{opacity:.5}
 <div id="app" class="hide">
 <nav>
   <button data-tab="st" class="on">状态</button>
+  <button data-tab="dg">诊断</button>
   <button data-tab="net">网络</button>
   <button data-tab="par">参数</button>
   <button data-tab="sys">系统</button>
@@ -77,9 +90,42 @@ button:disabled{opacity:.5}
 
 <!-- 状态 -->
 <div id="tab-st">
+  <div class="card sum" id="stSum"></div>
   <div class="card"><h2>设备</h2><div id="stDev"></div></div>
   <div class="card"><h2>网络</h2><div id="stNet"></div></div>
   <div class="card"><h2>连接</h2><div id="stLink"></div></div>
+</div>
+
+<!-- 诊断 -->
+<div id="tab-dg" class="hide">
+  <div class="card">
+    <h2>检查结果<span class="sp"></span><button class="sec" id="btnDgRefresh">刷新</button></h2>
+    <div id="dgItems"></div>
+  </div>
+  <div class="card">
+    <h2>导出诊断信息</h2>
+    <p class="hint">遇到无法解决的问题时，点下面的按钮下载诊断文件，发给厂家即可（文件包含运行状态、事件和日志，不含密码）。</p>
+    <p><button id="btnExport">导出诊断信息</button></p>
+  </div>
+  <div class="card">
+    <h2>最近事件<span class="sp"></span><button class="sec fac-only hide" id="btnEvClear">清空</button></h2>
+    <div id="dgEvents" class="evs"></div>
+  </div>
+  <div class="card fac-only hide">
+    <h2>运行日志</h2>
+    <div class="btns"><button class="sec" id="btnLog">开始实时查看</button></div>
+    <pre class="log hide" id="logView"></pre>
+  </div>
+  <div class="card fac-only hide">
+    <h2>崩溃记录</h2>
+    <div id="dgCrash"></div>
+    <div class="btns">
+      <button class="sec" id="btnCrashLog">查看异常重启前日志</button>
+      <button class="sec" id="btnCoreDump">下载 core dump</button>
+      <button class="bad" id="btnCrashClear">清除崩溃记录</button>
+    </div>
+    <pre class="log hide" id="crashView"></pre>
+  </div>
 </div>
 
 <!-- 网络 -->
@@ -242,6 +288,7 @@ function logout() {
   token = '';
   try { sessionStorage.removeItem('t'); } catch (e) {}
   clearInterval(stTimer);
+  stopLog();
   show('#app', false); show('#saveBar', false); show('#btnOut', false); show('#login', true);
 }
 
@@ -292,6 +339,11 @@ function loadStatus() {
       dev.push(['空闲内存', Math.round(s.heap / 1024) + ' KB']);
     }
     $('#stDev').innerHTML = rows(dev);
+    // 顶部总结：有问题时点击进入诊断页
+    var ne = s.diagErrors || 0, nw = s.diagWarns || 0;
+    $('#stSum').innerHTML = ne ? dot('bad', '<b>发现 ' + ne + ' 个问题' + (nw ? '、' + nw + ' 个警告' : '') + '</b>') + '<span class="hint">点击查看原因和处理方法 ›</span>'
+      : nw ? dot('warn', '<b>运行正常，有 ' + nw + ' 个警告</b>') + '<span class="hint">点击查看 ›</span>'
+      : dot('ok', '<b>运行正常</b>');
     var e = s.eth, w = s.wifi, a = s.ap, net = [];
     if (!e.enabled) {
       net.push(['以太网', dot('', '未启用')]);
@@ -333,6 +385,7 @@ function loadConfig() {
     });
     isFactory = (j.role === 'factory');
     show('#tabFac', isFactory);
+    $$('.fac-only').forEach(function (el) { el.classList.toggle('hide', !isFactory); });
     $('#btnOut').textContent = '退出 ' + (isFactory ? 'factory' : 'admin');
     $('#facMac').placeholder = '留空：芯片 MAC ' + (j.ethMacChip || '');
     $('#facPorts').innerHTML = rows([
@@ -422,15 +475,123 @@ function scan() {
     .then(function () { b.disabled = false; b.textContent = '扫描'; });
 }
 
+/* ---------------- 诊断 ---------------- */
+
+var DOT = { ok: 'ok', info: '', warn: 'warn', error: 'bad' };
+var logPos = 0, logTimer = null;
+
+function fmtTime(ms) {
+  var d = new Date(ms), p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+function fmtUp(s) {
+  var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return '开机 ' + (h ? h + ' 时 ' : '') + m + ' 分 ' + (s % 60) + ' 秒';
+}
+
+// 事件时间：已校时直接显示；未校时用同一次启动中已校时的记录（或网关当前时间）推算，都没有时显示开机后多久
+function eventTimes(list, d) {
+  var ref = {};
+  if (d.now) { ref[d.boot] = { t: d.now, up: d.uptime }; }
+  list.forEach(function (e) { if (e.t && !ref[e.b]) { ref[e.b] = e; } });
+  return list.map(function (e) {
+    if (e.t) { return fmtTime(e.t); }
+    var r = ref[e.b];
+    return r ? '≈' + fmtTime(r.t - (r.up - e.up) * 1000) : '#' + e.b + ' ' + fmtUp(e.up);
+  });
+}
+
+function loadDiag() {
+  api('/api/diag').then(function (d) {
+    $('#dgItems').innerHTML = d.items.map(function (it) {
+      return '<div class="chk-item">' + dot(DOT[it.level], '<b>' + esc(it.title) + '</b>：' + esc(it.text)) +
+        (it.advice ? '<div class="adv">' + esc(it.advice) + '</div>' : '') + '</div>';
+    }).join('');
+    $('#dgCrash').innerHTML = rows([
+      ['异常重启前日志', d.crashLog ? dot('warn', '有') : '无'],
+      ['core dump', d.coreDump ? dot('warn', '有') : '无']
+    ]);
+    return api('/api/events?n=200').then(function (list) {
+      var times = eventTimes(list, d);
+      $('#dgEvents').innerHTML = list.length ? list.map(function (e, i) {
+        return '<div class="ev' + (e.l === 2 ? ' err' : e.l === 1 ? ' warn' : '') + '"><time>' + times[i] + '</time><span>' + esc(e.m) + '</span></div>';
+      }).join('') : '<p class="hint">暂无事件</p>';
+    });
+  }).catch(function (e) { msg(e.message, true); });
+}
+
+// 带登录令牌下载文件（浏览器直接打开链接无法带令牌）
+function download(path, fallbackName) {
+  return fetch(path, { headers: { 'X-Token': token } }).then(function (r) {
+    if (!r.ok) { return r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || ('下载失败 HTTP ' + r.status)); }); }
+    var m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
+    return r.blob().then(function (b) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = m ? m[1] : fallbackName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    });
+  });
+}
+
+function pollLog() {
+  fetch('/api/log?from=' + logPos, { headers: { 'X-Token': token } }).then(function (r) {
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+    logPos = Number(r.headers.get('X-Log-Pos')) || logPos;
+    return r.text();
+  }).then(function (t) {
+    var v = $('#logView'), atEnd = v.scrollTop + v.clientHeight >= v.scrollHeight - 20;
+    if (!t) { return; }
+    v.textContent += t;
+    if (v.textContent.length > 65536) { v.textContent = v.textContent.slice(-49152); }
+    if (atEnd) { v.scrollTop = v.scrollHeight; }
+  }).catch(function () {});
+}
+function stopLog() {
+  clearInterval(logTimer); logTimer = null;
+  $('#btnLog').textContent = '开始实时查看';
+}
+
+$('#btnDgRefresh').onclick = loadDiag;
+$('#btnExport').onclick = function () {
+  var b = this;
+  b.disabled = true; b.textContent = '正在生成…';
+  download('/api/export', 'iotgw-diag.txt').catch(function (e) { msg(e.message, true); })
+    .then(function () { b.disabled = false; b.textContent = '导出诊断信息'; });
+};
+$('#btnEvClear').onclick = function () {
+  if (confirm('清空全部事件记录？')) { api('/api/events/clear', {}).then(function () { setTimeout(loadDiag, 1500); }).catch(function (e) { msg(e.message, true); }); }
+};
+$('#btnLog').onclick = function () {
+  if (logTimer) { stopLog(); return; }
+  logPos = 0; $('#logView').textContent = ''; show('#logView', true);
+  this.textContent = '停止';
+  pollLog(); logTimer = setInterval(pollLog, 2000);
+};
+$('#btnCrashLog').onclick = function () {
+  fetch('/api/crash', { headers: { 'X-Token': token } }).then(function (r) {
+    return r.ok ? r.text() : r.json().then(function (j) { throw new Error(j.error); });
+  }).then(function (t) { $('#crashView').textContent = t; show('#crashView', true); })
+    .catch(function (e) { msg(e.message, true); });
+};
+$('#btnCoreDump').onclick = function () { download('/api/coredump', 'coredump.bin').catch(function (e) { msg(e.message, true); }); };
+$('#btnCrashClear').onclick = function () {
+  if (confirm('清除异常重启前日志和 core dump？')) { api('/api/crash/clear', {}).then(loadDiag).catch(function (e) { msg(e.message, true); }); }
+};
+$('#stSum').onclick = function () { setTab('dg'); };
+
 /* ---------------- 页面 ---------------- */
 
 function setTab(t) {
   tab = t;
   $$('nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
-  ['st', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
+  ['st', 'dg', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
   show('#saveBar', t === 'net' || t === 'par');
+  stopLog();
   clearInterval(stTimer);
   if (t === 'st' || t === 'net') { loadStatus(); }
+  if (t === 'dg') { loadDiag(); }
   if (t === 'st') { stTimer = setInterval(loadStatus, 5000); }
 }
 

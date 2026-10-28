@@ -15,6 +15,7 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "event_log.h"
 #include "esp_rom_sys.h"
 #include "iot_common.h"
 #include "iot_report.h"
@@ -128,12 +129,14 @@ void max6675_task(void *pvParameters)
             // 原实现开路时继续上报上一次的温度，上位机无法发现故障；改为不上报，只在状态变化时打印
             if (!open) {
                 ESP_LOGW(TAG, "thermocouple open circuit, stop reporting");
+                EvLog_Add(EV_WARN, "热电偶开路（断线或未接），停止上报温度");
                 open = true;
             }
             continue;
         }
         if (open) {
             ESP_LOGI(TAG, "thermocouple reconnected");
+            EvLog_Add(EV_INFO, "热电偶已恢复");
             open = false;
         }
 

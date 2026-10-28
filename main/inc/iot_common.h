@@ -149,6 +149,8 @@ uint32_t UART_BufferedBytes(void);
 
 int get_random_range_freq(int min_val, int max_val);
 int IOT_PostOwnedMessage(char *msg);    // msg 为 malloc 得到的字符串，所有权交给上报队列
+/* 上报统计（诊断用）：累计提交条数、因积压丢弃的条数、当前排队条数 */
+void IOT_GetReportStats(uint32_t *posted, uint32_t *dropped, uint32_t *queued);
 int IOT_PostMessage(const char *msg);   // 复制一份后入队
 
 #endif

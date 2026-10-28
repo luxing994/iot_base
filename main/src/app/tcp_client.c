@@ -25,6 +25,8 @@
 #include "ota_task.h"
 #include "plc_poll.h"
 #include "host_cmd.h"
+#include "event_log.h"
+#include "esp_timer.h"
 
 /* 上位机地址和端口为运行参数（gw_config.h），可在配置网页修改 */
 #define HOST_IP_ADDR    (GwConfig_Get()->hostAddr)
@@ -56,9 +58,14 @@ char* GetStaIp(void)
 typedef struct {
     const char *tag;
     const char *peer;       // 日志中的对端名称，如 "report channel"
-    int fails;
+    int fails;              // 连续失败次数（连上后清零）
     volatile bool up;
     volatile bool off;      // 端口为 0，不使用这条通道
+    int lastErr;            // 最近一次连接失败的 errno
+    uint32_t connects;      // 本次启动累计连上次数
+    uint32_t drops;         // 连上后又断开的次数
+    uint32_t sinceS;        // 最近一次状态变化的开机秒数
+    char addr[56];          // 最近一次连接的 "ip:port"
 } ConnLog;
 
 #define MAX_LINKS   8
@@ -102,6 +109,12 @@ int TcpClient_GetLinks(TcpLinkState *out, int max)
         out[n].peer = s_links[i].peer;
         out[n].up = s_links[i].up;
         out[n].off = s_links[i].off;
+        out[n].lastErr = s_links[i].lastErr;
+        out[n].fails = s_links[i].fails;
+        out[n].connects = s_links[i].connects;
+        out[n].drops = s_links[i].drops;
+        out[n].sinceS = s_links[i].sinceS;
+        strlcpy(out[n].addr, s_links[i].addr, sizeof(out[n].addr));
     }
     taskEXIT_CRITICAL(&s_linkLock);
     return n;
@@ -114,8 +127,54 @@ static void WaitNetwork(void)
     }
 }
 
+static uint32_t UptimeS(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000000);
+}
+
+const char *TcpClient_LinkName(const char *peer)
+{
+    static const char *const names[][2] = {
+        { "report channel", "上位机上报通道" },
+        { "link channel",   "上位机心跳通道" },
+        { "ota channel",    "上位机 OTA 通道" },
+        { "modbus tcp",     "Modbus TCP 设备" },
+        { "fx mc",          "FX PLC（网口）" },
+        { "s7",             "S7 PLC（网口）" },
+    };
+
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        if (strcmp(peer, names[i][0]) == 0) {
+            return names[i][1];
+        }
+    }
+    return peer;
+}
+
+const char *TcpClient_ErrText(int err)
+{
+    switch (err) {
+    case ECONNREFUSED:
+    case ECONNRESET:    return "对方拒绝连接（端口未开放）";
+    case ECONNABORTED:
+    case ETIMEDOUT:
+    case EAGAIN:        return "对方无回应";
+    case EHOSTUNREACH:
+    case ENETUNREACH:   return "网络不通";
+    case 0:             return "";
+    default:            return "连接失败";
+    }
+}
+
 static void LogConnectFail(ConnLog *log, const char *ip, uint16_t port, int err)
 {
+    snprintf(log->addr, sizeof(log->addr), "%s:%u", ip, port);
+    log->lastErr = err;
+    if (log->fails == 0) {
+        // 只记第一次失败（连上之后再失败才会再记）
+        log->sinceS = UptimeS();
+        EvLog_Add(EV_WARN, "%s连接失败（%s）：%s", TcpClient_LinkName(log->peer), log->addr, TcpClient_ErrText(err));
+    }
     if (log->fails % CONNECT_LOG_EVERY == 0) {
         ESP_LOGW(log->tag, "%s %s:%u unreachable (errno %d), retry every %d s",
                  log->peer, ip, port, err, CLIENT_RECONNECT_MS / 1000);
@@ -126,12 +185,22 @@ static void LogConnectFail(ConnLog *log, const char *ip, uint16_t port, int err)
 static void LogConnected(ConnLog *log, const char *ip, uint16_t port)
 {
     ESP_LOGI(log->tag, "%s %s:%u connected", log->peer, ip, port);
+    snprintf(log->addr, sizeof(log->addr), "%s:%u", ip, port);
     log->fails = 0;
+    log->lastErr = 0;
+    log->connects++;
+    log->sinceS = UptimeS();
     log->up = true;
+    EvLog_Add(EV_INFO, "%s已连接（%s）", TcpClient_LinkName(log->peer), log->addr);
 }
 
 static void TcpClose(int sock, ConnLog *log)
 {
+    if (log->up) {
+        log->drops++;
+        log->sinceS = UptimeS();
+        EvLog_Add(EV_WARN, "%s已断开", TcpClient_LinkName(log->peer));
+    }
     log->up = false;
     if (sock >= 0) {
         ESP_LOGW(log->tag, "%s disconnected, reconnect in %d s", log->peer, CLIENT_RECONNECT_MS / 1000);

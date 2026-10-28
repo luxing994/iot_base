@@ -1,5 +1,7 @@
 # Name,   Type, SubType, Offset,   Size, Flags
 # Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
+# spiffs   : 未挂载文件系统，用作事件日志和异常重启前日志（main/src/app/event_log.c）
+# coredump : 程序崩溃时系统自动保存的现场（main/src/app/diag.c 读取摘要，网页可下载）
 nvs,      data, nvs,     ,        0x4000,
 otadata,  data, ota,     ,        0x2000,
 phy_init, data, phy,     ,        0x1000,
@@ -7,3 +9,4 @@ factory,  app,  factory, ,        1M,
 ota_0,    app,  ota_0,   ,        1M,
 ota_1,    app,  ota_1,   ,        1M,
 spiffs,   data, spiffs,  ,        0x50000,
+coredump, data, coredump,,        0x10000,
