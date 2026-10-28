@@ -111,14 +111,16 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
 1. **进入配置模式**：新烧录的网关（出厂状态）开机即打开配置热点；已配置过的网关在 5 秒内连续按 3 次复位键
    （或快速断电上电 3 次）打开热点。热点 10 分钟无人连接自动关闭；网络断开**不会**自动打开热点。
 2. 手机 / 电脑连接热点 `IoTGW-xxxx`（xxxx 为 Wi-Fi MAC 后 4 位，密码默认 `12345678`），浏览器访问 `http://192.168.4.1`。
-   网关已接入局域网时，也可直接访问 `http://<网关 IP>`。
+   网关已接入局域网时，也可直接访问 `http://<devId>.local`（如 `http://jxgs001.local`，devId 转小写，
+   字母数字以外的字符换成 `-`；需电脑与网关在同一网段，Windows 10/11、macOS、iOS 支持）或 `http://<网关 IP>`。
+   路由器的设备列表中网关也以这个名称显示。
 3. 用账号 `admin` 登录（密码默认 `admin`），可查看运行状态、启用以太网 / Wi-Fi（至少一个）、设置 DHCP / 静态 IP、选择 Wi-Fi、上位机地址和端口、
    网口 PLC 地址、网页密码，保存后自动重启生效；也可在网页中重启或恢复出厂。
    “系统”中可打开“仅允许通过配置热点访问”，打开后局域网 IP 访问会被拒绝。
 
 参数保存在 NVS 中，升级固件不会丢失；网页中没有保存过的参数使用 menuconfig 中的值（出厂默认值）。
 
-**出厂参数**（devId、devNumber、上位机端口、本机命令 / 文件端口、connectPort、以太网 MAC、配置热点密码）客户不能修改：出货时用厂家账号 `factory`
+**出厂参数**（devId、devNumber、上位机端口、本机命令 / 文件端口、以太网 MAC、配置热点密码）客户不能修改：出货时用厂家账号 `factory`
 （密码为 menuconfig `IOT_FACTORY_PASSWORD`，所有设备相同，只给生产 / 售后）登录网页，在“出厂”页逐台设置，
 所有盒子烧同一个固件即可。客户在网页中恢复出厂只清除现场参数，出厂参数保留。
 
@@ -136,7 +138,7 @@ idf.py -p PORT flash monitor
 |---|---|
 | Device identity | 设备号 `devId`（每台网关必须唯一）、`devNumber` |
 | Host connection | 上位机 IP、上报 / 心跳 / OTA 端口、心跳和重连间隔 |
-| Local server | 命令端口、上线包中的 connectPort、文件端口开关、TCP keepalive |
+| Local server | 命令端口、文件端口开关、TCP keepalive |
 | Network | Wi-Fi、W5500 引脚、以太网 MAC、DHCP / 静态 IP、配置热点密码、网页密码（出厂默认值） |
 | Data acquisition | 应答超时；各协议的设备类型、连接方式、网口 IP / 端口 |
 | Sensors | MAX6675 热电偶 |

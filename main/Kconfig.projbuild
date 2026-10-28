@@ -110,14 +110,6 @@ menu "Local server"
             本机监听的命令端口，接收上位机 JSON 命令（StartFlush / EndFlush / PowerOn /
             PowerOff / single / group）。
 
-    config IOT_ADVERTISED_PORT
-        int "Port advertised in online packet (connectPort)"
-        range 0 65535
-        default 8766
-        help
-            上线包 / 心跳包中 connectPort 字段的值。历史上固定为 8766，
-            请确认上位机实际用它连接本机的哪个端口。
-
     config IOT_FILE_SERVER
         bool "Enable file transfer server"
         default y

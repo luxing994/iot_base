@@ -113,7 +113,6 @@ static const GwConfig s_defaults = {
     .hostOtaPort = CONFIG_IOT_HOST_OTA_PORT,
 
     .cmdPort = CONFIG_IOT_CMD_PORT,
-    .advertisedPort = CONFIG_IOT_ADVERTISED_PORT,
     .filePort = DEF_FILE_PORT,
 
     .wifiEnabled = DEF_WIFI_ENABLED,
@@ -172,7 +171,6 @@ static const GwField s_fields[] = {
     FACTORY("host_ota",    FIELD_U16,  hostOtaPort),
     FACTORY("cmd_port",    FIELD_U16,  cmdPort),
     FACTORY("file_port",   FIELD_U16,  filePort),
-    FACTORY("adv_port",    FIELD_U16,  advertisedPort),
     FACTORY("eth_mac",     FIELD_STR,  ethMac),
     FSECRET("ap_pass",                 apPass),     // 可逐台设置并印在标签上
 

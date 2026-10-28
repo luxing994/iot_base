@@ -10,6 +10,7 @@
 #include "esp_wifi.h"
 #include "esp_wifi_default.h"
 #include "nvs.h"
+#include "mdns.h"
 #include "lwip/inet.h"
 #include "sdkconfig.h"
 #ifdef CONFIG_IOT_ETH_W5500
@@ -58,6 +59,7 @@ static volatile int s_apClients;
 static NetApReason s_apReason;
 static int s_bootResets;            // NetMgr_CountBoot() 记下的连续复位次数
 static char s_apSsid[33];
+static char s_hostname[33];          // 局域网访问名：http://<s_hostname>.local
 static TickType_t s_apIdleSince;
 
 static TickType_t Now(void)
@@ -252,6 +254,7 @@ static void WifiInit(void)
         return;
     }
     s_staNetif = esp_netif_create_default_wifi_sta();
+    esp_netif_set_hostname(s_staNetif, NetMgr_GetHostname());     // 路由器设备列表中显示的名称
     s_apNetif = esp_netif_create_default_wifi_ap();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));    // 账号保存在本项目的配置中
@@ -356,6 +359,7 @@ static bool EthStart(void)
     esp_err_t err;
 
     s_ethNetif = esp_netif_new(&netifCfg);
+    esp_netif_set_hostname(s_ethNetif, NetMgr_GetHostname());     // 须在 DHCP 开始前设置
 
     // W5500 中断依赖的 GPIO ISR 服务已在 app_main 中安装
     err = spi_bus_initialize(CONFIG_IOT_ETH_SPI_HOST, &bus, SPI_DMA_CH_AUTO);
@@ -436,6 +440,58 @@ static void OnIpEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
+/* ================================================================ 局域网名称 */
+
+// 由 devId 生成主机名：字母转小写、数字保留，其他字符换成 '-'（合并连续的、去掉首尾的）；
+// devId 改了重启后自动跟着变。结果为空时用 iotgw-xxxx（Wi-Fi MAC 后 4 位）
+const char *NetMgr_GetHostname(void)
+{
+    const char *id = GwConfig_Get()->devId;
+    size_t n = 0;
+
+    if (s_hostname[0] != '\0') {
+        return s_hostname;
+    }
+    for (; *id != '\0' && n < sizeof(s_hostname) - 1; id++) {
+        char c = *id;
+
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            s_hostname[n++] = c;
+        } else if (c >= 'A' && c <= 'Z') {
+            s_hostname[n++] = (char)(c - 'A' + 'a');
+        } else if (n > 0 && s_hostname[n - 1] != '-') {
+            s_hostname[n++] = '-';
+        }
+    }
+    while (n > 0 && s_hostname[n - 1] == '-') {
+        n--;
+    }
+    s_hostname[n] = '\0';
+    if (n == 0) {
+        uint8_t mac[6];
+
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(s_hostname, sizeof(s_hostname), "iotgw-%02x%02x", mac[4], mac[5]);
+    }
+    return s_hostname;
+}
+
+// mDNS：局域网电脑可用 http://<主机名>.local 访问配置网页（以太网、Wi-Fi、热点上都可用）
+static void MdnsStart(void)
+{
+    char instance[48];
+    esp_err_t err = mdns_init();
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "mdns init failed: %s", esp_err_to_name(err));
+        return;
+    }
+    mdns_hostname_set(NetMgr_GetHostname());
+    snprintf(instance, sizeof(instance), "IoT Gateway %s", GwConfig_Get()->devId);
+    mdns_instance_name_set(instance);
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+}
+
 /* ================================================================ 管理任务 */
 
 static void NetMgrTask(void *arg)
@@ -490,6 +546,7 @@ void NetMgr_Start(void)
     snprintf(s_apSsid, sizeof(s_apSsid), "IoTGW-%02X%02X", mac[4], mac[5]);
 
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, OnIpEvent, NULL));
+    MdnsStart();
 
 #ifdef CONFIG_IOT_ETH_W5500
     if (cfg->ethEnabled) {

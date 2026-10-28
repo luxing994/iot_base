@@ -291,6 +291,7 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "devId", cfg->devId);
     cJSON_AddStringToObject(root, "devNumber", cfg->devNumber);
     cJSON_AddStringToObject(root, "hostAddr", cfg->hostAddr);
+    cJSON_AddStringToObject(root, "hostname", NetMgr_GetHostname());
     cJSON_AddBoolToObject(root, "viaAp", FromConfigAp(req));     // 当前是否经配置热点访问
 
     obj = cJSON_AddObjectToObject(root, "eth");

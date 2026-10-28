@@ -164,7 +164,8 @@ static void PrintBanner(void)
     ESP_LOGI(TAG, " collect   : %s", App_CollectText());
     ESP_LOGI(TAG, " host      : %s  report %u, link %u, ota %u", c->hostAddr,
              c->hostReportPort, c->hostLinkPort, c->hostOtaPort);
-    ESP_LOGI(TAG, " local     : cmd port %u, connectPort %u", c->cmdPort, c->advertisedPort);
+    ESP_LOGI(TAG, " local     : cmd port %u", c->cmdPort);
+    ESP_LOGI(TAG, " web page  : http://%s.local, hotspot http://" NET_AP_IP, NetMgr_GetHostname());
 #ifdef CONFIG_IOT_ETH_W5500
     GwConfig_GetEthMac(mac);
     ESP_LOGI(TAG, " ethernet  : MAC %02X:%02X:%02X:%02X:%02X:%02X%s, %s%s", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
@@ -196,10 +197,10 @@ static void QuietSystemLogs(void)
     for (size_t i = 0; i < sizeof(tags) / sizeof(tags[0]); i++) {
         esp_log_level_set(tags[i], ESP_LOG_WARN);
     }
-    // 手机浏览器断开连接、请求 favicon 等都会打警告，对现场排查没有意义
+    // 浏览器断开连接、请求 favicon 等都会打警告，对现场排查没有意义；
+    // httpd_parse 保留（请求头过长等解析错误要能看到）
     esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
     esp_log_level_set("httpd_uri", ESP_LOG_ERROR);
-    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
 }
 void app_main(void)
 {

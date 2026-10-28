@@ -57,6 +57,12 @@ void NetMgr_GetStatus(NetStatus *out);
 /* 与 peer 同网段的本机 IP（用于上报 devIP），没有同网段时返回任一已连接网口的 IP，都没有时为空串 */
 void NetMgr_GetLocalIp(const char *peer, char *buf, size_t size);
 
+/*
+ * 局域网访问名（由 devId 生成，如 JXGS001 -> "jxgs001"），用于 DHCP 主机名和 mDNS：
+ * 局域网电脑可访问 http://<名称>.local。devId 修改后重启生效
+ */
+const char *NetMgr_GetHostname(void);
+
 /* 打开配置热点 */
 void NetMgr_OpenConfigAp(NetApReason reason);
 

@@ -31,7 +31,8 @@
 #define PORT            (GwConfig_Get()->hostReportPort)    // 数据上报
 #define PORT1           (GwConfig_Get()->hostLinkPort)      // 上线 / 心跳
 #define OTA_PORT        (GwConfig_Get()->hostOtaPort)       // OTA 控制通道
-#define CONNECT_PORT    (GwConfig_Get()->advertisedPort)    // 上线包 connectPort 字段
+// 上线包 / 心跳包的 connectPort 字段：上位机目前不使用，沿用原始代码的固定值
+#define CONNECT_PORT    8766
 
 #define CLIENT_RECONNECT_MS     CONFIG_IOT_RECONNECT_INTERVAL_MS
 #define HEART_BEAT_MS           CONFIG_IOT_HEARTBEAT_INTERVAL_MS

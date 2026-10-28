@@ -158,9 +158,7 @@ button:disabled{opacity:.5}
       <div><label>上位机 OTA</label><input data-fk="hostOtaPort" type="number"></div>
       <div><label>本机命令</label><input data-fk="cmdPort" type="number"></div>
       <div data-f="filePort"><label>本机文件</label><input data-fk="filePort" type="number"></div>
-      <div><label>connectPort</label><input data-fk="advertisedPort" type="number"></div>
     </div>
-    <p class="hint">connectPort：上线包中告诉上位机的命令端口，网关与上位机之间有端口映射时才与本机命令端口不同。</p>
   </div>
   <div class="card">
     <h2>配置热点密码</h2>
@@ -308,6 +306,7 @@ function loadStatus() {
       net.push(['Wi-Fi', dot('', '未启用')]);
     }
     net.push(['Wi-Fi MAC', esc(w.mac)]);
+    net.push(['局域网访问', esc('http://' + s.hostname + '.local')]);
     net.push(['配置热点', a.on ? dot('warn', esc(a.ssid) + '，' + a.clients + ' 台已连接') : '已关闭']);
     $('#stNet').innerHTML = rows(net);
     $('#stLink').innerHTML = s.links.length ? rows(s.links.map(function (l) {
