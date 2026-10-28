@@ -295,6 +295,7 @@ static esp_err_t StatusHandler(httpd_req_t *req)
 
     obj = cJSON_AddObjectToObject(root, "eth");
     GwConfig_GetMacStr(GW_MAC_ETH, mac, sizeof(mac));
+    cJSON_AddBoolToObject(obj, "enabled", cfg->ethEnabled);
     cJSON_AddBoolToObject(obj, "present", st.ethPresent);
     cJSON_AddBoolToObject(obj, "link", st.ethLink);
     cJSON_AddBoolToObject(obj, "up", st.ethUp);
@@ -304,7 +305,7 @@ static esp_err_t StatusHandler(httpd_req_t *req)
 
     obj = cJSON_AddObjectToObject(root, "wifi");
     GwConfig_GetMacStr(GW_MAC_WIFI, mac, sizeof(mac));
-    cJSON_AddBoolToObject(obj, "enabled", st.wifiEnabled);
+    cJSON_AddBoolToObject(obj, "enabled", cfg->wifiEnabled);
     cJSON_AddStringToObject(obj, "ssid", cfg->wifiSsid);
     cJSON_AddBoolToObject(obj, "up", st.wifiUp);
     cJSON_AddStringToObject(obj, "ip", st.wifiUp ? st.wifiIp : "");

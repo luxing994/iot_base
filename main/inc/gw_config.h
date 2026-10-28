@@ -38,13 +38,15 @@ typedef struct {
 
     /* 本机服务 */
     uint16_t cmdPort;                   // 接收上位机 JSON 命令
-    uint16_t advertisedPort;            // 上线包中的 connectPort
+    uint16_t advertisedPort;            // 上线包中的 connectPort（出厂参数，经端口映射时与 cmdPort 不同）
     uint16_t filePort;                  // 文件分包（menuconfig 中开启文件端口时使用）
 
     /* 网络 */
-    char wifiSsid[GW_STR_SSID];         // 为空表示不使用 Wi-Fi
+    bool wifiEnabled;                   // 使用 Wi-Fi（与以太网至少启用一个）
+    char wifiSsid[GW_STR_SSID];
     char wifiPass[GW_STR_WIFIPW];
     char ethMac[GW_STR_MAC];            // 以太网 MAC（出厂参数，只来自 menuconfig，不存 NVS），空表示按芯片出厂 MAC 自动生成
+    bool ethEnabled;                    // 使用以太网（未编译 W5500 时无效）
     bool ethDhcp;                       // false：使用下面的静态地址
     char ethIp[GW_STR_IP4];
     char ethMask[GW_STR_IP4];
@@ -73,7 +75,7 @@ const GwConfig *GwConfig_Get(void);
 
 /*
  * 参数分两区：
- *   出厂参数（devId、devNumber、上位机端口、本机命令 / 文件端口、以太网 MAC、配置热点密码）：出货时用出厂密码在
+ *   出厂参数（devId、devNumber、上位机端口、本机命令 / 文件端口、connectPort、以太网 MAC、配置热点密码）：出货时用出厂密码在
  *     配置网页设置，客户不能修改，恢复出厂不清除
  *   客户参数（其余）：现场安装时设置，恢复出厂时清除
  */

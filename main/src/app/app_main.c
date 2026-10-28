@@ -168,16 +168,17 @@ static void PrintBanner(void)
 #ifdef CONFIG_IOT_ETH_W5500
     GwConfig_GetEthMac(mac);
     ESP_LOGI(TAG, " ethernet  : MAC %02X:%02X:%02X:%02X:%02X:%02X%s, %s%s", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-             c->ethMac[0] != '\0' ? "" : " (auto)", c->ethDhcp ? "DHCP" : "static ", c->ethDhcp ? "" : c->ethIp);
+             c->ethMac[0] != '\0' ? "" : " (auto)", !c->ethEnabled ? "disabled" : c->ethDhcp ? "DHCP" : "static ",
+             (c->ethEnabled && !c->ethDhcp) ? c->ethIp : "");
 #else
     ESP_LOGI(TAG, " ethernet  : not fitted");
 #endif
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    if (c->wifiSsid[0] != '\0') {
+    if (c->wifiEnabled) {
         ESP_LOGI(TAG, " wifi      : MAC %02X:%02X:%02X:%02X:%02X:%02X, SSID \"%s\"",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], c->wifiSsid);
     } else {
-        ESP_LOGI(TAG, " wifi      : MAC %02X:%02X:%02X:%02X:%02X:%02X, not configured",
+        ESP_LOGI(TAG, " wifi      : MAC %02X:%02X:%02X:%02X:%02X:%02X, disabled",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
     ESP_LOGI(TAG, "==================================================================");

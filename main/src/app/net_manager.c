@@ -492,10 +492,14 @@ void NetMgr_Start(void)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, OnIpEvent, NULL));
 
 #ifdef CONFIG_IOT_ETH_W5500
-    s_ethPresent = EthStart();
+    if (cfg->ethEnabled) {
+        s_ethPresent = EthStart();
+    } else {
+        ESP_LOGI(TAG, "eth: disabled in config");
+    }
 #endif
 
-    s_staWanted = (cfg->wifiSsid[0] != '\0');
+    s_staWanted = cfg->wifiEnabled && cfg->wifiSsid[0] != '\0';
     if (s_staWanted) {
         WifiInit();
     }

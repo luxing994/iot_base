@@ -158,15 +158,23 @@ menu "Network"
 
     comment "Factory defaults - values saved on the web config page take precedence"
 
+    config IOT_WIFI_ENABLE
+        bool "Use Wi-Fi"
+        default n
+        help
+            是否使用 Wi-Fi 联网。以太网和 Wi-Fi 至少启用一个（以太网开关在配置网页中，默认启用）。
+            出厂默认关闭，由客户在配置网页中打开并选择 Wi-Fi。配置热点不受此开关影响。
+
     config IOT_WIFI_SSID
         string "Wi-Fi SSID"
+        depends on IOT_WIFI_ENABLE
         default ""
         help
-            要连接的 Wi-Fi 名称。留空表示不使用 Wi-Fi（只用以太网）。
-            出厂默认值，现场可在配置网页修改。
+            要连接的 Wi-Fi 名称。出厂默认值，现场可在配置网页修改。
 
     config IOT_WIFI_PASSWORD
         string "Wi-Fi password"
+        depends on IOT_WIFI_ENABLE
         default ""
         help
             Wi-Fi 密码，开放网络留空。出厂默认值，现场可在配置网页修改。

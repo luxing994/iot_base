@@ -48,6 +48,22 @@ static const char *TAG = "GW_CONFIG";
 #define DEF_ETH_DNS         ""
 #endif
 
+#ifdef CONFIG_IOT_WIFI_ENABLE
+#define DEF_WIFI_ENABLED    true
+#define DEF_WIFI_SSID       CONFIG_IOT_WIFI_SSID
+#define DEF_WIFI_PASS       CONFIG_IOT_WIFI_PASSWORD
+#else
+#define DEF_WIFI_ENABLED    false
+#define DEF_WIFI_SSID       ""
+#define DEF_WIFI_PASS       ""
+#endif
+
+#ifdef CONFIG_IOT_ETH_W5500
+#define DEF_ETH_ENABLED     true
+#else
+#define DEF_ETH_ENABLED     false
+#endif
+
 #ifdef CONFIG_IOT_ETH_MAC
 #define DEF_ETH_MAC         CONFIG_IOT_ETH_MAC
 #else
@@ -100,8 +116,10 @@ static const GwConfig s_defaults = {
     .advertisedPort = CONFIG_IOT_ADVERTISED_PORT,
     .filePort = DEF_FILE_PORT,
 
-    .wifiSsid = CONFIG_IOT_WIFI_SSID,
-    .wifiPass = CONFIG_IOT_WIFI_PASSWORD,
+    .wifiEnabled = DEF_WIFI_ENABLED,
+    .wifiSsid = DEF_WIFI_SSID,
+    .wifiPass = DEF_WIFI_PASS,
+    .ethEnabled = DEF_ETH_ENABLED,
     .ethMac = DEF_ETH_MAC,
     .ethDhcp = DEF_ETH_DHCP,
     .ethIp = DEF_ETH_IP,
@@ -154,14 +172,16 @@ static const GwField s_fields[] = {
     FACTORY("host_ota",    FIELD_U16,  hostOtaPort),
     FACTORY("cmd_port",    FIELD_U16,  cmdPort),
     FACTORY("file_port",   FIELD_U16,  filePort),
+    FACTORY("adv_port",    FIELD_U16,  advertisedPort),
     FACTORY("eth_mac",     FIELD_STR,  ethMac),
     FSECRET("ap_pass",                 apPass),     // 可逐台设置并印在标签上
 
     /* 客户参数：现场安装时设置 */
     FIELD("host_addr",   FIELD_STR,  hostAddr),
-    FIELD("adv_port",    FIELD_U16,  advertisedPort),
+    FIELD("wifi_en",     FIELD_BOOL, wifiEnabled),
     FIELD("wifi_ssid",   FIELD_STR,  wifiSsid),
     SECRET("wifi_pass",              wifiPass),
+    FIELD("eth_en",      FIELD_BOOL, ethEnabled),
     FIELD("eth_dhcp",    FIELD_BOOL, ethDhcp),
     FIELD("eth_ip",      FIELD_STR,  ethIp),
     FIELD("eth_mask",    FIELD_STR,  ethMask),
@@ -249,11 +269,29 @@ static bool LoadNamespace(const char *ns, uint8_t areas, GwConfig *cfg)
     return true;
 }
 
+// 早期测试版本没有 Wi-Fi 开关：保存过 Wi-Fi 名称的视为已启用 Wi-Fi
+static void MigrateWifiSwitch(GwConfig *cfg)
+{
+    nvs_handle_t h;
+    uint8_t v;
+
+    if (nvs_open(GW_NVS_USER, NVS_READONLY, &h) != ESP_OK) {
+        return;
+    }
+    if (nvs_get_u8(h, "wifi_en", &v) == ESP_ERR_NVS_NOT_FOUND && cfg->wifiSsid[0] != '\0') {
+        cfg->wifiEnabled = true;
+    }
+    nvs_close(h);
+}
+
 void GwConfig_Init(void)
 {
     s_config = s_defaults;
     // 早期测试版本把出厂参数也存在客户区，一并读取；出厂区有值时以出厂区为准
     s_saved = LoadNamespace(GW_NVS_USER, GW_AREA_ALL, &s_config);
+    if (s_saved) {
+        MigrateWifiSwitch(&s_config);
+    }
     s_factorySaved = LoadNamespace(GW_NVS_FACTORY, GW_AREA_FACTORY, &s_config);
     s_loaded = true;
 
@@ -352,6 +390,11 @@ static bool IsUnicastMac(const char *s)
 esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
 {
     const char *reason = NULL;
+#ifdef CONFIG_IOT_ETH_W5500
+    const bool ethOn = cfg->ethEnabled;
+#else
+    const bool ethOn = false;
+#endif
 
     if (cfg->devId[0] == '\0') {
         reason = "设备号不能为空";
@@ -360,13 +403,17 @@ esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
     } else if (cfg->hostReportPort == 0 || cfg->hostLinkPort == 0 || cfg->hostOtaPort == 0 ||
                cfg->cmdPort == 0) {
         reason = "端口不能为 0";
-    } else if (cfg->wifiSsid[0] != '\0' && cfg->wifiPass[0] != '\0' && strlen(cfg->wifiPass) < 8) {
+    } else if (!ethOn && !cfg->wifiEnabled) {
+        reason = "以太网和 Wi-Fi 至少启用一个";
+    } else if (cfg->wifiEnabled && cfg->wifiSsid[0] == '\0') {
+        reason = "请填写 Wi-Fi 名称";
+    } else if (cfg->wifiEnabled && cfg->wifiPass[0] != '\0' && strlen(cfg->wifiPass) < 8) {
         reason = "Wi-Fi 密码至少 8 位（开放网络留空）";
     } else if (cfg->ethMac[0] != '\0' && !IsUnicastMac(cfg->ethMac)) {
         reason = "以太网 MAC 格式应为 AA:BB:CC:DD:EE:FF，且第一个字节须为偶数（单播地址）";
-    } else if (!cfg->ethDhcp && (!IsIp4(cfg->ethIp) || !IsIp4(cfg->ethMask) || !IsIp4(cfg->ethGateway))) {
+    } else if (ethOn && !cfg->ethDhcp && (!IsIp4(cfg->ethIp) || !IsIp4(cfg->ethMask) || !IsIp4(cfg->ethGateway))) {
         reason = "以太网静态 IP、子网掩码、网关格式不正确";
-    } else if (!cfg->ethDhcp && cfg->ethDns[0] != '\0' && !IsIp4(cfg->ethDns)) {
+    } else if (ethOn && !cfg->ethDhcp && cfg->ethDns[0] != '\0' && !IsIp4(cfg->ethDns)) {
         reason = "DNS 地址格式不正确";
     } else if (strlen(cfg->apPass) < 8) {
         reason = "配置热点密码至少 8 位";

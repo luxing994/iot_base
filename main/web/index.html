@@ -24,8 +24,8 @@ nav button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
 .row span:first-child{color:var(--mut);flex:none}
 .row span:last-child{text-align:right;word-break:break-all}
 label{display:block;margin:10px 0 4px;color:var(--mut);font-size:13px}
-input{width:100%;padding:9px 10px;border:1px solid #cfd6de;border-radius:6px;font-size:15px;background:#fff;color:var(--fg)}
-input:focus{outline:2px solid #1769e033;border-color:var(--pri)}
+input,select{width:100%;padding:9px 10px;border:1px solid #cfd6de;border-radius:6px;font-size:15px;background:#fff;color:var(--fg)}
+input:focus,select:focus{outline:2px solid #1769e033;border-color:var(--pri)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}
 .chk{display:flex;align-items:center;gap:8px;margin:10px 0 0;color:var(--fg);font-size:15px}
@@ -59,10 +59,9 @@ button:disabled{opacity:.5}
   <h2>登录</h2>
   <form id="loginForm">
   <label>用户名</label>
-  <input id="user" value="admin" autocomplete="username" autocapitalize="off" spellcheck="false">
+  <input id="user" autocomplete="username" autocapitalize="off" spellcheck="false">
   <label>密码</label>
   <input id="pw" type="password" autocomplete="current-password">
-  <p class="hint">登录密码与热点（Wi-Fi）密码是两个不同的密码，出厂默认为 admin，登录后可在“系统”中修改。</p>
   <p><button type="submit">登录</button></p>
   </form>
 </section>
@@ -85,26 +84,37 @@ button:disabled{opacity:.5}
 
 <!-- 网络 -->
 <div id="tab-net" class="hide">
-  <div class="card">
-    <h2>Wi-Fi<span class="sp"></span><button id="btnScan" class="sec">扫描</button></h2>
-    <div id="scan" class="scan hide"></div>
-    <label>名称（SSID），留空表示不使用 Wi-Fi</label>
-    <input data-k="wifiSsid" maxlength="32">
-    <label>密码</label>
-    <input data-s="wifiPass" type="password" maxlength="64" placeholder="不修改请留空" autocomplete="new-password">
-    <label class="chk"><input type="checkbox" id="showPw">显示密码</label>
-  </div>
+  <p class="hint">以太网和 Wi-Fi 可同时使用，至少启用一个。</p>
   <div class="card" data-f="eth">
     <h2>以太网</h2>
-    <div class="row"><span>MAC 地址</span><span id="ethMac">-</span></div>
-    <label class="chk"><input type="checkbox" data-k="ethDhcp" id="ethDhcp">自动获取 IP（DHCP）</label>
-    <div id="ethStatic">
-      <div class="grid">
-        <div><label>IP 地址</label><input data-k="ethIp" maxlength="15"></div>
-        <div><label>子网掩码</label><input data-k="ethMask" maxlength="15"></div>
-        <div><label>网关</label><input data-k="ethGateway" maxlength="15"></div>
-        <div><label>DNS（可留空）</label><input data-k="ethDns" maxlength="15"></div>
+    <label class="chk"><input type="checkbox" data-k="ethEnabled" id="ethEn">使用以太网</label>
+    <div id="ethBox">
+      <div class="row"><span>MAC 地址</span><span id="ethMac">-</span></div>
+      <label>IP 地址获取方式</label>
+      <select data-k="ethDhcp" data-bool id="ethDhcp">
+        <option value="1">自动获取（DHCP）</option>
+        <option value="0">静态 IP</option>
+      </select>
+      <div id="ethStatic">
+        <div class="grid">
+          <div><label>IP 地址</label><input data-k="ethIp" maxlength="15"></div>
+          <div><label>子网掩码</label><input data-k="ethMask" maxlength="15"></div>
+          <div><label>网关</label><input data-k="ethGateway" maxlength="15"></div>
+          <div><label>DNS（可留空）</label><input data-k="ethDns" maxlength="15"></div>
+        </div>
       </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Wi-Fi<span class="sp"></span><button id="btnScan" class="sec">扫描</button></h2>
+    <label class="chk"><input type="checkbox" data-k="wifiEnabled" id="wifiEn">使用 Wi-Fi</label>
+    <div id="wifiBox">
+      <div id="scan" class="scan hide"></div>
+      <label>名称（SSID）</label>
+      <input data-k="wifiSsid" maxlength="32">
+      <label>密码（开放网络留空）</label>
+      <input data-s="wifiPass" type="password" maxlength="64" autocomplete="new-password">
+      <label class="chk"><input type="checkbox" id="showPw">显示密码</label>
     </div>
   </div>
 </div>
@@ -116,11 +126,6 @@ button:disabled{opacity:.5}
     <label>地址</label><input data-k="hostAddr" maxlength="47">
     <div id="facPorts"></div>
     <p class="hint">端口和设备号为出厂设置，如需更改请联系厂家。</p>
-  </div>
-  <div class="card">
-    <h2>高级</h2>
-    <label>connectPort（上线包中告诉上位机的命令端口）</label><input data-k="advertisedPort" type="number">
-    <p class="hint">网关与上位机之间经过端口映射时才需要修改，否则与命令端口相同。</p>
   </div>
   <div class="card" data-f="fx">
     <h2>FX PLC（网口）</h2>
@@ -153,7 +158,9 @@ button:disabled{opacity:.5}
       <div><label>上位机 OTA</label><input data-fk="hostOtaPort" type="number"></div>
       <div><label>本机命令</label><input data-fk="cmdPort" type="number"></div>
       <div data-f="filePort"><label>本机文件</label><input data-fk="filePort" type="number"></div>
+      <div><label>connectPort</label><input data-fk="advertisedPort" type="number"></div>
     </div>
+    <p class="hint">connectPort：上线包中告诉上位机的命令端口，网关与上位机之间有端口映射时才与本机命令端口不同。</p>
   </div>
   <div class="card">
     <h2>配置热点密码</h2>
@@ -273,25 +280,32 @@ function signal(rssi) { return rssi >= -60 ? '强' : rssi >= -75 ? '中' : '弱'
 function loadStatus() {
   api('/api/status').then(function (s) {
     $('#hdrId').textContent = s.devId;
-    $('#stDev').innerHTML = rows([
+    var dev = [
       ['devId', esc(s.devId)], ['devNumber', esc(s.devNumber)],
       ['固件', esc(s.fw + '（' + s.build + '）')],
-      ['采集设备', esc(s.collect)],
-      ['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值'],
-      ['现场参数', s.saved ? '已设置' : '未设置（出厂状态）'],
-      ['运行时间', dur(s.uptime)], ['上次复位', esc(s.reset)], ['空闲内存', Math.round(s.heap / 1024) + ' KB']
-    ]);
-    var e = s.eth, w = s.wifi, a = s.ap, net = [];
-    if (e.present) {
-      net.push(['以太网', e.up ? dot('ok', esc(e.ip) + (e.dhcp ? '（DHCP）' : '（静态）')) : e.link ? dot('warn', '已插网线，等待 IP') : dot('bad', '未插网线')]);
-      net.push(['以太网 MAC', esc(e.mac)]);
-    } else {
-      net.push(['以太网', dot('', '未启用或模块无响应')]);
+      ['采集设备', esc(s.collect)], ['运行时间', dur(s.uptime)]
+    ];
+    if (s.role === 'factory') {
+      // 售后排查用，客户不需要
+      dev.push(['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值']);
+      dev.push(['现场参数', s.saved ? '已设置' : '未设置（出厂状态）']);
+      dev.push(['上次复位原因', esc(s.reset)]);
+      dev.push(['空闲内存', Math.round(s.heap / 1024) + ' KB']);
     }
+    $('#stDev').innerHTML = rows(dev);
+    var e = s.eth, w = s.wifi, a = s.ap, net = [];
+    if (!e.enabled) {
+      net.push(['以太网', dot('', '未启用')]);
+    } else if (e.present) {
+      net.push(['以太网', e.up ? dot('ok', esc(e.ip) + (e.dhcp ? '（DHCP）' : '（静态）')) : e.link ? dot('warn', '已插网线，等待 IP') : dot('bad', '未插网线')]);
+    } else {
+      net.push(['以太网', dot('bad', '模块无响应')]);
+    }
+    if (e.enabled) { net.push(['以太网 MAC', esc(e.mac)]); }
     if (w.enabled) {
       net.push(['Wi-Fi', w.up ? dot('ok', esc(w.ip) + '，信号' + signal(w.rssi) + '（' + w.rssi + ' dBm）') : dot('bad', '未连接 “' + esc(w.ssid) + '”')]);
     } else {
-      net.push(['Wi-Fi', dot('', '未配置')]);
+      net.push(['Wi-Fi', dot('', '未启用')]);
     }
     net.push(['Wi-Fi MAC', esc(w.mac)]);
     net.push(['配置热点', a.on ? dot('warn', esc(a.ssid) + '，' + a.clients + ' 台已连接') : '已关闭']);
@@ -313,7 +327,9 @@ function loadConfig() {
     $$('[data-f]').forEach(function (el) { el.classList.toggle('hide', !feat[el.getAttribute('data-f')]); });
     $$('[data-k],[data-fk]').forEach(function (el) {
       var k = el.getAttribute('data-k') || el.getAttribute('data-fk');
-      if (el.type === 'checkbox') { el.checked = !!cfg[k]; } else { el.value = cfg[k] === undefined ? '' : cfg[k]; }
+      if (el.type === 'checkbox') { el.checked = !!cfg[k]; }
+      else if (el.hasAttribute('data-bool')) { el.value = cfg[k] ? '1' : '0'; }    // 是 / 否二选一的下拉框
+      else { el.value = cfg[k] === undefined ? '' : cfg[k]; }
     });
     isFactory = (j.role === 'factory');
     show('#tabFac', isFactory);
@@ -324,13 +340,19 @@ function loadConfig() {
       ['本机命令端口', String(cfg.cmdPort)]
     ]);
     $$('[data-s]').forEach(function (el) { el.value = ''; });
+    $('[data-s=wifiPass]').placeholder = cfg.wifiSsid ? '已保存，不修改请留空' : '';
     ethMode();
     setMacHint();
   }).catch(function (e) { msg(e.message, true); });
 }
 
 function setMacHint() { $('#ethMac').textContent = ethMacNow || '-'; }
-function ethMode() { show('#ethStatic', !$('#ethDhcp').checked); }
+function ethMode() {
+  show('#ethBox', $('#ethEn').checked);
+  show('#ethStatic', $('#ethDhcp').value === '0');
+  show('#wifiBox', $('#wifiEn').checked);
+  show('#btnScan', $('#wifiEn').checked);
+}
 
 function visible(el) { return !el.closest('[data-f].hide'); }
 
@@ -341,6 +363,7 @@ function fields(attr) {
     if (!visible(el)) { return; }
     var k = el.getAttribute(attr);
     if (el.type === 'checkbox') { out[k] = el.checked; return; }
+    if (el.hasAttribute('data-bool')) { out[k] = (el.value === '1'); return; }
     if (el.type === 'number') {
       var n = Number(el.value);
       if (el.value === '' || !Number.isInteger(n) || n < 0 || n > 65535) { throw new Error('端口应为 0~65535 的整数'); }
@@ -356,7 +379,9 @@ function collect() {
   var pw = $('[data-s=wifiPass]').value;
   // 换了 Wi-Fi 名称时一定带上密码（留空即开放网络），否则会沿用旧网络的密码
   if (pw !== '' || out.wifiSsid !== cfg.wifiSsid) { out.wifiPass = pw; }
-  if (out.wifiSsid && out.wifiPass && out.wifiPass.length < 8) { throw new Error('Wi-Fi 密码至少 8 位（开放网络请留空）'); }
+  if (!out.ethEnabled && !out.wifiEnabled) { throw new Error('以太网和 Wi-Fi 至少启用一个'); }
+  if (out.wifiEnabled && !out.wifiSsid) { throw new Error('请填写 Wi-Fi 名称'); }
+  if (out.wifiEnabled && out.wifiPass && out.wifiPass.length < 8) { throw new Error('Wi-Fi 密码至少 8 位（开放网络请留空）'); }
   return out;
 }
 
@@ -412,7 +437,7 @@ $$('nav button').forEach(function (b) { b.onclick = function () { setTab(b.getAt
 // 用 form 提交，浏览器才会提示保存用户名和密码
 $('#loginForm').onsubmit = function (e) { e.preventDefault(); login(); };
 $('#btnOut').onclick = logout;
-$('#ethDhcp').onchange = ethMode;
+$('#ethDhcp').onchange = $('#ethEn').onchange = $('#wifiEn').onchange = ethMode;
 $('#showPw').onchange = function () { $('[data-s=wifiPass]').type = this.checked ? 'text' : 'password'; };
 $('#btnScan').onclick = scan;
 $('#scan').onclick = function (e) {
