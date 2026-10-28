@@ -553,8 +553,17 @@ static esp_err_t DiagHandler(httpd_req_t *req)
         CrashInfo info;
         size_t size = 0;
 
-        cJSON_AddBoolToObject(root, "crashLog", EvLog_ReadCrash(&info, NULL, 0));
-        cJSON_AddBoolToObject(root, "coreDump", Diag_CoreDumpInfo(&size));
+        // 崩溃记录：有才返回对应对象，网页据此决定显示哪些操作
+        if (EvLog_ReadCrash(&info, NULL, 0)) {
+            cJSON *c = cJSON_AddObjectToObject(root, "crashLog");
+
+            cJSON_AddNumberToObject(c, "boot", info.boot);
+            cJSON_AddStringToObject(c, "reason", info.reason);
+            cJSON_AddNumberToObject(c, "len", info.len);
+        }
+        if (Diag_CoreDumpInfo(&size)) {
+            cJSON_AddNumberToObject(cJSON_AddObjectToObject(root, "coreDump"), "size", size);
+        }
     }
     return SendJson(req, root);
 }

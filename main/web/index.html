@@ -47,6 +47,10 @@ button:disabled{opacity:.5}
 #cover{position:fixed;inset:0;background:#14324fe6;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:8}
 #cover div{max-width:420px}
 .hide{display:none!important}
+#login{max-width:340px;margin:10vh auto 0;padding:28px 24px 20px}
+#login h2{display:block;text-align:center;font-size:19px;margin:0 0 2px}
+#login .sub{text-align:center;color:var(--mut);font-size:13px;margin:0 0 14px}
+#login button{width:100%;padding:11px;margin-top:6px}
 .sum{display:flex;align-items:center;gap:10px;cursor:pointer}
 .sum b{font-size:16px}
 .chk-item{padding:8px 0;border-top:1px solid var(--line)}
@@ -59,6 +63,7 @@ button:disabled{opacity:.5}
 .evs{max-height:420px;overflow-y:auto}
 pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace;padding:10px;border-radius:6px;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.row button{padding:3px 10px;margin-left:8px;font-size:13px}
 </style>
 </head>
 <body>
@@ -69,6 +74,7 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
 <main>
 <section id="login" class="card hide">
   <h2>登录</h2>
+  <p class="sub">IoT 网关配置</p>
   <form id="loginForm">
   <label>用户名</label>
   <input id="user" autocomplete="username" autocapitalize="off" spellcheck="false">
@@ -119,11 +125,7 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
   <div class="card fac-only hide">
     <h2>崩溃记录</h2>
     <div id="dgCrash"></div>
-    <div class="btns">
-      <button class="sec" id="btnCrashLog">查看异常重启前日志</button>
-      <button class="sec" id="btnCoreDump">下载 core dump</button>
-      <button class="bad" id="btnCrashClear">清除崩溃记录</button>
-    </div>
+    <div class="btns" id="crashBtns"><button class="bad" id="btnCrashClear">清除崩溃记录</button></div>
     <pre class="log hide" id="crashView"></pre>
   </div>
 </div>
@@ -507,10 +509,7 @@ function loadDiag() {
       return '<div class="chk-item">' + dot(DOT[it.level], '<b>' + esc(it.title) + '</b>：' + esc(it.text)) +
         (it.advice ? '<div class="adv">' + esc(it.advice) + '</div>' : '') + '</div>';
     }).join('');
-    $('#dgCrash').innerHTML = rows([
-      ['异常重启前日志', d.crashLog ? dot('warn', '有') : '无'],
-      ['core dump', d.coreDump ? dot('warn', '有') : '无']
-    ]);
+    renderCrash(d);
     return api('/api/events?n=200').then(function (list) {
       var times = eventTimes(list, d);
       $('#dgEvents').innerHTML = list.length ? list.map(function (e, i) {
@@ -569,13 +568,33 @@ $('#btnLog').onclick = function () {
   this.textContent = '停止';
   pollLog(); logTimer = setInterval(pollLog, 2000);
 };
-$('#btnCrashLog').onclick = function () {
-  fetch('/api/crash', { headers: { 'X-Token': token } }).then(function (r) {
-    return r.ok ? r.text() : r.json().then(function (j) { throw new Error(j.error); });
-  }).then(function (t) { $('#crashView').textContent = t; show('#crashView', true); })
-    .catch(function (e) { msg(e.message, true); });
+// 崩溃记录：有哪类记录就显示哪一行和对应操作，没有记录时只显示说明
+var CRASH_REASON = { 'panic': '程序异常', 'interrupt watchdog': '看门狗', 'task watchdog': '看门狗', 'watchdog': '看门狗', 'brownout': '电源电压不足' };
+function renderCrash(d) {
+  var html = '';
+  if (d.crashLog) {
+    html += '<div class="row"><span>异常重启前日志</span><span>第 ' + d.crashLog.boot + ' 次启动，' +
+      esc(CRASH_REASON[d.crashLog.reason] || d.crashLog.reason) + ' <button class="sec" data-act="log">查看</button></span></div>';
+  }
+  if (d.coreDump) {
+    html += '<div class="row"><span>core dump</span><span>' + Math.round(d.coreDump.size / 1024) +
+      ' KB <button class="sec" data-act="core">下载</button></span></div>';
+  }
+  $('#dgCrash').innerHTML = html || '<p class="hint">没有崩溃记录。网关发生程序异常、看门狗重启或电压不足重启时，会自动保存现场。</p>';
+  show('#crashBtns', !!html);
+  if (!d.crashLog) { show('#crashView', false); }
+}
+$('#dgCrash').onclick = function (e) {
+  var act = e.target.getAttribute('data-act');
+  if (act === 'log') {
+    fetch('/api/crash', { headers: { 'X-Token': token } }).then(function (r) {
+      return r.ok ? r.text() : r.json().then(function (j) { throw new Error(j.error); });
+    }).then(function (t) { $('#crashView').textContent = t; show('#crashView', true); })
+      .catch(function (err) { msg(err.message, true); });
+  } else if (act === 'core') {
+    download('/api/coredump', 'coredump.bin').catch(function (err) { msg(err.message, true); });
+  }
 };
-$('#btnCoreDump').onclick = function () { download('/api/coredump', 'coredump.bin').catch(function (e) { msg(e.message, true); }); };
 $('#btnCrashClear').onclick = function () {
   if (confirm('清除异常重启前日志和 core dump？')) { api('/api/crash/clear', {}).then(loadDiag).catch(function (e) { msg(e.message, true); }); }
 };
