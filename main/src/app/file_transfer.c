@@ -35,7 +35,7 @@ static void HandleHeader(char *data)
     ESP_LOGI(TAG, "file name: %s", s_file.name);
 
     size = strtok(NULL, FILE_HEADER_DELIM);
-    if (size != NULL) {
+    if (size != NULL && atoi(size) > 0) {      // 大小为 0 时原实现会一直停在"接收数据"状态
         s_file.size = atoi(size);
         s_file.count = 0;
         s_file.countsize = 0;
@@ -68,6 +68,13 @@ static void HandleData(const char *data, int len)
     if (code == APPUPDATE) {
         xEventGroupSetBits(xEventGroup2, BIT_0);
     }
+}
+
+void FileTransfer_Reset(void)
+{
+    s_file.flag = 0;
+    s_file.count = 0;
+    s_file.countsize = 0;
 }
 
 void FileTransfer_HandlePacket(char *data, int len)

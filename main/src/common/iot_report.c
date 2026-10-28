@@ -25,15 +25,10 @@ struct IotBatch {
     char units[BATCH_UNITS_SIZE];
 };
 
-// 消息所有权交给队列，由 tcp_client_task 发送后 free；入队失败在这里释放
+// 消息所有权交给上报队列（队列满时丢弃最旧的一条，见 iot_common.c）
 static int PostOwnedMessage(char *msg)
 {
-    if (xQueue1 == NULL || xQueueSend(xQueue1, &msg, IOT_MSG_QUEUE_TIMEOUT) != pdPASS) {
-        ESP_LOGW(TAG, "report queue full, drop message");
-        free(msg);
-        return -1;
-    }
-    return 0;
+    return IOT_PostOwnedMessage(msg);
 }
 
 static const char *OrDefault(const char *value, const char *def)

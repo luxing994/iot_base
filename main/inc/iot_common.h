@@ -15,9 +15,9 @@ extern EventGroupHandle_t xEventGroup3;
 
 #define UART_BUFF_SIZE 1024
 
-// 上报队列：元素为 char *（堆上的 JSON 副本），消费者负责 free
+// 上报队列：元素为 char *（堆上的 JSON），由 tcp_client_task 发送后 free；满时丢弃最旧的一条
 #define IOT_MSG_QUEUE_LEN      32
-#define IOT_MSG_QUEUE_TIMEOUT  pdMS_TO_TICKS(100)
+
 
 #define BIT_0	( 1 << 0 )
 #define BIT_1	( 1 << 1 )
@@ -142,6 +142,7 @@ void UART_FlushBuffer(void);
 uint32_t UART_BufferedBytes(void);
 
 int get_random_range_freq(int min_val, int max_val);
-int IOT_PostMessage(const char *msg);
+int IOT_PostOwnedMessage(char *msg);    // msg 为 malloc 得到的字符串，所有权交给上报队列
+int IOT_PostMessage(const char *msg);   // 复制一份后入队
 
 #endif

@@ -15,7 +15,26 @@ static const char *TAG = "OTA_TASK";
 static int64_t total_len = 0;
 static int64_t written = 0;
 static uint8_t errbuf[120] = {0};
-static volatile bool s_ota_running = false;
+static bool s_ota_running = false;
+static portMUX_TYPE s_ota_lock = portMUX_INITIALIZER_UNLOCKED;
+
+bool OTA_TryBegin(void)
+{
+    bool ok;
+
+    taskENTER_CRITICAL(&s_ota_lock);
+    ok = !s_ota_running;
+    s_ota_running = true;
+    taskEXIT_CRITICAL(&s_ota_lock);
+    return ok;
+}
+
+void OTA_Abort(void)
+{
+    taskENTER_CRITICAL(&s_ota_lock);
+    s_ota_running = false;
+    taskEXIT_CRITICAL(&s_ota_lock);
+}
 
 // 控制通道断开时不发送
 static void OtaReport(const void *data, size_t len)
@@ -57,14 +76,7 @@ void ota_task(void *pvParameter)
 {
     const char *ota_url = (const char *)pvParameter;
 
-    // 同一时间只允许一个 OTA 任务（重复下发命令时直接丢弃）
-    if (s_ota_running) {
-        ESP_LOGW(TAG, "OTA already running, ignore: %s", ota_url);
-        free((void *)ota_url);
-        vTaskDelete(NULL);
-        return;
-    }
-    s_ota_running = true;
+    // 调用方已通过 OTA_TryBegin() 占用，这里不再检查
     total_len = 0;   // 原实现不复位，第二次 OTA 的进度会错误
     written = 0;
 
@@ -96,6 +108,6 @@ void ota_task(void *pvParameter)
 
     // 清理：如果不重启，需要删除任务并释放 URL 内存
     free((void*)ota_url);
-    s_ota_running = false;
+    OTA_Abort();
     vTaskDelete(NULL);
 }

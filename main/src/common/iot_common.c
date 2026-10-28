@@ -35,27 +35,39 @@ int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 	return 0;
 }
 
-//
+/*
+ * 上报队列入队，msg 的所有权交给队列（tcp_client_task 发送后 free）。
+ * 队列满（上位机断线、发送跟不上）时丢弃最旧的一条再入队，不阻塞调用方：
+ * 原实现每条等待 100ms，断线期间会把所有采集任务拖慢；丢旧留新也保证重连后先发的是较新的数据。
+ */
+int IOT_PostOwnedMessage(char *msg)
+{
+    char *oldest = NULL;
+
+    if (msg == NULL || xQueue1 == NULL) {
+        free(msg);
+        return -1;
+    }
+    if (xQueueSend(xQueue1, &msg, 0) == pdPASS) {
+        return 0;
+    }
+    if (xQueueReceive(xQueue1, &oldest, 0) == pdPASS) {
+        free(oldest);
+    }
+    if (xQueueSend(xQueue1, &msg, 0) != pdPASS) {
+        free(msg);
+        return -1;
+    }
+    return 0;
+}
+
 int IOT_PostMessage(const char *msg)
 {
-    char *copy;
-
-    if (msg == NULL || msg[0] == '\0' || xQueue1 == NULL) {
+    if (msg == NULL || msg[0] == '\0') {
         return -1;
     }
-
-    // 入队的是独立副本，由 tcp_client_task 发送后 free，避免多个任务共用同一缓冲区被覆盖
-    copy = strdup(msg);
-    if (copy == NULL) {
-        return -1;
-    }
-
-    if (xQueueSend(xQueue1, &copy, IOT_MSG_QUEUE_TIMEOUT) != pdPASS) {
-        free(copy);
-        return -1;
-    }
-
-    return 0;
+    // 入队的是独立副本，避免多个任务共用同一缓冲区被覆盖
+    return IOT_PostOwnedMessage(strdup(msg));
 }
 
 int get_random_range_freq(int min_val, int max_val)

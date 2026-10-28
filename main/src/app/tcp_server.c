@@ -241,6 +241,7 @@ static void HandleFileConnection(int sock, const char *tag)
 {
     char buf[FILE_RX_BUF_SIZE + 1];
 
+    FileTransfer_Reset();   // 上一个连接中途断开时，未传完的文件作废
     while (1) {
         int len = recv(sock, buf, FILE_RX_BUF_SIZE, 0);
         if (len < 0) {

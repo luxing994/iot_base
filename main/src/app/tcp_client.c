@@ -6,6 +6,7 @@
  *   tcp_client3_task       上位机 OTA_PORT : 上线包 + 1s 心跳，接收 OTA_UPDATE / TIMESTAMP 命令
  *   tcp_xxx_client_task    网口 PLC        : 周期轮询寄存器，链路失效自动重连
  */
+#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@
 #include "lx_s7comm.h"
 #include "ota_task.h"
 #include "plc_poll.h"
+#include "host_cmd.h"
 
 #if defined(CONFIG_IOT_HOST_IPV4)
 #define HOST_IP_ADDR CONFIG_IOT_HOST_IPV4_ADDR
@@ -44,6 +46,7 @@
 #define HEART_BEAT_MS           CONFIG_IOT_HEARTBEAT_INTERVAL_MS
 #define PLC_POLL_INTERVAL_MS    1000
 #define JSON_BUF_SIZE           1024
+#define HOST_SEND_TIMEOUT_MS    5000    // 与上位机的连接发送超时
 
 char mcu_ip[32] = {0};
 int ota_tcp_sock = -1;
@@ -60,27 +63,18 @@ static bool is_our_netif(const char *prefix, esp_netif_t *netif)
     return strncmp(prefix, esp_netif_get_desc(netif), strlen(prefix) - 1) == 0;
 }
 
-// 把 "a.b.c.d" 拆成整数数组（会修改 ip）
-static void GetIpArry(char *ip, int *data, uint16_t len)
-{
-    char *token = strtok(ip, ".");
-    for (int i = 0; i < len && token != NULL; i++) {
-        data[i] = atoi(token);
-        token = strtok(NULL, ".");
-    }
-}
-
 // 在多个网卡中找出与上位机同网段的那个，记录其 IP 作为本机上报 IP
+// （两个连接任务会同时调用，原实现用 strtok 拆 IP，不可重入）
 static void UpdateMcuIp(const char *hostip)
 {
     const char *TAG = "example_connect";
     esp_netif_ip_info_t ip_info;
     esp_netif_t *netif = NULL;
     int addr[4] = {0};
-    char ptr[32] = {0};
 
-    strlcpy(ptr, hostip, sizeof(ptr));
-    GetIpArry(ptr, addr, sizeof(addr) / sizeof(int));
+    if (sscanf(hostip, "%d.%d.%d.%d", &addr[0], &addr[1], &addr[2], &addr[3]) != 4) {
+        return;     // 非 IPv4 地址
+    }
     for (int i = 0; i < esp_netif_get_nr_of_ifs(); ++i) {
         netif = esp_netif_next(netif);
         if (is_our_netif(TAG, netif)) {
@@ -158,6 +152,8 @@ static int TcpConnect(const char *ip, uint16_t port, const char *tag)
     }
     ESP_LOGI(tag, "Successfully connected");
 
+    // 上位机不再读取数据时 send 会一直阻塞，设置超时后按断线处理并重连
+    Net_SetTimeout(sock, HOST_SEND_TIMEOUT_MS);
     return sock;
 }
 
@@ -188,14 +184,18 @@ void tcp_client_task(void *pvParameters)
             if (xQueueReceive(xQueue1, &msg, portMAX_DELAY) != pdPASS) {
                 continue;
             }
-            ESP_LOGI(TAG, "Read data %s\n", msg);
-            int err = SendAll(sock, msg, strlen(msg));
-            free(msg);   // 队列元素由 IOT_PostMessage 分配，发送后在这里释放
-            msg = NULL;
-            if (err < 0) {
+            ESP_LOGD(TAG, "send %s", msg);     // 每条上报都打 INFO 日志会占满串口输出
+            if (SendAll(sock, msg, strlen(msg)) < 0) {
                 ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                // 放回队首，重连后重发（原实现直接丢弃这一条）
+                if (xQueueSendToFront(xQueue1, &msg, 0) != pdPASS) {
+                    free(msg);
+                }
+                msg = NULL;
                 break;
             }
+            free(msg);   // 队列元素由上报模块分配，发送后在这里释放
+            msg = NULL;
         }
 
         TcpClose(sock, TAG);
@@ -226,9 +226,14 @@ static void HandleTcpCommand(const char *cmd_line)
     if (strncmp(cmd_line, prefixota, strlen(prefixota)) == 0) {
         const char *url = cmd_line + strlen(prefixota);
         ESP_LOGI("OTA_CMD", "OTA UPDATE URL=%s", url);
+        if (!OTA_TryBegin()) {
+            ESP_LOGW("OTA_CMD", "OTA already running, ignore");
+            return;
+        }
         char *u = strdup(url);
-        if (u != NULL && xTaskCreate(ota_task, "ota_task", 8192, u, 5, NULL) != pdPASS) {
+        if (u == NULL || xTaskCreate(ota_task, "ota_task", 8192, u, 5, NULL) != pdPASS) {
             free(u);
+            OTA_Abort();
         }
     } else if (strncmp(cmd_line, prefixtime, strlen(prefixtime)) == 0) {
         CalBaseTime((uint64_t)atoll(cmd_line + strlen(prefixtime)));
@@ -365,6 +370,9 @@ static __attribute__((unused)) void PlcNetClientLoop(const char *tag, PlcConnect
         TickType_t lastWake = xTaskGetTickCount();
         while (1) {
             vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(PLC_POLL_INTERVAL_MS));
+            if (!HostCmd_IsCollectEnabled()) {
+                continue;   // 与串口轮询一致：上位机 EndFlush 后暂停采集（原实现网口 PLC 不受控制）
+            }
             if (poll_fn(sock) < 0) {
                 ESP_LOGE(tag, "plc link lost");
                 break;

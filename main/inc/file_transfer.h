@@ -10,6 +10,7 @@
  * 之后按 FILETRANSSIZE 字节一包发送文件内容。每收到一包数据通知一次使用方，
  * 使用方通过 GetFileData() 取走当前包。
  */
+void FileTransfer_Reset(void);      // 新连接开始时调用：丢弃上一次未传完的文件
 void FileTransfer_HandlePacket(char *data, int len);
 
 int GetFileCount(uint8_t *count);

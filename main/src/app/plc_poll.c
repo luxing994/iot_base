@@ -54,19 +54,32 @@ static __attribute__((unused)) void LogUnsupported(const char *protocol, const P
              protocol, p->type, p->frnum, p->name);
 }
 
-/* 串口：逐点读取并上报，读失败的点跳过 */
+/*
+ * 串口：逐点读取并上报，读失败的点跳过。
+ * 连续 SERIAL_OFFLINE_FAILS 个点无应答时认为设备离线，结束本轮：
+ * 否则每个点都要等满超时（如 30 个点 x 500ms = 15s），串口锁长时间被占用，
+ * 上位机下发的写命令也要等这么久才能执行。
+ */
+#define SERIAL_OFFLINE_FAILS    3
+
 static __attribute__((unused)) void PollTable(const char *protocol, const PlcPointTable *table,
                                               PointReader read, PointReporter report)
 {
+    int fails = 0;
+
     for (size_t i = 0; i < table->count; i++) {
         const PlcPoint *p = &table->points[i];
         PlcValue v;
         int ret = read(p, &v);
 
         if (ret == PLC_OK) {
+            fails = 0;
             report(p, &v);
         } else if (ret == PLC_ERR_UNSUPPORTED) {
             LogUnsupported(protocol, p);
+        } else if (++fails >= SERIAL_OFFLINE_FAILS && i + 1 < table->count) {
+            ESP_LOGW(TAG, "%s: no response for %d points, skip the rest of this round", protocol, fails);
+            return;
         }
     }
 }

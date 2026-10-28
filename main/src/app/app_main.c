@@ -74,7 +74,14 @@ static void stack_monitor_task(void *arg)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
+    // NVS 分区已满或由新版本 IDF 格式化过时需要擦除重建，否则 ESP_ERROR_CHECK 会反复重启
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW(TAG, "nvs partition needs erase: %s", esp_err_to_name(err));
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
