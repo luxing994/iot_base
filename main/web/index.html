@@ -64,6 +64,13 @@ button:disabled{opacity:.5}
 pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace;padding:10px;border-radius:6px;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .row button{padding:3px 10px;margin-left:8px;font-size:13px}
+.mon{border-top:1px solid var(--line);padding:6px 0}
+.mon:first-child{border-top:0}
+.mon .mh{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;font-size:13px}
+.mon time{color:var(--mut)}
+.mon .tx{color:var(--pri)}.mon .rx{color:var(--ok)}
+.mon pre{margin:4px 0 0;font:12px/1.45 Consolas,Menlo,monospace;white-space:pre-wrap;word-break:break-all;background:#f5f7fa;padding:6px 8px;border-radius:4px}
+#monList{max-height:60vh}
 </style>
 </head>
 <body>
@@ -91,6 +98,7 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
   <button data-tab="net">网络</button>
   <button data-tab="par">参数</button>
   <button data-tab="sys">系统</button>
+  <button data-tab="mon" class="fac-only hide">报文</button>
   <button data-tab="fac" id="tabFac" class="hide">出厂</button>
 </nav>
 
@@ -127,6 +135,28 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
     <div id="dgCrash"></div>
     <div class="btns" id="crashBtns"><button class="bad" id="btnCrashClear">清除崩溃记录</button></div>
     <pre class="log hide" id="crashView"></pre>
+  </div>
+</div>
+
+<!-- 报文（厂家账号） -->
+<div id="tab-mon" class="hide">
+  <div class="card">
+    <h2>报文监视</h2>
+    <p class="hint">记录网关与上位机、设备之间收发的原始数据。开始后按所选时长自动停止；内存中最多保留约 32 KB，超出时丢弃最旧的。</p>
+    <div id="monChs" class="grid3"></div>
+    <div class="grid">
+      <div><label>记录时长</label><select id="monMin"><option value="5">5 分钟</option><option value="10" selected>10 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></div>
+      <div><label>显示格式</label><select id="monFmt"><option value="auto">自动（文本 / 十六进制）</option><option value="text">文本</option><option value="hex">十六进制</option></select></div>
+    </div>
+    <div class="btns">
+      <button id="btnMon">开始</button>
+      <button class="sec" id="btnMonClr">清屏</button>
+      <button class="sec" id="btnMonExp">导出</button>
+    </div>
+    <p class="hint" id="monState">未开始</p>
+  </div>
+  <div class="card">
+    <div id="monList" class="evs"><p class="hint">暂无数据</p></div>
   </div>
 </div>
 
@@ -600,17 +630,115 @@ $('#btnCrashClear').onclick = function () {
 };
 $('#stSum').onclick = function () { setTab('dg'); };
 
+/* ---------------- 报文监视（厂家账号） ---------------- */
+
+var MON_CH = ['上位机上报', '上位机心跳', '上位机 OTA', '命令端口', '文件端口', '串口设备', '网口设备'];
+var monItems = [], monAfter = 0, monTimer = null, monOn = false;
+
+function monLabel(c) {
+  var p = cfg ? [cfg.hostReportPort, cfg.hostLinkPort, cfg.hostOtaPort, cfg.cmdPort, cfg.filePort][c] : 0;
+  return MON_CH[c] + (p ? ' ' + p : '');
+}
+
+function monRenderChs() {
+  var show = [true, true, true, true, !!feat.filePort, true, !!(feat.fx || feat.s7 || feat.modbus)];
+  $('#monChs').innerHTML = MON_CH.map(function (n, i) {
+    return show[i] ? '<label class="chk"><input type="checkbox" value="' + i + '"' + (i < 6 ? ' checked' : '') + '>' + esc(monLabel(i)) + '</label>' : '';
+  }).join('');
+}
+
+function hexToBytes(x) {
+  var b = new Uint8Array(x.length / 2);
+  for (var i = 0; i < b.length; i++) { b[i] = parseInt(x.substr(i * 2, 2), 16); }
+  return b;
+}
+function bytesHex(b) {
+  var s = [];
+  for (var i = 0; i < b.length; i++) { s.push((b[i] < 16 ? '0' : '') + b[i].toString(16).toUpperCase()); }
+  return s.join(' ');
+}
+// 可显示为文本：合法 UTF-8 且没有 \t \r \n 以外的控制字符
+function bytesText(b) {
+  for (var i = 0; i < b.length; i++) {
+    if ((b[i] < 0x20 && b[i] !== 9 && b[i] !== 10 && b[i] !== 13) || b[i] === 0x7F) { return null; }
+  }
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { return null; }
+}
+function monBody(it) {
+  var b = hexToBytes(it.x), fmt = $('#monFmt').value, t = fmt === 'hex' ? null : bytesText(b);
+  if (fmt === 'text' && t === null) { t = new TextDecoder('utf-8').decode(b); }
+  var s = t !== null ? t : bytesHex(b);
+  return s + (it.n > b.length ? '\n…（共 ' + it.n + ' 字节，只保留前 ' + b.length + ' 字节）' : '');
+}
+function monTime(it) {
+  if (!it.t) { return '开机 ' + (it.up / 1000).toFixed(3) + ' s'; }
+  var d = new Date(it.t), p = function (n, w) { n = String(n); while (n.length < (w || 2)) { n = '0' + n; } return n; };
+  return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + p(d.getMilliseconds(), 3);
+}
+function monLine(it) {
+  return '<div class="mon"><div class="mh"><time>' + monTime(it) + '</time><b>' + esc(monLabel(it.c)) + '</b>' +
+    (it.d ? '<span class="rx">← 收到</span>' : '<span class="tx">→ 发出</span>') + '<span class="hint">' + it.n + ' 字节</span></div>' +
+    '<pre>' + esc(monBody(it)) + '</pre></div>';
+}
+function monRenderAll() {
+  $('#monList').innerHTML = monItems.length ? monItems.map(monLine).join('') : '<p class="hint">暂无数据</p>';
+}
+
+function monPoll() {
+  api('/api/monitor?after=' + monAfter).then(function (r) {
+    var box = $('#monList'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    monOn = r.on;
+    $('#btnMon').textContent = r.on ? '停止' : '开始';
+    $('#monState').textContent = r.on ? '记录中，剩余 ' + Math.floor(r.left / 60) + ' 分 ' + (r.left % 60) + ' 秒' +
+      (r.lost ? '，已丢弃最旧的 ' + r.lost + ' 条' : '') : '已停止' + (monItems.length ? '，共 ' + monItems.length + ' 条' : '');
+    if (r.items.length) {
+      if (!monItems.length) { box.innerHTML = ''; }
+      monAfter = r.next;
+      r.items.forEach(function (it) { monItems.push(it); box.insertAdjacentHTML('beforeend', monLine(it)); });
+      while (monItems.length > 500) { monItems.shift(); box.removeChild(box.firstChild); }
+      if (atEnd) { box.scrollTop = box.scrollHeight; }
+    }
+    if (!r.on && !r.items.length) { monStopPoll(); }
+  }).catch(function (e) { monStopPoll(); msg(e.message, true); });
+}
+function monStartPoll() { if (!monTimer) { monTimer = setInterval(monPoll, 1000); } monPoll(); }
+function monStopPoll() { clearInterval(monTimer); monTimer = null; }
+
+$('#btnMon').onclick = function () {
+  if (monOn) { api('/api/monitor/stop', {}).then(monPoll).catch(function (e) { msg(e.message, true); }); return; }
+  var mask = 0;
+  $$('#monChs input:checked').forEach(function (el) { mask |= 1 << Number(el.value); });
+  if (!mask) { return msg('请至少选择一个通道', true); }
+  api('/api/monitor/start', { mask: mask, minutes: Number($('#monMin').value) }).then(function () {
+    monItems = []; monAfter = 0; monRenderAll(); monStartPoll();
+  }).catch(function (e) { msg(e.message, true); });
+};
+$('#btnMonClr').onclick = function () { monItems = []; monRenderAll(); };
+$('#monFmt').onchange = monRenderAll;
+$('#btnMonExp').onclick = function () {
+  if (!monItems.length) { return msg('没有可导出的数据', true); }
+  var text = monItems.map(function (it) {
+    return monTime(it) + '  ' + monLabel(it.c) + '  ' + (it.d ? '<- 收到' : '-> 发出') + '  ' + it.n + ' 字节\n' + monBody(it) + '\n';
+  }).join('\n');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  a.download = 'iotgw-monitor.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
 /* ---------------- 页面 ---------------- */
 
 function setTab(t) {
   tab = t;
   $$('nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
-  ['st', 'dg', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
+  ['st', 'dg', 'mon', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
   show('#saveBar', t === 'net' || t === 'par');
   stopLog();
   clearInterval(stTimer);
   if (t === 'st' || t === 'net') { loadStatus(); }
   if (t === 'dg') { loadDiag(); }
+  monStopPoll();
+  if (t === 'mon') { monRenderChs(); monStartPoll(); }
   if (t === 'st') { stTimer = setInterval(loadStatus, 5000); }
 }
 

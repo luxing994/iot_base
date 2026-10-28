@@ -24,6 +24,7 @@
 #include "event_log.h"
 #include "log_buffer.h"
 #include "diag.h"
+#include "monitor.h"
 #include "iot_time.h"
 #include <time.h>
 
@@ -759,6 +760,63 @@ static esp_err_t CoreDumpHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* ------------------------------------------------------------ 报文监视（厂家账号） */
+
+static esp_err_t MonitorGetHandler(httpd_req_t *req)
+{
+    char query[24];
+    char val[12];
+    uint32_t after = 0;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "after", val, sizeof(val)) == ESP_OK) {
+        after = (uint32_t)strtoul(val, NULL, 10);
+    }
+    return SendJson(req, Mon_ToJson(after, 12 * 1024));
+}
+
+static esp_err_t MonitorStartHandler(httpd_req_t *req)
+{
+    const cJSON *mask;
+    const cJSON *minutes;
+    cJSON *json;
+    uint32_t m;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    json = ReadJson(req);
+    if (json == NULL) {
+        return ESP_OK;
+    }
+    mask = cJSON_GetObjectItemCaseSensitive(json, "mask");
+    minutes = cJSON_GetObjectItemCaseSensitive(json, "minutes");
+    m = cJSON_IsNumber(minutes) ? (uint32_t)minutes->valueint : 10;
+    if (m < 1 || m > 60) {
+        m = 10;
+    }
+    if (!cJSON_IsNumber(mask) || mask->valueint <= 0) {
+        cJSON_Delete(json);
+        return SendError(req, "400 Bad Request", "请至少选择一个通道");
+    }
+    Mon_Start((uint32_t)mask->valueint, m);
+    cJSON_Delete(json);
+    EvLog_Add(EV_INFO, "开始报文监视（%u 分钟）", (unsigned)m);
+    return SendOk(req);
+}
+
+static esp_err_t MonitorStopHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    Mon_Stop();
+    return SendOk(req);
+}
+
 static esp_err_t IndexHandler(httpd_req_t *req)
 {
     if (!CheckSource(req)) {
@@ -791,6 +849,9 @@ void WebConfig_Start(void)
         { .uri = "/api/crash",         .method = HTTP_GET,  .handler = CrashHandler },
         { .uri = "/api/crash/clear",   .method = HTTP_POST, .handler = CrashClearHandler },
         { .uri = "/api/coredump",      .method = HTTP_GET,  .handler = CoreDumpHandler },
+        { .uri = "/api/monitor",       .method = HTTP_GET,  .handler = MonitorGetHandler },
+        { .uri = "/api/monitor/start", .method = HTTP_POST, .handler = MonitorStartHandler },
+        { .uri = "/api/monitor/stop",  .method = HTTP_POST, .handler = MonitorStopHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;

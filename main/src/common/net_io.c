@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include "esp_log.h"
+#include "monitor.h"
 #include "net_io.h"
 
 static const char *TAG = "NET_IO";
@@ -22,6 +23,7 @@ int Net_SendAll(int sock, const void *data, size_t len)
 {
     const uint8_t *p = data;
 
+    Mon_CaptureSock(sock, MON_TX, data, len);
     while (len > 0) {
         int n = send(sock, p, len, 0);
         if (n <= 0) {
@@ -37,6 +39,7 @@ int Net_SendAll(int sock, const void *data, size_t len)
 int Net_RecvExact(int sock, void *buf, size_t len)
 {
     uint8_t *p = buf;
+    const size_t want = len;
 
     while (len > 0) {
         int n = recv(sock, p, len, 0);
@@ -47,6 +50,7 @@ int Net_RecvExact(int sock, void *buf, size_t len)
         p += n;
         len -= (size_t)n;
     }
+    Mon_CaptureSock(sock, MON_RX, buf, want);     // 同一应答分几次读取时由监视模块合并
     return 0;
 }
 

@@ -5,6 +5,7 @@
 #include "tcp_client.h"
 #include "esp_log.h"
 #include "event_log.h"
+#include "monitor.h"
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
@@ -42,6 +43,7 @@ static void OtaReport(const void *data, size_t len)
 {
     int sock = ota_tcp_sock;
     if (sock >= 0) {
+        Mon_CaptureSock(sock, MON_TX, data, len);
         send(sock, data, len, 0);
     }
 }

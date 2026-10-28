@@ -22,6 +22,7 @@
 #include "host_cmd.h"
 #include "sensor.h"
 #include "serial_txn.h"
+#include "monitor.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "t_tester_protocol.h"
@@ -127,7 +128,8 @@ void uart_event_task(void *pvParameters)
         switch (event.type) {
         case UART_DATA:
             uart_read_bytes(UART_NUM_1, dtmp, event.size, portMAX_DELAY);
-            ESP_LOGI(UART_EVENT_TASK_TAG, "[DATA EVT]: %d bytes", event.size);
+            ESP_LOGD(UART_EVENT_TASK_TAG, "[DATA EVT]: %d bytes", event.size);   // 每次收到数据都打 INFO 会刷屏
+            Mon_Capture(MON_CH_SERIAL, MON_RX, dtmp, event.size);
             if (UART_WriteBufferBytes(dtmp, event.size) != 0) {
                 ESP_LOGE(UART_EVENT_TASK_TAG, "uart buffer full");
             }

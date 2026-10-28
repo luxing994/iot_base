@@ -26,6 +26,7 @@
 #include "plc_poll.h"
 #include "host_cmd.h"
 #include "event_log.h"
+#include "monitor.h"
 #include "esp_timer.h"
 
 /* 上位机地址和端口为运行参数（gw_config.h），可在配置网页修改 */
@@ -235,6 +236,7 @@ static void PackLinkData(char *buf, size_t size, const char *orderId, const char
 // 发送全部数据（send 可能只发出一部分）
 static int SendAll(int sock, const char *data, size_t len)
 {
+    Mon_CaptureSock(sock, MON_TX, data, len);
     while (len > 0) {
         int n = send(sock, data, len, 0);
         if (n < 0) {
@@ -281,6 +283,8 @@ static int TcpConnect(const char *ip, uint16_t port, ConnLog *log)
         return -1;
     }
     LogConnected(log, ip, port);
+    Mon_BindSocket(sock, strcmp(log->peer, "report channel") == 0 ? MON_CH_REPORT :
+                         strcmp(log->peer, "ota channel") == 0 ? MON_CH_OTA : MON_CH_LINK);
 
     // 上位机不再读取数据时 send 会一直阻塞，设置超时后按断线处理并重连
     Net_SetTimeout(sock, HOST_SEND_TIMEOUT_MS);
@@ -422,6 +426,7 @@ static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler hand
 
             int len = recv(sock, rxbuf, JSON_BUF_SIZE - 1, MSG_DONTWAIT);
             if (len > 0) {
+                Mon_CaptureSock(sock, MON_RX, rxbuf, len);
                 rxbuf[len] = '\0';
                 handler(rxbuf, len);
             } else if (len == 0) {
@@ -473,6 +478,7 @@ static __attribute__((unused)) int PlcTcpConnect(const char *ip, uint16_t port, 
         return -1;
     }
     LogConnected(log, ip, port);
+    Mon_BindSocket(sock, MON_CH_PLC);     // 收发由 net_io 记录
     Net_SetTimeout(sock, PLC_NET_TIMEOUT_MS);
     return sock;
 }

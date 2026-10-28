@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "monitor.h"
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "sdkconfig.h"
@@ -128,6 +129,7 @@ static void TcpServerLoop(int addr_family, uint16_t port, const char *tag, Conne
 
             SetKeepAlive(sock);
             LogPeer(&source_addr, tag);
+            Mon_BindSocket(sock, (strcmp(tag, "FILE") == 0) ? MON_CH_FILE : MON_CH_CMD);
             handler(sock, tag);
             shutdown(sock, 0);
             close(sock);
@@ -197,6 +199,9 @@ static size_t ProcessCommands(int sock, size_t len, const char *tag)
         const char *reply = HostCmd_HandleMessage(&s_cmdBuf[start]);
         s_cmdBuf[end + 1] = saved;
 
+        if (reply != NULL) {
+            Mon_CaptureSock(sock, MON_TX, reply, strlen(reply));
+        }
         if (reply != NULL && send(sock, reply, strlen(reply), 0) < 0) {
             ESP_LOGE(tag, "Error occurred during sending: errno %d", errno);
         }
@@ -211,6 +216,9 @@ static void HandleCommandConnection(int sock, const char *tag)
 
     while (1) {
         int n = recv(sock, s_cmdBuf + len, CMD_RX_BUF_SIZE - len, 0);
+        if (n > 0) {
+            Mon_CaptureSock(sock, MON_RX, s_cmdBuf + len, n);
+        }
         if (n < 0) {
             ESP_LOGE(tag, "Error occurred during receiving: errno %d", errno);
             return;
@@ -244,6 +252,9 @@ static void HandleFileConnection(int sock, const char *tag)
     FileTransfer_Reset();   // 上一个连接中途断开时，未传完的文件作废
     while (1) {
         int len = recv(sock, buf, FILE_RX_BUF_SIZE, 0);
+        if (len > 0) {
+            Mon_CaptureSock(sock, MON_RX, buf, len);
+        }
         if (len < 0) {
             ESP_LOGE(tag, "Error occurred during receiving: errno %d", errno);
             return;

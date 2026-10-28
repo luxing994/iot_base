@@ -7,6 +7,7 @@
 #include "iot_common.h"
 #include "serial_txn.h"
 #include "event_log.h"
+#include "monitor.h"
 
 #define SERIAL_TXN_UART      UART_NUM_1
 #define SERIAL_TXN_POLL_MS   10     // 应答未收全时的重试间隔
@@ -103,6 +104,7 @@ void SerialTxn_Begin(void)
 
 void SerialTxn_Send(const void *data, size_t len)
 {
+    Mon_Capture(MON_CH_SERIAL, MON_TX, data, len);
     uart_write_bytes(SERIAL_TXN_UART, data, len);
 }
 

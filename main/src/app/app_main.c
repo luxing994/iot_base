@@ -32,6 +32,7 @@
 #include "event_log.h"
 #include "log_buffer.h"
 #include "diag.h"
+#include "monitor.h"
 #include "esp_ota_ops.h"
 #include <stdlib.h>
 #include <time.h>
@@ -291,6 +292,7 @@ void app_main(void)
     tzset();
     EvLog_Init();
     LogBuf_Init();
+    Mon_Init();
 
     // 运行参数（设备号、上位机地址、PLC 地址等）从 NVS 加载，之后各模块只读
     GwConfig_Init();
