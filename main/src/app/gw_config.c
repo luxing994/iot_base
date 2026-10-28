@@ -11,7 +11,8 @@
 
 static const char *TAG = "GW_CONFIG";
 
-#define GW_NVS_NAMESPACE    "gwcfg"
+#define GW_NVS_USER         "gwcfg"         // 客户参数，恢复出厂时清除
+#define GW_NVS_FACTORY      "gwfactory"     // 出厂参数，恢复出厂时保留
 
 /* ------------------------------------------------------------ 出厂默认值 */
 
@@ -132,27 +133,35 @@ typedef struct {
     const char *key;        // NVS 键名，最长 15 个字符
     const char *name;       // JSON 键名（与结构体成员同名）
     uint8_t type;
+    uint8_t area;           // GW_AREA_USER / GW_AREA_FACTORY
     bool secret;            // 密码类：不输出到 JSON
     uint16_t offset;
     uint16_t size;
 } GwField;
 
-#define FIELD(k, t, m)  { k, #m, t, false, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
-#define SECRET(k, m)    { k, #m, FIELD_STR, true, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
+#define F_(a, k, t, s, m)   { k, #m, t, a, s, offsetof(GwConfig, m), sizeof(((GwConfig *)0)->m) }
+#define FACTORY(k, t, m)    F_(GW_AREA_FACTORY, k, t, false, m)
+#define FIELD(k, t, m)      F_(GW_AREA_USER, k, t, false, m)
+#define SECRET(k, m)        F_(GW_AREA_USER, k, FIELD_STR, true, m)
+#define FSECRET(k, m)       F_(GW_AREA_FACTORY, k, FIELD_STR, true, m)
 
 static const GwField s_fields[] = {
-    FIELD("dev_id",      FIELD_STR,  devId),
-    FIELD("dev_number",  FIELD_STR,  devNumber),
+    /* 出厂参数：出货时用出厂密码在配置网页设置，客户不能修改，恢复出厂不清除 */
+    FACTORY("dev_id",      FIELD_STR,  devId),
+    FACTORY("dev_number",  FIELD_STR,  devNumber),
+    FACTORY("host_report", FIELD_U16,  hostReportPort),
+    FACTORY("host_link",   FIELD_U16,  hostLinkPort),
+    FACTORY("host_ota",    FIELD_U16,  hostOtaPort),
+    FACTORY("cmd_port",    FIELD_U16,  cmdPort),
+    FACTORY("file_port",   FIELD_U16,  filePort),
+    FACTORY("eth_mac",     FIELD_STR,  ethMac),
+    FSECRET("ap_pass",                 apPass),     // 可逐台设置并印在标签上
+
+    /* 客户参数：现场安装时设置 */
     FIELD("host_addr",   FIELD_STR,  hostAddr),
-    FIELD("host_report", FIELD_U16,  hostReportPort),
-    FIELD("host_link",   FIELD_U16,  hostLinkPort),
-    FIELD("host_ota",    FIELD_U16,  hostOtaPort),
-    FIELD("cmd_port",    FIELD_U16,  cmdPort),
     FIELD("adv_port",    FIELD_U16,  advertisedPort),
-    FIELD("file_port",   FIELD_U16,  filePort),
     FIELD("wifi_ssid",   FIELD_STR,  wifiSsid),
     SECRET("wifi_pass",              wifiPass),
-    FIELD("eth_mac",     FIELD_STR,  ethMac),
     FIELD("eth_dhcp",    FIELD_BOOL, ethDhcp),
     FIELD("eth_ip",      FIELD_STR,  ethIp),
     FIELD("eth_mask",    FIELD_STR,  ethMask),
@@ -164,7 +173,6 @@ static const GwField s_fields[] = {
     FIELD("s7_port",     FIELD_U16,  s7Port),
     FIELD("mb_ip",       FIELD_STR,  modbusIp),
     FIELD("mb_port",     FIELD_U16,  modbusPort),
-    SECRET("ap_pass",                apPass),
     SECRET("web_pass",               webPass),
     FIELD("web_ap_only", FIELD_BOOL, webApOnly),
 };
@@ -173,7 +181,13 @@ static const GwField s_fields[] = {
 
 static GwConfig s_config;
 static bool s_loaded;
-static bool s_saved;
+static bool s_saved;            // 客户参数保存过
+static bool s_factorySaved;     // 出厂参数保存过
+
+static const char *AreaNamespace(GwArea area)
+{
+    return (area == GW_AREA_FACTORY) ? GW_NVS_FACTORY : GW_NVS_USER;
+}
 
 /* ------------------------------------------------------------ 加载 */
 
@@ -214,24 +228,33 @@ static void LoadField(nvs_handle_t h, const GwField *f, GwConfig *cfg)
     }
 }
 
-void GwConfig_Init(void)
+// 从一个命名空间读取 areas 中的字段；命名空间不存在（从未保存过）时返回 false
+static bool LoadNamespace(const char *ns, uint8_t areas, GwConfig *cfg)
 {
     nvs_handle_t h;
-    esp_err_t err;
+    esp_err_t err = nvs_open(ns, NVS_READONLY, &h);
 
-    s_config = s_defaults;
-    s_saved = false;
-
-    err = nvs_open(GW_NVS_NAMESPACE, NVS_READONLY, &h);
-    if (err == ESP_OK) {
-        for (size_t i = 0; i < FIELD_COUNT; i++) {
-            LoadField(h, &s_fields[i], &s_config);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGE(TAG, "open nvs %s failed: %s, use defaults", ns, esp_err_to_name(err));
         }
-        nvs_close(h);
-        s_saved = true;
-    } else if (err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGE(TAG, "open nvs failed: %s, use defaults", esp_err_to_name(err));
+        return false;
     }
+    for (size_t i = 0; i < FIELD_COUNT; i++) {
+        if (s_fields[i].area & areas) {
+            LoadField(h, &s_fields[i], cfg);
+        }
+    }
+    nvs_close(h);
+    return true;
+}
+
+void GwConfig_Init(void)
+{
+    s_config = s_defaults;
+    // 早期测试版本把出厂参数也存在客户区，一并读取；出厂区有值时以出厂区为准
+    s_saved = LoadNamespace(GW_NVS_USER, GW_AREA_ALL, &s_config);
+    s_factorySaved = LoadNamespace(GW_NVS_FACTORY, GW_AREA_FACTORY, &s_config);
     s_loaded = true;
 
     ESP_LOGD(TAG, "%s config: devId %s, host %s:%u/%u/%u, wifi \"%s\", eth %s",
@@ -300,6 +323,11 @@ const GwConfig *GwConfig_Get(void)
 bool GwConfig_IsSaved(void)
 {
     return s_saved;
+}
+
+bool GwConfig_IsFactorySaved(void)
+{
+    return s_factorySaved;
 }
 
 void GwConfig_GetDefaults(GwConfig *out)
@@ -391,7 +419,7 @@ static esp_err_t SaveField(nvs_handle_t h, const GwField *f, const GwConfig *cfg
     }
 }
 
-esp_err_t GwConfig_Save(const GwConfig *cfg)
+esp_err_t GwConfig_Save(const GwConfig *cfg, GwArea area)
 {
     const char *why = NULL;
     nvs_handle_t h;
@@ -403,12 +431,15 @@ esp_err_t GwConfig_Save(const GwConfig *cfg)
         return err;
     }
 
-    err = nvs_open(GW_NVS_NAMESPACE, NVS_READWRITE, &h);
+    err = nvs_open(AreaNamespace(area), NVS_READWRITE, &h);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "open nvs failed: %s", esp_err_to_name(err));
         return err;
     }
     for (size_t i = 0; i < FIELD_COUNT && err == ESP_OK; i++) {
+        if (s_fields[i].area != area) {
+            continue;
+        }
         err = SaveField(h, &s_fields[i], cfg);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "write %s failed: %s", s_fields[i].key, esp_err_to_name(err));
@@ -420,7 +451,7 @@ esp_err_t GwConfig_Save(const GwConfig *cfg)
     nvs_close(h);
 
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "config saved, takes effect after restart");
+        ESP_LOGI(TAG, "%s config saved, takes effect after restart", (area == GW_AREA_FACTORY) ? "factory" : "user");
     }
     return err;
 }
@@ -430,7 +461,7 @@ esp_err_t GwConfig_Reset(void)
     nvs_handle_t h;
     esp_err_t err;
 
-    err = nvs_open(GW_NVS_NAMESPACE, NVS_READWRITE, &h);
+    err = nvs_open(GW_NVS_USER, NVS_READWRITE, &h);     // 只清客户参数，出厂参数保留
     if (err != ESP_OK) {
         return err;
     }
@@ -446,7 +477,7 @@ esp_err_t GwConfig_Reset(void)
 
 /* ------------------------------------------------------------ JSON（配置网页） */
 
-cJSON *GwConfig_ToJson(const GwConfig *cfg)
+cJSON *GwConfig_ToJson(const GwConfig *cfg, uint8_t areas)
 {
     cJSON *root = cJSON_CreateObject();
 
@@ -457,7 +488,7 @@ cJSON *GwConfig_ToJson(const GwConfig *cfg)
         const GwField *f = &s_fields[i];
         const uint8_t *p = (const uint8_t *)cfg + f->offset;
 
-        if (f->secret) {
+        if (f->secret || !(f->area & areas)) {
             continue;
         }
         switch (f->type) {
@@ -477,7 +508,7 @@ cJSON *GwConfig_ToJson(const GwConfig *cfg)
     return root;
 }
 
-esp_err_t GwConfig_FromJson(GwConfig *cfg, const cJSON *json, const char **why)
+esp_err_t GwConfig_FromJson(GwConfig *cfg, const cJSON *json, uint8_t areas, const char **why)
 {
     static char reason[80];     // 只有配置网页调用，不会并发
 
@@ -489,6 +520,11 @@ esp_err_t GwConfig_FromJson(GwConfig *cfg, const cJSON *json, const char **why)
 
         if (item == NULL) {
             continue;       // 未出现的字段保持原值
+        }
+        if (!(f->area & areas)) {
+            snprintf(reason, sizeof(reason), "%s 为出厂参数，不能修改", f->name);
+            *why = reason;
+            return ESP_ERR_INVALID_ARG;
         }
         switch (f->type) {
         case FIELD_STR:

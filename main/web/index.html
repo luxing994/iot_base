@@ -57,10 +57,14 @@ button:disabled{opacity:.5}
 <main>
 <section id="login" class="card hide">
   <h2>登录</h2>
-  <label>网页密码</label>
+  <form id="loginForm">
+  <label>用户名</label>
+  <input id="user" value="admin" autocomplete="username" autocapitalize="off" spellcheck="false">
+  <label>密码</label>
   <input id="pw" type="password" autocomplete="current-password">
-  <p class="hint">出厂密码见 menuconfig（IOT_WEB_PASSWORD），登录后可在“系统”中修改。</p>
-  <p><button id="btnLogin">登录</button></p>
+  <p class="hint">登录密码与热点（Wi-Fi）密码是两个不同的密码，出厂默认为 admin，登录后可在“系统”中修改。</p>
+  <p><button type="submit">登录</button></p>
+  </form>
 </section>
 
 <div id="app" class="hide">
@@ -69,6 +73,7 @@ button:disabled{opacity:.5}
   <button data-tab="net">网络</button>
   <button data-tab="par">参数</button>
   <button data-tab="sys">系统</button>
+  <button data-tab="fac" id="tabFac" class="hide">出厂</button>
 </nav>
 
 <!-- 状态 -->
@@ -91,8 +96,7 @@ button:disabled{opacity:.5}
   </div>
   <div class="card" data-f="eth">
     <h2>以太网</h2>
-    <label>MAC 地址，留空表示自动（每台不同）</label>
-    <input data-k="ethMac" maxlength="17" id="ethMac">
+    <div class="row"><span>MAC 地址</span><span id="ethMac">-</span></div>
     <label class="chk"><input type="checkbox" data-k="ethDhcp" id="ethDhcp">自动获取 IP（DHCP）</label>
     <div id="ethStatic">
       <div class="grid">
@@ -108,29 +112,15 @@ button:disabled{opacity:.5}
 <!-- 参数 -->
 <div id="tab-par" class="hide">
   <div class="card">
-    <h2>设备标识</h2>
-    <div class="grid">
-      <div><label>devId</label><input data-k="devId" maxlength="31"></div>
-      <div><label>devNumber</label><input data-k="devNumber" maxlength="31"></div>
-    </div>
-  </div>
-  <div class="card">
     <h2>上位机</h2>
     <label>地址</label><input data-k="hostAddr" maxlength="47">
-    <div class="grid3">
-      <div><label>上报端口</label><input data-k="hostReportPort" type="number"></div>
-      <div><label>心跳端口</label><input data-k="hostLinkPort" type="number"></div>
-      <div><label>OTA 端口</label><input data-k="hostOtaPort" type="number"></div>
-    </div>
+    <div id="facPorts"></div>
+    <p class="hint">端口和设备号为出厂设置，如需更改请联系厂家。</p>
   </div>
   <div class="card">
-    <h2>本机端口</h2>
-    <div class="grid3">
-      <div><label>命令端口</label><input data-k="cmdPort" type="number"></div>
-      <div><label>connectPort</label><input data-k="advertisedPort" type="number"></div>
-      <div data-f="filePort"><label>文件端口</label><input data-k="filePort" type="number"></div>
-    </div>
-    <p class="hint">connectPort 是上线包中告诉上位机的命令端口，经端口映射时与命令端口不同。</p>
+    <h2>高级</h2>
+    <label>connectPort（上线包中告诉上位机的命令端口）</label><input data-k="advertisedPort" type="number">
+    <p class="hint">网关与上位机之间经过端口映射时才需要修改，否则与命令端口相同。</p>
   </div>
   <div class="card" data-f="fx">
     <h2>FX PLC（网口）</h2>
@@ -146,17 +136,49 @@ button:disabled{opacity:.5}
   </div>
 </div>
 
+<!-- 出厂（出厂密码登录后可见） -->
+<div id="tab-fac" class="hide">
+  <div class="card">
+    <h2>设备标识</h2>
+    <div class="grid">
+      <div><label>devId（每台唯一）</label><input data-fk="devId" maxlength="31"></div>
+      <div><label>devNumber</label><input data-fk="devNumber" maxlength="31"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>端口</h2>
+    <div class="grid3">
+      <div><label>上位机上报</label><input data-fk="hostReportPort" type="number"></div>
+      <div><label>上位机心跳</label><input data-fk="hostLinkPort" type="number"></div>
+      <div><label>上位机 OTA</label><input data-fk="hostOtaPort" type="number"></div>
+      <div><label>本机命令</label><input data-fk="cmdPort" type="number"></div>
+      <div data-f="filePort"><label>本机文件</label><input data-fk="filePort" type="number"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>配置热点密码</h2>
+    <input id="apPass" type="password" maxlength="32" placeholder="不修改请留空（至少 8 位）" autocomplete="new-password">
+    <p class="hint">可逐台设置并印在设备标签上。客户不能修改，忘记网页密码时售后可连热点后用出厂密码登录处理。</p>
+  </div>
+  <div class="card" data-f="eth">
+    <h2>以太网 MAC</h2>
+    <input data-fk="ethMac" maxlength="17" id="facMac">
+    <p class="hint">留空表示使用芯片出厂 MAC（每台唯一，推荐）。只有老设备需要沿用原 MAC 时才填写。</p>
+  </div>
+  <p class="hint">出厂参数客户不能修改，客户恢复出厂也不会清除。</p>
+  <p><button id="btnFac">保存出厂参数并重启</button></p>
+</div>
+
 <!-- 系统 -->
 <div id="tab-sys" class="hide">
   <div class="card">
-    <h2>修改密码</h2>
-    <label>配置热点密码（至少 8 位）</label>
-    <input id="apPass" type="password" maxlength="32" placeholder="不修改请留空" autocomplete="new-password">
+    <h2>修改网页密码</h2>
     <label>网页登录密码</label>
-    <input id="webPass" type="password" maxlength="32" placeholder="不修改请留空" autocomplete="new-password">
+    <input id="webPass" type="password" maxlength="32" autocomplete="new-password">
     <label>再次输入网页登录密码</label>
     <input id="webPass2" type="password" maxlength="32" autocomplete="new-password">
     <p><button id="btnPass">保存密码并重启</button></p>
+    <p class="hint">忘记网页密码时请联系厂家售后处理。</p>
   </div>
   <div class="card">
     <h2>访问控制</h2>
@@ -169,7 +191,7 @@ button:disabled{opacity:.5}
     <p class="hint">再次进入配置模式：5 秒内连续按 3 次复位键（或快速断电上电 3 次），网关会打开配置热点 10 分钟；连着局域网时也可直接访问网关 IP。</p>
     <p><button id="btnReboot" class="sec">重启网关</button></p>
     <p><button id="btnFactory" class="bad">恢复出厂设置</button></p>
-    <p class="hint">恢复出厂会清除网页中保存的全部参数，改用 menuconfig 中的默认值，并打开配置热点。</p>
+    <p class="hint">恢复出厂会清除现场参数（网络、上位机地址、网口 PLC、网页密码等）并打开配置热点；设备号、端口、热点密码等出厂参数保留。</p>
   </div>
 </div>
 </div>
@@ -181,7 +203,7 @@ button:disabled{opacity:.5}
 var $ = function (s) { return document.querySelector(s); };
 var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
 var token = '';
-var cfg = null, feat = {}, ethMacNow = '', stTimer = null, tab = 'st', viaAp = false;
+var cfg = null, feat = {}, ethMacNow = '', stTimer = null, tab = 'st', viaAp = false, isFactory = false;
 try { token = sessionStorage.getItem('t') || ''; } catch (e) {}
 
 function msg(text, bad) {
@@ -218,7 +240,7 @@ function logout() {
 }
 
 function login() {
-  api('/api/login', { password: $('#pw').value }).then(function (j) {
+  api('/api/login', { username: $('#user').value.trim(), password: $('#pw').value }).then(function (j) {
     token = j.token;
     try { sessionStorage.setItem('t', token); } catch (e) {}
     $('#pw').value = '';
@@ -255,7 +277,8 @@ function loadStatus() {
       ['devId', esc(s.devId)], ['devNumber', esc(s.devNumber)],
       ['固件', esc(s.fw + '（' + s.build + '）')],
       ['采集设备', esc(s.collect)],
-      ['参数来源', s.saved ? '网页保存' : '出厂默认（menuconfig）'],
+      ['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值'],
+      ['现场参数', s.saved ? '已设置' : '未设置（出厂状态）'],
       ['运行时间', dur(s.uptime)], ['上次复位', esc(s.reset)], ['空闲内存', Math.round(s.heap / 1024) + ' KB']
     ]);
     var e = s.eth, w = s.wifi, a = s.ap, net = [];
@@ -288,26 +311,35 @@ function loadConfig() {
   return api('/api/config').then(function (j) {
     cfg = j.config; feat = j.features || {};
     $$('[data-f]').forEach(function (el) { el.classList.toggle('hide', !feat[el.getAttribute('data-f')]); });
-    $$('[data-k]').forEach(function (el) {
-      var k = el.getAttribute('data-k');
+    $$('[data-k],[data-fk]').forEach(function (el) {
+      var k = el.getAttribute('data-k') || el.getAttribute('data-fk');
       if (el.type === 'checkbox') { el.checked = !!cfg[k]; } else { el.value = cfg[k] === undefined ? '' : cfg[k]; }
     });
+    isFactory = (j.role === 'factory');
+    show('#tabFac', isFactory);
+    $('#btnOut').textContent = '退出 ' + (isFactory ? 'factory' : 'admin');
+    $('#facMac').placeholder = '留空：芯片 MAC ' + (j.ethMacChip || '');
+    $('#facPorts').innerHTML = rows([
+      ['上位机端口', '上报 ' + cfg.hostReportPort + '，心跳 ' + cfg.hostLinkPort + '，OTA ' + cfg.hostOtaPort],
+      ['本机命令端口', String(cfg.cmdPort)]
+    ]);
     $$('[data-s]').forEach(function (el) { el.value = ''; });
     ethMode();
     setMacHint();
   }).catch(function (e) { msg(e.message, true); });
 }
 
-function setMacHint() { $('#ethMac').placeholder = ethMacNow ? '自动（当前 ' + ethMacNow + '）' : '自动'; }
+function setMacHint() { $('#ethMac').textContent = ethMacNow || '-'; }
 function ethMode() { show('#ethStatic', !$('#ethDhcp').checked); }
 
 function visible(el) { return !el.closest('[data-f].hide'); }
 
-function collect() {
+// 收集带 attr 属性（data-k 客户参数 / data-fk 出厂参数）的输入项
+function fields(attr) {
   var out = {};
-  $$('[data-k]').forEach(function (el) {
+  $$('[' + attr + ']').forEach(function (el) {
     if (!visible(el)) { return; }
-    var k = el.getAttribute('data-k');
+    var k = el.getAttribute(attr);
     if (el.type === 'checkbox') { out[k] = el.checked; return; }
     if (el.type === 'number') {
       var n = Number(el.value);
@@ -316,6 +348,11 @@ function collect() {
     }
     out[k] = el.value.trim();
   });
+  return out;
+}
+
+function collect() {
+  var out = fields('data-k');
   var pw = $('[data-s=wifiPass]').value;
   // 换了 Wi-Fi 名称时一定带上密码（留空即开放网络），否则会沿用旧网络的密码
   if (pw !== '' || out.wifiSsid !== cfg.wifiSsid) { out.wifiPass = pw; }
@@ -323,9 +360,9 @@ function collect() {
   return out;
 }
 
-function save(body, what) {
+function save(body, what, path) {
   if (!confirm((what || '保存参数') + '后网关将重启，确认继续？')) { return; }
-  api('/api/config', body).then(function () { restarting(true); }).catch(function (e) { msg(e.message, true); });
+  api(path || '/api/config', body).then(function () { restarting(true); }).catch(function (e) { msg(e.message, true); });
 }
 
 function restarting(saved) {
@@ -364,7 +401,7 @@ function scan() {
 function setTab(t) {
   tab = t;
   $$('nav button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
-  ['st', 'net', 'par', 'sys'].forEach(function (x) { show('#tab-' + x, x === t); });
+  ['st', 'net', 'par', 'sys', 'fac'].forEach(function (x) { show('#tab-' + x, x === t); });
   show('#saveBar', t === 'net' || t === 'par');
   clearInterval(stTimer);
   if (t === 'st' || t === 'net') { loadStatus(); }
@@ -372,8 +409,8 @@ function setTab(t) {
 }
 
 $$('nav button').forEach(function (b) { b.onclick = function () { setTab(b.getAttribute('data-tab')); }; });
-$('#btnLogin').onclick = login;
-$('#pw').onkeydown = function (e) { if (e.key === 'Enter') { login(); } };
+// 用 form 提交，浏览器才会提示保存用户名和密码
+$('#loginForm').onsubmit = function (e) { e.preventDefault(); login(); };
 $('#btnOut').onclick = logout;
 $('#ethDhcp').onchange = ethMode;
 $('#showPw').onchange = function () { $('[data-s=wifiPass]').type = this.checked ? 'text' : 'password'; };
@@ -389,11 +426,19 @@ $('#btnSave').onclick = function () {
   try { save(collect()); } catch (e) { msg(e.message, true); }
 };
 $('#btnPass').onclick = function () {
-  var body = {}, ap = $('#apPass').value, w1 = $('#webPass').value, w2 = $('#webPass2').value;
+  var w1 = $('#webPass').value, w2 = $('#webPass2').value;
+  if (!w1) { return msg('请输入新的网页密码', true); }
+  if (w1 !== w2) { return msg('两次输入的网页密码不一致', true); }
+  save({ webPass: w1 }, '修改网页密码');
+};
+$('#btnFac').onclick = function () {
+  var body;
+  try { body = fields('data-fk'); } catch (e) { return msg(e.message, true); }
+  if (!body.devId) { return msg('devId 不能为空', true); }
+  var ap = $('#apPass').value;
   if (ap) { if (ap.length < 8) { return msg('配置热点密码至少 8 位', true); } body.apPass = ap; }
-  if (w1 || w2) { if (w1 !== w2) { return msg('两次输入的网页密码不一致', true); } body.webPass = w1; }
-  if (!body.apPass && body.webPass === undefined) { return msg('没有要修改的密码', true); }
-  save(body, '修改密码');
+  if (body.ethMac && !/^[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}$/.test(body.ethMac)) { return msg('MAC 格式应为 AA:BB:CC:DD:EE:FF', true); }
+  save(body, '保存出厂参数', '/api/factory-config');
 };
 $('#btnApOnly').onclick = function () {
   var on = $('#apOnly').checked;
@@ -405,7 +450,7 @@ $('#btnReboot').onclick = function () {
   if (confirm('确认重启网关？')) { api('/api/reboot', {}).then(function () { restarting(false); }).catch(function (e) { msg(e.message, true); }); }
 };
 $('#btnFactory').onclick = function () {
-  if (confirm('恢复出厂会清除网页中保存的全部参数，确认继续？') && confirm('再次确认：恢复出厂设置并重启？')) {
+  if (confirm('恢复出厂会清除网络、上位机地址等现场参数，确认继续？') && confirm('再次确认：恢复出厂设置并重启？')) {
     api('/api/factory', {}).then(function () { restarting(false); }).catch(function (e) { msg(e.message, true); });
   }
 };

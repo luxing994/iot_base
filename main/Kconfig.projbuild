@@ -12,8 +12,9 @@ menu "Device identity"
             设备号。用于上线包 / 心跳包的 devId，以及上位机下发命令之前数据报文的默认 devId。
             每台网关必须唯一。
 
-            这里是出厂默认值。设备上电后以 NVS 中保存的运行参数为准（在配置网页中修改），
-            menuconfig 中的设备号、上位机地址和端口、网口 PLC 地址只在出厂状态或恢复出厂后生效。
+            这里是默认值。devId、devNumber、上位机端口、本机端口、以太网 MAC 是出厂参数：
+            出货时用出厂密码（IOT_FACTORY_PASSWORD）登录配置网页逐台设置，不必为每台单独编译。
+            其余参数由客户在配置网页修改。网页中保存过的值优先于这里的值。
 
     config IOT_DEVICE_NUMBER
         string "Device number (devNumber)"
@@ -218,8 +219,9 @@ menu "Network"
             help
                 以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
                 W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
-                需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）。
-                出厂默认值，现场可在配置网页修改。
+                需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）；
+                老设备升级固件时，如果客户现场按 MAC 绑定了 IP 或白名单，需填回原来的 MAC。
+                MAC 属于出厂参数：可用出厂密码登录配置网页逐台设置，客户不能修改，恢复出厂也不会改变。
 
         config IOT_ETH_DHCP
             bool "Obtain IP address automatically (DHCP)"
@@ -253,7 +255,7 @@ menu "Network"
         string "Config hotspot password"
         default "12345678"
         help
-            配置热点 IoTGW-xxxx 的密码，至少 8 位。出厂默认值，现场可在配置网页修改。
+            配置热点 IoTGW-xxxx 的密码，至少 8 位。出厂参数：可用出厂密码在配置网页逐台设置（如印在标签上），客户不能修改。
             热点只在以下情况打开：出厂状态（从未保存过配置）、5 秒内连按 3 次复位键
             （或快速断电上电 3 次）；10 分钟内没有人连接则自动关闭。网络断开不会打开热点。
 
@@ -261,7 +263,7 @@ menu "Network"
         string "Config web page password"
         default "admin"
         help
-            配置网页的登录密码。出厂默认值，现场可在配置网页修改。
+            配置网页客户账号 admin 的登录密码。出厂默认值，现场可在配置网页修改。
 
     config IOT_WEB_AP_ONLY
         bool "Config web page: hotspot access only"
@@ -270,6 +272,15 @@ menu "Network"
             打开后配置网页只能通过配置热点（http://192.168.4.1）访问，
             从局域网 IP 访问会被拒绝，避免网页密码在局域网中明文传输。
             出厂默认值，现场可在配置网页"系统"中修改。
+
+    config IOT_FACTORY_PASSWORD
+        string "Factory password (config web page)"
+        default "iotgw-factory"
+        help
+            出厂密码：配置网页厂家账号 factory 的密码，用它登录时可修改出厂参数（devId、devNumber、上位机端口、
+            本机命令 / 文件端口、以太网 MAC）。所有设备相同，只给生产 / 售后人员，不要告诉客户。
+            出厂参数在网页中保存后单独存放，客户恢复出厂不会清除；没在网页中设置过时使用
+            menuconfig 中的值。留空表示禁用出厂登录。
 
 endmenu
 

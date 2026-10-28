@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -30,12 +31,23 @@ static const char *TAG = "WEB";
 #define SCAN_MAX            20
 #define RESTART_DELAY_MS    1500        // 先把应答发出去再重启
 
+/* 出厂密码（menuconfig，所有设备相同，只给生产 / 售后人员）：登录后可修改出厂参数 */
+#ifndef CONFIG_IOT_FACTORY_PASSWORD
+// 新增 Kconfig 选项后 build/config/sdkconfig.h 没有重新生成，静默当作空密码会导致出厂登录被禁用
+#error "CONFIG_IOT_FACTORY_PASSWORD missing: run idf.py reconfigure, then build again"
+#endif
+#define FACTORY_PASS        CONFIG_IOT_FACTORY_PASSWORD
+
+#define USER_ADMIN          "admin"         // 客户账号，密码为运行参数 webPass
+#define USER_FACTORY        "factory"       // 厂家账号，密码为出厂密码
+
 /* main/web/index.html，CMakeLists.txt 中以 EMBED_TXTFILES 嵌入（末尾带 '\0'） */
 extern const char s_indexStart[] asm("_binary_index_html_start");
 extern const char s_indexEnd[] asm("_binary_index_html_end");
 
 /* 会话：同一时间只有一个有效令牌，所有请求都在 httpd 任务中处理，无需加锁 */
 static char s_token[33];
+static bool s_tokenFactory;      // 用出厂密码登录：可修改出厂参数
 static int64_t s_tokenUsedMs;
 static int s_loginFails;
 static int64_t s_lockUntilMs;
@@ -194,6 +206,9 @@ static esp_err_t LoginHandler(httpd_req_t *req)
     cJSON *json;
     cJSON *root;
     uint8_t rnd[16];
+    const cJSON *user;
+    bool factory;
+    bool ok = false;
 
     if (!CheckSource(req)) {
         return ESP_OK;
@@ -205,15 +220,27 @@ static esp_err_t LoginHandler(httpd_req_t *req)
     if (json == NULL) {
         return ESP_OK;
     }
+    // 两个固定账号：admin（客户，密码 webPass）、factory（厂家，密码 menuconfig 出厂密码）
+    user = cJSON_GetObjectItemCaseSensitive(json, "username");
     pass = cJSON_GetObjectItemCaseSensitive(json, "password");
-    if (!cJSON_IsString(pass) || strcmp(pass->valuestring, GwConfig_Get()->webPass) != 0) {
+    factory = cJSON_IsString(user) && strcmp(user->valuestring, USER_FACTORY) == 0;
+    if (cJSON_IsString(user) && cJSON_IsString(pass)) {
+        if (factory) {
+            ok = FACTORY_PASS[0] != '\0' && strcmp(pass->valuestring, FACTORY_PASS) == 0;
+        } else if (strcmp(user->valuestring, USER_ADMIN) == 0) {
+            ok = strcmp(pass->valuestring, GwConfig_Get()->webPass) == 0;
+        }
+    }
+    if (!ok) {
+        // 用户名可能是任意内容，日志里只区分是否为已知账号
+        ESP_LOGW(TAG, "login failed: %s", factory ? USER_FACTORY :
+                 (cJSON_IsString(user) && strcmp(user->valuestring, USER_ADMIN) == 0) ? USER_ADMIN : "unknown user");
         cJSON_Delete(json);
-        ESP_LOGW(TAG, "login failed");
         if (++s_loginFails >= LOGIN_MAX_FAILS) {
             s_loginFails = 0;
             s_lockUntilMs = NowMs() + LOGIN_LOCK_MS;
         }
-        return SendError(req, "401 Unauthorized", "密码错误");
+        return SendError(req, "401 Unauthorized", "用户名或密码错误");
     }
     cJSON_Delete(json);
 
@@ -222,11 +249,13 @@ static esp_err_t LoginHandler(httpd_req_t *req)
     for (int i = 0; i < 16; i++) {
         snprintf(&s_token[i * 2], 3, "%02x", rnd[i]);
     }
+    s_tokenFactory = factory;
     s_tokenUsedMs = NowMs();
-    ESP_LOGI(TAG, "login ok");
+    ESP_LOGI(TAG, "login ok: %s", factory ? USER_FACTORY : USER_ADMIN);
 
     root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "token", s_token);
+    cJSON_AddStringToObject(root, "role", factory ? "factory" : "user");
     return SendJson(req, root);
 }
 
@@ -257,6 +286,8 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "reset", App_ResetText());
     cJSON_AddStringToObject(root, "collect", App_CollectText());
     cJSON_AddBoolToObject(root, "saved", GwConfig_IsSaved());
+    cJSON_AddBoolToObject(root, "factorySaved", GwConfig_IsFactorySaved());
+    cJSON_AddStringToObject(root, "role", s_tokenFactory ? "factory" : "user");
     cJSON_AddStringToObject(root, "devId", cfg->devId);
     cJSON_AddStringToObject(root, "devNumber", cfg->devNumber);
     cJSON_AddStringToObject(root, "hostAddr", cfg->hostAddr);
@@ -307,7 +338,17 @@ static esp_err_t ConfigGetHandler(httpd_req_t *req)
         return ESP_OK;
     }
     root = cJSON_CreateObject();
-    cJSON_AddItemToObject(root, "config", GwConfig_ToJson(GwConfig_Get()));
+    // 出厂参数也返回（客户只能查看），修改权限由 POST 接口控制
+    cJSON_AddItemToObject(root, "config", GwConfig_ToJson(GwConfig_Get(), GW_AREA_ALL));
+    {
+        uint8_t mac[6];
+        char chip[GW_STR_MAC];
+
+        esp_read_mac(mac, ESP_MAC_ETH);     // ethMac 留空时使用的芯片 MAC
+        snprintf(chip, sizeof(chip), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        cJSON_AddStringToObject(root, "ethMacChip", chip);
+    }
+    cJSON_AddStringToObject(root, "role", s_tokenFactory ? "factory" : "user");
 
     // 本固件编译进来的功能，网页据此显示 / 隐藏对应的设置项
     obj = cJSON_AddObjectToObject(root, "features");
@@ -344,16 +385,14 @@ static void ScheduleRestart(const char *why)
     xTaskCreate(RestartTask, "web_restart", 2048, NULL, 5, NULL);
 }
 
-static esp_err_t ConfigPostHandler(httpd_req_t *req)
+// 用请求中的字段修改 area 区参数，校验后保存并重启
+static esp_err_t SaveArea(httpd_req_t *req, GwArea area)
 {
     GwConfig *cfg;
     const char *why = NULL;
     cJSON *json;
     esp_err_t err;
 
-    if (!CheckAuth(req)) {
-        return ESP_OK;
-    }
     json = ReadJson(req);
     if (json == NULL) {
         return ESP_OK;
@@ -364,13 +403,13 @@ static esp_err_t ConfigPostHandler(httpd_req_t *req)
         return httpd_resp_send_500(req);
     }
     *cfg = *GwConfig_Get();
-    err = GwConfig_FromJson(cfg, json, &why);
+    err = GwConfig_FromJson(cfg, json, area, &why);
     cJSON_Delete(json);
     if (err == ESP_OK) {
         err = GwConfig_Validate(cfg, &why);
     }
     if (err == ESP_OK) {
-        err = GwConfig_Save(cfg);
+        err = GwConfig_Save(cfg, area);
         if (err != ESP_OK) {
             why = "写入存储失败";
         }
@@ -380,8 +419,27 @@ static esp_err_t ConfigPostHandler(httpd_req_t *req)
         return SendError(req, "400 Bad Request", why != NULL ? why : "保存失败");
     }
     SendOk(req);
-    ScheduleRestart("config saved from web");
+    ScheduleRestart((area == GW_AREA_FACTORY) ? "factory config saved from web" : "config saved from web");
     return ESP_OK;
+}
+
+static esp_err_t ConfigPostHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    return SaveArea(req, GW_AREA_USER);
+}
+
+static esp_err_t FactoryConfigPostHandler(httpd_req_t *req)
+{
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    if (!s_tokenFactory) {
+        return SendError(req, "403 Forbidden", "需要用出厂密码登录");
+    }
+    return SaveArea(req, GW_AREA_FACTORY);
 }
 
 static esp_err_t ScanHandler(httpd_req_t *req)
@@ -465,6 +523,7 @@ void WebConfig_Start(void)
         { .uri = "/api/scan",    .method = HTTP_GET,  .handler = ScanHandler },
         { .uri = "/api/reboot",  .method = HTTP_POST, .handler = RebootHandler },
         { .uri = "/api/factory", .method = HTTP_POST, .handler = FactoryHandler },
+        { .uri = "/api/factory-config", .method = HTTP_POST, .handler = FactoryConfigPostHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;

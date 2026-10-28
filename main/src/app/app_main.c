@@ -158,7 +158,8 @@ static void PrintBanner(void)
     ESP_LOGI(TAG, "==================================================================");
     ESP_LOGI(TAG, " IoT Gateway %s   build %s %s   IDF %s", FW_VERSION, __DATE__, __TIME__, esp_get_idf_version());
     ESP_LOGI(TAG, " reset     : %s", App_ResetText());
-    ESP_LOGI(TAG, " config    : %s", GwConfig_IsSaved() ? "saved (web config)" : "factory defaults (menuconfig)");
+    ESP_LOGI(TAG, " config    : factory %s, user %s", GwConfig_IsFactorySaved() ? "web" : "menuconfig",
+             GwConfig_IsSaved() ? "web" : "menuconfig (not configured)");
     ESP_LOGI(TAG, " device    : devId %s, devNumber %s", c->devId, c->devNumber);
     ESP_LOGI(TAG, " collect   : %s", App_CollectText());
     ESP_LOGI(TAG, " host      : %s  report %u, link %u, ota %u", c->hostAddr,
