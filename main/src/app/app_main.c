@@ -86,7 +86,8 @@ static void health_task(void *arg)
         for (int i = 0; i < n; i++) {
             char item[32];
 
-            snprintf(item, sizeof(item), "%s%s %s", (i == 0) ? "" : ", ", links[i].peer, links[i].up ? "up" : "DOWN");
+            snprintf(item, sizeof(item), "%s%s %s", (i == 0) ? "" : ", ", links[i].peer,
+                     links[i].off ? "off" : links[i].up ? "up" : "DOWN");
             strlcat(linkText, item, sizeof(linkText));
         }
         NetMgr_GetStatus(&st);
@@ -102,6 +103,16 @@ static void health_task(void *arg)
                  !st.ethPresent ? "off" : st.ethUp ? st.ethIp : st.ethLink ? "no IP" : "no link",
                  !st.wifiEnabled ? "off" : st.wifiUp ? st.wifiIp : "DOWN", rssi, st.apOn ? ", hotspot on" : "", linkText);
     }
+}
+
+// 上位机端口为 0 表示不使用该通道：不创建任务（省内存，也不会反复重连打日志），状态显示 off
+static void StartHostTask(TaskFunction_t fn, const char *name, uint16_t port, const char *peer)
+{
+    if (port == 0) {
+        TcpClient_RegisterOff(peer);
+        return;
+    }
+    StartTask(fn, name, 1024 * 8, NULL, PRIO_NETWORK);
 }
 
 #ifdef CONFIG_IOT_DEBUG_STACK_MONITOR
@@ -317,9 +328,11 @@ void app_main(void)
 #endif
 
     /* 与上位机通信 */
-    StartTask(tcp_client_task, "host_report", 1024 * 8, NULL, PRIO_NETWORK);
-    StartTask(tcp_client1_task, "host_link", 1024 * 8, NULL, PRIO_NETWORK);
-    StartTask(tcp_client3_task, "host_ota", 1024 * 8, NULL, PRIO_NETWORK);
+    const GwConfig *cfg = GwConfig_Get();
+
+    StartHostTask(tcp_client_task, "host_report", cfg->hostReportPort, "report channel");
+    StartHostTask(tcp_client1_task, "host_link", cfg->hostLinkPort, "link channel");
+    StartHostTask(tcp_client3_task, "host_ota", cfg->hostOtaPort, "ota channel");
     StartTask(tcp_server_task, "cmd_server", 1024 * 4, (void *)AF_INET, PRIO_NETWORK);
 #ifdef CONFIG_IOT_FILE_SERVER
     StartTask(tcp_server1_task, "file_server", 1024 * 4, (void *)AF_INET, PRIO_NETWORK);

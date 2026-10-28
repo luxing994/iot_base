@@ -159,6 +159,7 @@ button:disabled{opacity:.5}
       <div><label>本机命令</label><input data-fk="cmdPort" type="number"></div>
       <div data-f="filePort"><label>本机文件</label><input data-fk="filePort" type="number"></div>
     </div>
+    <p class="hint">上位机的端口填 0 表示不使用该通道（例如上位机只开了心跳端口时，上报和 OTA 填 0）。</p>
   </div>
   <div class="card">
     <h2>配置热点密码</h2>
@@ -310,7 +311,7 @@ function loadStatus() {
     net.push(['配置热点', a.on ? dot('warn', esc(a.ssid) + '，' + a.clients + ' 台已连接') : '已关闭']);
     $('#stNet').innerHTML = rows(net);
     $('#stLink').innerHTML = s.links.length ? rows(s.links.map(function (l) {
-      return [PEER[l.peer] || esc(l.peer), l.up ? dot('ok', '已连接') : dot('bad', '未连接')];
+      return [PEER[l.peer] || esc(l.peer), l.off ? dot('', '未启用') : l.up ? dot('ok', '已连接') : dot('bad', '未连接')];
     })) + '<p class="hint">上位机地址 ' + esc(s.hostAddr) + '</p>' : '<p class="hint">暂无</p>';
     ethMacNow = e.mac;
     viaAp = s.viaAp;
@@ -335,7 +336,7 @@ function loadConfig() {
     $('#btnOut').textContent = '退出 ' + (isFactory ? 'factory' : 'admin');
     $('#facMac').placeholder = '留空：芯片 MAC ' + (j.ethMacChip || '');
     $('#facPorts').innerHTML = rows([
-      ['上位机端口', '上报 ' + cfg.hostReportPort + '，心跳 ' + cfg.hostLinkPort + '，OTA ' + cfg.hostOtaPort],
+      ['上位机端口', '上报 ' + portText(cfg.hostReportPort) + '，心跳 ' + portText(cfg.hostLinkPort) + '，OTA ' + portText(cfg.hostOtaPort)],
       ['本机命令端口', String(cfg.cmdPort)]
     ]);
     $$('[data-s]').forEach(function (el) { el.value = ''; });
@@ -345,6 +346,7 @@ function loadConfig() {
   }).catch(function (e) { msg(e.message, true); });
 }
 
+function portText(p) { return p ? String(p) : '不使用'; }
 function setMacHint() { $('#ethMac').textContent = ethMacNow || '-'; }
 function ethMode() {
   show('#ethBox', $('#ethEn').checked);

@@ -398,9 +398,8 @@ esp_err_t GwConfig_Validate(const GwConfig *cfg, const char **why)
         reason = "设备号不能为空";
     } else if (cfg->hostAddr[0] == '\0') {
         reason = "上位机地址不能为空";
-    } else if (cfg->hostReportPort == 0 || cfg->hostLinkPort == 0 || cfg->hostOtaPort == 0 ||
-               cfg->cmdPort == 0) {
-        reason = "端口不能为 0";
+    } else if (cfg->cmdPort == 0) {
+        reason = "本机命令端口不能为 0";     // 上位机端口为 0 表示不使用该通道
     } else if (!ethOn && !cfg->wifiEnabled) {
         reason = "以太网和 Wi-Fi 至少启用一个";
     } else if (cfg->wifiEnabled && cfg->wifiSsid[0] == '\0') {

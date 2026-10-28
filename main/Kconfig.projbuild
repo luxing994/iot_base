@@ -63,7 +63,7 @@ menu "Host connection"
         range 0 65535
         default 8761
         help
-            上位机接收数据报文的端口（采集数据、开关量、传感器等）。
+            上位机接收数据报文的端口（采集数据、开关量、传感器等）。填 0 表示不使用该通道。
 
     config IOT_HOST_LINK_PORT
         int "Online / heartbeat port"
@@ -71,6 +71,7 @@ menu "Host connection"
         default 8766
         help
             上位机接收上线包和心跳包的端口；该连接上收到的纯数字会被当作时间戳用于校时。
+            填 0 表示不使用该通道。
 
     config IOT_HOST_OTA_PORT
         int "OTA control port"
@@ -78,7 +79,7 @@ menu "Host connection"
         default 8768
         help
             上位机 OTA 控制通道端口。该连接同样发送上线包和心跳包，
-            并接收 "OTA_UPDATE:<url>" 和 "TIMESTAMP:<ms>" 命令。
+            并接收 "OTA_UPDATE:<url>" 和 "TIMESTAMP:<ms>" 命令。填 0 表示不使用该通道。
 
     config IOT_HEARTBEAT_INTERVAL_MS
         int "Heartbeat interval (ms)"

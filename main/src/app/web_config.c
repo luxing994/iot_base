@@ -326,6 +326,7 @@ static esp_err_t StatusHandler(httpd_req_t *req)
         cJSON_AddStringToObject(obj, "tag", links[i].tag);
         cJSON_AddStringToObject(obj, "peer", links[i].peer);
         cJSON_AddBoolToObject(obj, "up", links[i].up);
+        cJSON_AddBoolToObject(obj, "off", links[i].off);
         cJSON_AddItemToArray(arr, obj);
     }
     return SendJson(req, root);

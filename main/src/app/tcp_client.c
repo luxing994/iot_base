@@ -52,27 +52,44 @@ char* GetStaIp(void)
 
 /* ---------------------------------------------------------------- 连接工具 */
 
-// 每个连接任务一份，用于日志限频和状态查询
+// 每个连接一份，用于日志限频和状态查询
 typedef struct {
     const char *tag;
-    const char *peer;       // 日志中的对端名称，如 "host report"
+    const char *peer;       // 日志中的对端名称，如 "report channel"
     int fails;
     volatile bool up;
+    volatile bool off;      // 端口为 0，不使用这条通道
 } ConnLog;
 
 #define MAX_LINKS   8
 
-static ConnLog *s_links[MAX_LINKS];     // 各任务栈上的 ConnLog，任务不退出，指针一直有效
+/* 静态存放（任务可能结束，不能放在任务栈上） */
+static ConnLog s_links[MAX_LINKS];
+static ConnLog s_linkSpare;         // 槽位用完时使用，不参与状态查询（正常不会发生）
 static int s_linkCount;
 static portMUX_TYPE s_linkLock = portMUX_INITIALIZER_UNLOCKED;
 
-static void RegisterLink(ConnLog *log)
+static ConnLog *NewLink(const char *tag, const char *peer)
 {
+    ConnLog *log = &s_linkSpare;
+
     taskENTER_CRITICAL(&s_linkLock);
     if (s_linkCount < MAX_LINKS) {
-        s_links[s_linkCount++] = log;
+        log = &s_links[s_linkCount++];
     }
+    log->tag = tag;
+    log->peer = peer;
     taskEXIT_CRITICAL(&s_linkLock);
+    return log;
+}
+
+// 上位机端口为 0 表示不使用这条通道：app_main 不创建该任务，只在这里登记状态
+void TcpClient_RegisterOff(const char *peer)
+{
+    ConnLog *log = NewLink("HOST", peer);
+
+    log->off = true;
+    ESP_LOGI(log->tag, "%s disabled (port 0)", peer);
 }
 
 int TcpClient_GetLinks(TcpLinkState *out, int max)
@@ -81,9 +98,10 @@ int TcpClient_GetLinks(TcpLinkState *out, int max)
 
     taskENTER_CRITICAL(&s_linkLock);
     for (int i = 0; i < s_linkCount && n < max; i++, n++) {
-        out[n].tag = s_links[i]->tag;
-        out[n].peer = s_links[i]->peer;
-        out[n].up = s_links[i]->up;
+        out[n].tag = s_links[i].tag;
+        out[n].peer = s_links[i].peer;
+        out[n].up = s_links[i].up;
+        out[n].off = s_links[i].off;
     }
     taskEXIT_CRITICAL(&s_linkLock);
     return n;
@@ -204,25 +222,25 @@ static int TcpConnect(const char *ip, uint16_t port, ConnLog *log)
 
 void tcp_client_task(void *pvParameters)
 {
-    ConnLog log = { .tag = "HOST", .peer = "report channel" };
+    ConnLog *log = NewLink("HOST", "report channel");
     char *msg = NULL;
 
-    RegisterLink(&log);
     while (1) {
         WaitNetwork();
-        int sock = TcpConnect(HOST_IP_ADDR, PORT, &log);
+        int sock = TcpConnect(HOST_IP_ADDR, PORT, log);
         if (sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
             continue;
         }
+        UpdateMcuIp(HOST_IP_ADDR);     // 心跳通道停用时也要有 devIP
 
         while (1) {
             if (xQueueReceive(xQueue1, &msg, portMAX_DELAY) != pdPASS) {
                 continue;
             }
-            ESP_LOGD(log.tag, "send %s", msg);     // 每条上报都打 INFO 日志会占满串口输出
+            ESP_LOGD(log->tag, "send %s", msg);     // 每条上报都打 INFO 日志会占满串口输出
             if (SendAll(sock, msg, strlen(msg)) < 0) {
-                ESP_LOGW(log.tag, "report send failed: errno %d", errno);
+                ESP_LOGW(log->tag, "report send failed: errno %d", errno);
                 // 放回队首，重连后重发
                 if (xQueueSendToFront(xQueue1, &msg, 0) != pdPASS) {
                     free(msg);
@@ -234,7 +252,7 @@ void tcp_client_task(void *pvParameters)
             msg = NULL;
         }
 
-        TcpClose(sock, &log);
+        TcpClose(sock, log);
         vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
     }
 }
@@ -295,22 +313,21 @@ static void HandleOtaCommandData(char *data, int len)
 // sockout 非空时把当前 socket 暴露给外部（OTA 任务用它回传进度）
 static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler handler, int *sockout)
 {
-    ConnLog log = { .tag = "HOST", .peer = peer };
+    ConnLog *log = NewLink("HOST", peer);
     char *txbuf = malloc(JSON_BUF_SIZE);   // 每个任务独立缓冲区
     char *rxbuf = malloc(JSON_BUF_SIZE);
 
     if (txbuf == NULL || rxbuf == NULL) {
-        ESP_LOGE(log.tag, "%s: no memory", peer);
+        ESP_LOGE(log->tag, "%s: no memory", peer);
         free(txbuf);
         free(rxbuf);
         vTaskDelete(NULL);
         return;
     }
-    RegisterLink(&log);
 
     while (1) {
         WaitNetwork();
-        int sock = TcpConnect(HOST_IP_ADDR, port, &log);
+        int sock = TcpConnect(HOST_IP_ADDR, port, log);
         if (sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
             continue;
@@ -322,7 +339,7 @@ static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler hand
         UpdateMcuIp(HOST_IP_ADDR);
         PackLinkData(txbuf, JSON_BUF_SIZE, "initDev", "yes");
         if (SendAll(sock, txbuf, strlen(txbuf)) < 0) {
-            ESP_LOGW(log.tag, "%s: send online packet failed: errno %d", peer, errno);
+            ESP_LOGW(log->tag, "%s: send online packet failed: errno %d", peer, errno);
         }
 
         TickType_t lastWake = xTaskGetTickCount();
@@ -330,7 +347,7 @@ static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler hand
             vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(HEART_BEAT_MS));
             PackLinkData(txbuf, JSON_BUF_SIZE, "heartBeat", "no");
             if (SendAll(sock, txbuf, strlen(txbuf)) < 0) {
-                ESP_LOGW(log.tag, "%s: send heartbeat failed: errno %d", peer, errno);
+                ESP_LOGW(log->tag, "%s: send heartbeat failed: errno %d", peer, errno);
                 break;
             }
 
@@ -346,7 +363,7 @@ static void LinkClientLoop(uint16_t port, const char *peer, LinkRecvHandler hand
         if (sockout != NULL) {
             *sockout = -1;
         }
-        TcpClose(sock, &log);
+        TcpClose(sock, log);
         vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
     }
 }
@@ -394,12 +411,10 @@ static __attribute__((unused)) int PlcTcpConnect(const char *ip, uint16_t port, 
 static __attribute__((unused)) void PlcNetClientLoop(const char *peer, PlcConnectFunc connect_fn,
                                                      PlcPollFunc poll_fn)
 {
-    ConnLog log = { .tag = "PLC", .peer = peer };
-
-    RegisterLink(&log);
+    ConnLog *log = NewLink("PLC", peer);
     while (1) {
         WaitNetwork();
-        int sock = connect_fn(&log);
+        int sock = connect_fn(log);
         if (sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
             continue;
@@ -416,7 +431,7 @@ static __attribute__((unused)) void PlcNetClientLoop(const char *peer, PlcConnec
             }
         }
 
-        TcpClose(sock, &log);
+        TcpClose(sock, log);
         vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
     }
 }

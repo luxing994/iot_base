@@ -25,9 +25,13 @@ typedef struct {
     const char *tag;        // "HOST" / "PLC"
     const char *peer;       // "report channel" 等
     bool up;
+    bool off;               // 端口为 0，不使用
 } TcpLinkState;
 
 int TcpClient_GetLinks(TcpLinkState *out, int max);
+
+/* 上位机端口为 0 时 app_main 不创建该连接任务，调用此函数登记为停用（状态显示 off） */
+void TcpClient_RegisterOff(const char *peer);
 
 // OTA 控制通道 socket（tcp_client3_task 维护，断线时为 -1），OTA 任务用它回传进度
 extern int ota_tcp_sock;
