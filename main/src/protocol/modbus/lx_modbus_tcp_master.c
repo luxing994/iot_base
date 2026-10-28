@@ -1,281 +1,161 @@
-#include "lx_modbus_tcp_master.h"
-#include "iot_common.h"
-#include "esp_log.h"
-#include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include "esp_log.h"
+#include "lx_modbus_tcp_master.h"
+#include "proto_util.h"
+#include "net_io.h"
 
-uint32_t mdnetsrdatabuffaddr = 0;
-uint32_t mdnetsrdatalen = 0;
-int mdnetdatarecvflag = 0;
-uint16_t g_trans_id = 0;
-// 读到的寄存器值放在模块静态区，接收任务稍后从这里取（原实现传的是读函数的栈变量地址）
-static uint8_t s_mdreadbuf[4];
+static const char *TAG = "MODBUS_TCP";
 
-static void MODBUS_NetDataRecvNotice(const void *data, uint32_t size, uint32_t len, uint16_t frnum, uint8_t datatype)
+#define MBAP_LEN                7
+#define MODBUS_PDU_MAX          253
+
+#define MODBUS_FC_READ_HOLDING  0x03
+#define MODBUS_FC_WRITE_SINGLE  0x06
+#define MODBUS_FC_WRITE_MULTI   0x10
+
+static uint16_t s_transId;
+
+/*
+ * 发送一个请求 PDU 并接收应答 PDU（不含 MBAP 头）
+ * 成功返回应答 PDU 长度，失败返回 PLC_ERR_RESPONSE / PLC_ERR_LINK
+ */
+static int MbTransact(int sock, const uint8_t *pdu, size_t plen, uint8_t *resp, size_t cap)
 {
-	memcpy(s_mdreadbuf, data, size);
-	mdnetsrdatabuffaddr = (uint32_t)s_mdreadbuf;
-	mdnetsrdatalen = len;
-	g_modbusplccount = frnum;
-	g_modbusplcdataformat = datatype;
-	mdnetdatarecvflag = 1;
-}
+    uint8_t adu[MBAP_LEN + MODBUS_PDU_MAX];
+    uint8_t mbap[MBAP_LEN];
+    const uint16_t tid = ++s_transId;
+    uint16_t rlen;
+    size_t n;
 
-// 发送/接收失败说明 socket 已失效，需要重连；其余错误（应答异常）只丢弃本次数据
-static int MODBUS_IsLinkError(int err)
-{
-    return (err == MODBUS_ERR_SEND) || (err == MODBUS_ERR_RECV);
-}
-
-// 发送并接收，返回接收长度或负值错误
-static int send_and_recv(int sock, const uint8_t *req, int req_len,
-                         uint8_t *resp, int resp_max_len)
-{
-    if (send(sock, req, req_len, 0) != req_len)
-        return MODBUS_ERR_SEND;
-
-    int len = recv(sock, resp, resp_max_len, 0);
-    if (len <= 0)
-        return MODBUS_ERR_RECV;
-
-    return len;
-}
-
-int modbus_tcp_read_holding_registers(int sock, uint16_t trans_id,
-                                      uint8_t unit_id, uint16_t start_addr,
-                                      uint16_t quantity, uint16_t *out_data)
-{
-    uint8_t req[MODBUS_TCP_HEADER_SIZE + 5];
-    uint8_t resp[MODBUS_TCP_MAX_ADU_LENGTH];
-
-    req[0] = trans_id >> 8;
-    req[1] = trans_id & 0xFF;
-    req[2] = MODBUS_TCP_PROTOCOL_ID >> 8;
-    req[3] = MODBUS_TCP_PROTOCOL_ID & 0xFF;
-    req[4] = 0x00;
-    req[5] = 0x06; // UnitID(1) + Func(1) + Addr(2) + Qty(2)
-    req[6] = unit_id;
-
-    req[7] = MODBUS_FUNC_READ_HOLDING_REGS;
-    req[8] = start_addr >> 8;
-    req[9] = start_addr & 0xFF;
-    req[10] = quantity >> 8;
-    req[11] = quantity & 0xFF;
-
-    int len = send_and_recv(sock, req, sizeof(req), resp, sizeof(resp));
-    if (len < (MODBUS_TCP_HEADER_SIZE + 2))
-        return MODBUS_ERR_RESP_LENGTH;
-
-    if (resp[7] != MODBUS_FUNC_READ_HOLDING_REGS)
-        return MODBUS_ERR_FUNC_MISMATCH;
-
-    uint8_t byte_count = resp[8];
-    if (byte_count != quantity * 2)
-        return MODBUS_ERR_DATA_MISMATCH;
-
-    for (int i = 0; i < quantity; i++) {
-        out_data[i] = (resp[9 + i*2] << 8) | resp[10 + i*2];
+    if (plen > MODBUS_PDU_MAX) {
+        return PLC_ERR_RESPONSE;
     }
-    return MODBUS_OK;
+    adu[0] = (uint8_t)(tid >> 8);
+    adu[1] = (uint8_t)tid;
+    adu[2] = 0x00;                      // 协议标识
+    adu[3] = 0x00;
+    adu[4] = (uint8_t)((plen + 1) >> 8);    // 后续长度：单元标识 + PDU
+    adu[5] = (uint8_t)(plen + 1);
+    adu[6] = MODBUS_TCP_UNIT_ID;
+    memcpy(&adu[MBAP_LEN], pdu, plen);
+
+    if (Net_SendAll(sock, adu, MBAP_LEN + plen) != 0 ||
+        Net_RecvExact(sock, mbap, sizeof(mbap)) != 0) {
+        return PLC_ERR_LINK;
+    }
+    rlen = Proto_Be16(&mbap[4]);
+    if (Proto_Be16(&mbap[2]) != 0 || rlen < 2 || rlen - 1 > MODBUS_PDU_MAX) {
+        ESP_LOGE(TAG, "bad MBAP header, length %u", rlen);
+        return PLC_ERR_LINK;            // 数据流已错位，重连
+    }
+    n = rlen - 1;
+    if (n > cap) {
+        Net_Discard(sock, n);
+        return PLC_ERR_RESPONSE;
+    }
+    if (Net_RecvExact(sock, resp, n) != 0) {
+        return PLC_ERR_LINK;
+    }
+
+    if (Proto_Be16(&mbap[0]) != tid) {
+        ESP_LOGE(TAG, "transaction id mismatch");
+        return PLC_ERR_RESPONSE;
+    }
+    if (resp[0] == (pdu[0] | 0x80)) {
+        ESP_LOGE(TAG, "function 0x%02X exception %u", pdu[0], (n > 1) ? resp[1] : 0);
+        return PLC_ERR_RESPONSE;
+    }
+    if (resp[0] != pdu[0]) {
+        return PLC_ERR_RESPONSE;
+    }
+    return (int)n;
 }
 
-int modbus_tcp_read_holding_registers_32(int sock, uint16_t trans_id,
-                                         uint8_t unit_id, uint16_t start_addr,
-                                         uint16_t quantity_32, uint32_t *out_data_32,
-                                         int high_word_first)
+int MODBUS_NetReadHolding(int sock, uint16_t address, uint16_t count, uint16_t *regs)
 {
-    uint16_t head_off   = start_addr & 0x1;          // 0=偶数，1=奇数
-    uint16_t aligned_sa = start_addr - head_off;     // 对齐后的起始
-    uint16_t quantity_16 = quantity_32 * 2 + head_off;
-    uint16_t *tmp_buffer = malloc(sizeof(uint16_t) * quantity_16);
-    if (!tmp_buffer)
-        return MODBUS_ERR_SEND;
+    const uint8_t pdu[] = {
+        MODBUS_FC_READ_HOLDING,
+        (uint8_t)(address >> 8), (uint8_t)address,
+        (uint8_t)(count >> 8), (uint8_t)count,
+    };
+    uint8_t resp[2 + MODBUS_MAX_READ_REGS * 2];
+    int n;
 
-    int ret = modbus_tcp_read_holding_registers(sock, trans_id, unit_id, aligned_sa, quantity_16, tmp_buffer);
-    if (ret != MODBUS_OK) {
-        free(tmp_buffer);
+    if (count == 0 || count > MODBUS_MAX_READ_REGS) {
+        return PLC_ERR_RESPONSE;
+    }
+    n = MbTransact(sock, pdu, sizeof(pdu), resp, sizeof(resp));
+    if (n < 0) {
+        return n;
+    }
+    if (n < 2 || resp[1] != count * 2 || n < 2 + count * 2) {
+        ESP_LOGE(TAG, "unexpected byte count %u", (n > 1) ? resp[1] : 0);
+        return PLC_ERR_RESPONSE;
+    }
+    for (int i = 0; i < count; i++) {
+        regs[i] = Proto_Be16(&resp[2 + i * 2]);
+    }
+    return PLC_OK;
+}
+
+int MODBUS_NetRead(int sock, uint16_t address, ModbusFormat fmt, PlcValue *out)
+{
+    uint16_t regs[2];
+    const uint16_t count = (fmt == MODBUS_FMT_U16) ? 1 : 2;
+    int ret;
+
+    ret = MODBUS_NetReadHolding(sock, address, count, regs);
+    if (ret != PLC_OK) {
         return ret;
     }
 
-    for (int i = 0; i < quantity_32; i++) {
-        uint16_t high_word, low_word;
-        if (high_word_first) {
-            high_word = tmp_buffer[i*2];
-            low_word  = tmp_buffer[i*2 + 1];
-        } else {
-            low_word  = tmp_buffer[i*2];
-            high_word = tmp_buffer[i*2 + 1];
-        }
-        out_data_32[i] = ((uint32_t)high_word << 16) | low_word;
+    switch (fmt) {
+    case MODBUS_FMT_I32:
+        PlcValue_SetInt(out, (int32_t)(((uint32_t)regs[0] << 16) | regs[1]));
+        break;
+    case MODBUS_FMT_FLOAT:
+        PlcValue_SetFloatBits(out, ((uint32_t)regs[0] << 16) | regs[1]);
+        break;
+    default:
+        PlcValue_SetInt(out, regs[0]);
+        break;
     }
-
-    free(tmp_buffer);
-    return MODBUS_OK;
+    return PLC_OK;
 }
 
-int modbus_tcp_write_single_register(int sock, uint16_t trans_id,
-                                     uint8_t unit_id, uint16_t reg_addr,
-                                     uint16_t value)
+int MODBUS_NetWriteSingle(int sock, uint16_t address, uint16_t value)
 {
-    uint8_t req[MODBUS_TCP_HEADER_SIZE + 5];
-    uint8_t resp[MODBUS_TCP_HEADER_SIZE + 5];
+    const uint8_t pdu[] = {
+        MODBUS_FC_WRITE_SINGLE,
+        (uint8_t)(address >> 8), (uint8_t)address,
+        (uint8_t)(value >> 8), (uint8_t)value,
+    };
+    uint8_t resp[8];
+    int n = MbTransact(sock, pdu, sizeof(pdu), resp, sizeof(resp));
 
-    req[0] = trans_id >> 8;
-    req[1] = trans_id & 0xFF;
-    req[2] = MODBUS_TCP_PROTOCOL_ID >> 8;
-    req[3] = MODBUS_TCP_PROTOCOL_ID & 0xFF;
-    req[4] = 0x00;
-    req[5] = 0x06;
-    req[6] = unit_id;
-
-    req[7] = MODBUS_FUNC_WRITE_SINGLE_REG;
-    req[8] = reg_addr >> 8;
-    req[9] = reg_addr & 0xFF;
-    req[10] = value >> 8;
-    req[11] = value & 0xFF;
-
-    int len = send_and_recv(sock, req, sizeof(req), resp, sizeof(resp));
-    if (len < sizeof(resp))
-        return MODBUS_ERR_RESP_LENGTH;
-
-    if (resp[7] != MODBUS_FUNC_WRITE_SINGLE_REG)
-        return MODBUS_ERR_FUNC_MISMATCH;
-
-    return MODBUS_OK;
+    return (n < 0) ? n : PLC_OK;
 }
 
-int modbus_tcp_write_multiple_registers(int sock, uint16_t trans_id,
-                                        uint8_t unit_id, uint16_t start_addr,
-                                        uint16_t quantity, const uint16_t *values)
+int MODBUS_NetWriteMultiple(int sock, uint16_t address, uint16_t count, const uint16_t *values)
 {
-    uint8_t req[MODBUS_TCP_MAX_ADU_LENGTH];
-    uint8_t resp[MODBUS_TCP_MAX_ADU_LENGTH];
+    uint8_t pdu[6 + 2 * 123];
+    uint8_t resp[8];
+    int n;
 
-    uint16_t byte_count = quantity * 2;
-    uint16_t length = 1 + 1 + 2 + 2 + 1 + byte_count;
-
-    req[0] = trans_id >> 8;
-    req[1] = trans_id & 0xFF;
-    req[2] = MODBUS_TCP_PROTOCOL_ID >> 8;
-    req[3] = MODBUS_TCP_PROTOCOL_ID & 0xFF;
-    req[4] = length >> 8;
-    req[5] = length & 0xFF;
-    req[6] = unit_id;
-
-    req[7] = MODBUS_FUNC_WRITE_MULTIPLE_REGS;
-    req[8] = start_addr >> 8;
-    req[9] = start_addr & 0xFF;
-    req[10] = quantity >> 8;
-    req[11] = quantity & 0xFF;
-    req[12] = byte_count;
-
-    for (int i = 0; i < quantity; i++) {
-        req[13 + i*2] = values[i] >> 8;
-        req[14 + i*2] = values[i] & 0xFF;
+    if (count == 0 || count > 123) {
+        return PLC_ERR_RESPONSE;
+    }
+    pdu[0] = MODBUS_FC_WRITE_MULTI;
+    pdu[1] = (uint8_t)(address >> 8);
+    pdu[2] = (uint8_t)address;
+    pdu[3] = (uint8_t)(count >> 8);
+    pdu[4] = (uint8_t)count;
+    pdu[5] = (uint8_t)(count * 2);
+    for (int i = 0; i < count; i++) {
+        pdu[6 + i * 2] = (uint8_t)(values[i] >> 8);
+        pdu[7 + i * 2] = (uint8_t)values[i];
     }
 
-    int len = send_and_recv(sock, req, 13 + byte_count, resp, sizeof(resp));
-    if (len < (MODBUS_TCP_HEADER_SIZE + 5))
-        return MODBUS_ERR_RESP_LENGTH;
-
-    if (resp[7] != MODBUS_FUNC_WRITE_MULTIPLE_REGS)
-        return MODBUS_ERR_FUNC_MISMATCH;
-
-    return MODBUS_OK;
-}
-
-int GetNetDataFromModbusPlc(void)
-{
-	uint16_t datalen;
-	int16_t tdata;
-	uint8_t* data = NULL;
-	static const char *TAG = "MODBUS_GET_NET_DATA";
-	int i, ret;
-
-	if (mdnetdatarecvflag != 1 || mdnetsrdatabuffaddr == NULL || mdnetsrdatalen == 0) {
-		return -1;
-	}
-
-	data = (uint8_t *)mdnetsrdatabuffaddr;
-    if (g_modbusplcdataformat == PLC_DATA_TYPE_SHORT) {
-        for (i = 0; i < mdnetsrdatalen * 2; i++) {
-            ret = MODBUSPLC_WriteBufferBytes(&data[i], 1);
-            if (ret != 0) {
-                ESP_LOGE(TAG, "buffer error: %d", ret);
-                return -1;
-            }
-        }
-    } else if (g_modbusplcdataformat == PLC_DATA_TYPE_FLOAT || g_modbusplcdataformat == PLC_DATA_TYPE_INT) {
-        for (i = 0; i < mdnetsrdatalen * 4; i++) {
-            ret = MODBUSPLC_WriteBufferBytes(&data[i], 1);
-            if (ret != 0) {
-                ESP_LOGE(TAG, "buffer error: %d", ret);
-                return -1;
-            }
-        }
-    }
-	
-	mdnetdatarecvflag = 0;
-
-	return 0;
-}
-
-// 以下读函数：返回 -1 表示链路失效需重连，返回 0 表示本次交互结束（成功或仅数据异常）
-int MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    int err;
-    uint16_t read_regs = 0;
-    static const char *TAG = "MODBUS_READ_SINGLE_DATA";
-
-    err = modbus_tcp_read_holding_registers(sock, g_trans_id, 1, address, 1, &read_regs);
-    g_trans_id = (g_trans_id + 1) & 0xFFFF;
-    if (err == MODBUS_OK) {
-        ESP_LOGI(TAG, "Read 16-bit regs: %u", read_regs);
-        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_SHORT);
-    } else {
-        ESP_LOGE(TAG, "Modbus 16-bit read failed: %d", err);
-    }
-    vTaskDelay(MODBUS_READ_DATA_TIME);
-
-    return MODBUS_IsLinkError(err) ? -1 : 0;
-}
-
-int MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    int err;
-    uint32_t read_regs = 0;
-    static const char *TAG = "MODBUS_READ_DOUBLE_DATA";
-
-    err = modbus_tcp_read_holding_registers_32(sock, g_trans_id, 1, address, 1, &read_regs, 1);
-    g_trans_id = (g_trans_id + 1) & 0xFFFF;
-    if (err == MODBUS_OK) {
-        ESP_LOGI(TAG, "Read 32-bit regs: %u", read_regs);
-        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_INT);
-    } else {
-        ESP_LOGE(TAG, "Modbus 32-bit read failed: %d", err);
-    }
-    vTaskDelay(MODBUS_READ_DATA_TIME);
-
-    return MODBUS_IsLinkError(err) ? -1 : 0;
-}
-
-int MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    int err;
-    uint32_t read_regs = 0;
-    static const char *TAG = "MODBUS_READ_FLOAT_DATA";
-
-    err = modbus_tcp_read_holding_registers_32(sock, g_trans_id, 1, address, 1, &read_regs, 1);
-    g_trans_id = (g_trans_id + 1) & 0xFFFF;
-    if (err == MODBUS_OK) {
-        ESP_LOGI(TAG, "Read 32-bit regs: %f", *((float *)(&read_regs)));
-        MODBUS_NetDataRecvNotice(&read_regs, sizeof(read_regs), 1, frnum, PLC_DATA_TYPE_FLOAT);
-    } else {
-        ESP_LOGE(TAG, "Modbus 32-bit read failed: %d", err);
-    }
-    vTaskDelay(MODBUS_READ_DATA_TIME);
-
-    return MODBUS_IsLinkError(err) ? -1 : 0;
+    n = MbTransact(sock, pdu, 6 + count * 2, resp, sizeof(resp));
+    return (n < 0) ? n : PLC_OK;
 }

@@ -1,12 +1,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "driver/uart.h"
 #include "esp_log.h"
-#include "sdkconfig.h"
 #include "iot_common.h"
 #include "serial_txn.h"
-#include "ppi_plc_protocol.h"
 
+#define SERIAL_TXN_UART      UART_NUM_1
 #define SERIAL_TXN_POLL_MS   10     // 应答未收全时的重试间隔
 #define SERIAL_TXN_GAP_MS    10     // 两次事务之间的最小间隔（RS485 收发切换、设备处理时间）
 
@@ -29,30 +29,33 @@ void SerialTxn_Begin(void)
     UART_FlushBuffer();
 }
 
-int SerialTxn_Wait(SerialParseFn parse, int timeout_ms)
+void SerialTxn_Send(const void *data, size_t len)
+{
+    uart_write_bytes(SERIAL_TXN_UART, data, len);
+}
+
+int SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms)
 {
     const TickType_t start = xTaskGetTickCount();
     const TickType_t timeout = pdMS_TO_TICKS(timeout_ms);
 
     while (1) {
         if (UART_BufferedBytes() > 0) {
-            // 解析函数会把数据写入解码缓冲，先清空，避免上一次未完成的尝试留下残片
-            FXPLC_FlushBuffer();
-            PPIPLC_FlushBuffer();
+            int ret = parse(ctx);
 
-            if (parse() == 0) {
+            if (ret == SERIAL_PARSE_OK) {
                 UART_CommitBuffer();
                 return 0;
             }
-            UART_RollbackBuffer();
-
-#if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-            // PPI：收到短应答 E5 后发确认帧，PLC 才会返回数据
-            if (PPI_TakeConfirmRequest()) {
-                UART_FlushBuffer();
-                PPISendConfirm();
+            if (ret == SERIAL_PARSE_SKIP) {
+                UART_CommitBuffer();
+                continue;       // 后面可能已经有数据，立即再解析一次
             }
-#endif
+            if (ret == SERIAL_PARSE_ERROR) {
+                UART_FlushBuffer();
+                return -1;
+            }
+            UART_RollbackBuffer();
         }
 
         if (xTaskGetTickCount() - start >= timeout) {
@@ -72,4 +75,39 @@ void SerialTxn_End(void)
         xSemaphoreGive(s_lock);
     }
     vTaskDelay(pdMS_TO_TICKS(SERIAL_TXN_GAP_MS));
+}
+
+int SerialTxn_Request(const void *req, size_t len, SerialParseFn parse, void *ctx, int timeout_ms)
+{
+    int ret;
+
+    SerialTxn_Begin();
+    SerialTxn_Send(req, len);
+    ret = SerialTxn_Wait(parse, ctx, timeout_ms);
+    SerialTxn_End();
+    return ret;
+}
+
+/* ------------------------------------------------------------ 解析读接口 */
+
+int SerialRx_Read(void *buf, size_t len)
+{
+    return UART_ReadBufferBytes((uint8_t *)buf, len) == 0 ? 0 : -1;
+}
+
+int SerialRx_Byte(uint8_t *b)
+{
+    return SerialRx_Read(b, 1);
+}
+
+int SerialRx_SeekAny(uint8_t a, uint8_t b)
+{
+    uint8_t c;
+
+    do {
+        if (SerialRx_Byte(&c) != 0) {
+            return -1;
+        }
+    } while (c != a && c != b);
+    return c;
 }

@@ -99,9 +99,6 @@ void app_main(void)
 #ifdef CONFIG_SENSOR_MAX6675
     MAX6675_Init();
 #endif
-    FXPLC_InitBuffer();
-    MODBUSPLC_InitBuffer();
-    PPIPLC_InitBuffer();
 
     /* 串口收发与命令执行 */
 #ifdef APP_UART_ENABLED

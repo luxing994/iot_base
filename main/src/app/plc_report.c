@@ -1,110 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
-#include "esp_log.h"
 #include "sdkconfig.h"
 #include "iot_common.h"
 #include "iot_report.h"
 #include "plc_report.h"
-#include "hl_plc_protocol.h"
-
-static const char *TAG = "PLC_REPORT";
-
-/* 协议层与本模块之间的"当前数据"描述，由协议层发请求/收应答时设置 */
-int g_fxplccount = 0;
-int g_fxplcdataformat = 0;   // PLC_DATA_TYPE_xxx
-int g_fxplcbitpos = 0;
-int g_modbusplccount = 0;
-int g_modbusplcdataformat = 0;
-int g_ppiplccount = 0;
-int g_ppiplcdataformat = 0;
-int g_hostlinkplccount = 0;
-int g_hostlinkplcdataformat = 0;
-int g_hostlinkplcbitpos = 0;
-int g_lsplccount = 0;
-int g_lsplcdataformat = 0;
-
-typedef enum {
-    PLC_VAL_INT,
-    PLC_VAL_FLOAT,
-    PLC_VAL_STR,
-} PlcValKind;
-
-typedef struct {
-    PlcValKind kind;
-    int32_t i;
-    float f;
-    char s[8];
-} PlcValue;
-
-typedef int (*BufferReader)(uint8_t *data, uint32_t size);
-
-/* ---------------------------------------------------------------- 解码工具 */
-
-static float U32ToFloat(uint32_t raw)
-{
-    float f;
-    memcpy(&f, &raw, sizeof(f));
-    return f;
-}
-
-// 读取 n 个 ASCII 十六进制字符并转换成数值
-static int ReadAsciiHex(BufferReader rd, int nchars, uint32_t *out)
-{
-    char buf[9] = {0};
-
-    if (nchars > 8 || rd((uint8_t *)buf, nchars) != 0) {
-        return -1;
-    }
-    *out = strtoul(buf, NULL, 16);
-    return 0;
-}
-
-// 读取 n 个原始字节（n <= 4），little = 1 按小端组合，否则按大端
-static int ReadBytes(BufferReader rd, int n, int little, uint32_t *out)
-{
-    uint8_t b[4] = {0};
-    uint32_t v = 0;
-
-    if (n > 4 || rd(b, n) != 0) {
-        return -1;
-    }
-    for (int i = 0; i < n; i++) {
-        v |= (uint32_t)b[little ? i : (n - 1 - i)] << (8 * i);
-    }
-    *out = v;
-    return 0;
-}
-
-// 读取定长字符串（协议层写入的字符串数据为 5 字节，含结尾 0）
-static int ReadString(BufferReader rd, PlcValue *v)
-{
-    memset(v->s, 0, sizeof(v->s));
-    if (rd((uint8_t *)v->s, 5) != 0) {
-        return -1;
-    }
-    v->s[5] = '\0';
-    v->kind = PLC_VAL_STR;
-    return 0;
-}
-
-static void SetInt(PlcValue *v, int32_t i)
-{
-    v->kind = PLC_VAL_INT;
-    v->i = i;
-}
-
-static void SetFloat(PlcValue *v, float f)
-{
-    v->kind = PLC_VAL_FLOAT;
-    v->f = f;
-}
-
-static __attribute__((unused)) double ValueAsDouble(const PlcValue *v)
-{
-    return (v->kind == PLC_VAL_FLOAT) ? (double)v->f : (double)v->i;
-}
 
 /*
  * 各协议上报时使用的设备类型（devTypeId / devTypeName）。
@@ -204,6 +102,8 @@ int PlcReport_GetBatchValue(int frnum, double *value)
 #ifdef SN_BATCH_ENABLED
     return IotBatchCollector_Get(&s_snBatch, frnum, value);
 #else
+    (void)frnum;
+    (void)value;
     return -1;
 #endif
 }
@@ -230,232 +130,52 @@ static bool FxValueChanged(int frnum, int32_t value)
 }
 #endif
 
-static int FxDecode(int format, PlcValue *v)
+void PlcReport_Fx(int frnum, const PlcValue *v)
 {
-    BufferReader rd = FXPLC_ReadBufferBytes;
-    uint32_t raw, hi, lo;
-
-    (void)hi;   // 网口模式下不使用
-    (void)lo;
-
-    switch (format) {
-    case PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI:
-        return ReadString(rd, v);
-
-#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-    // 网口：协议层按小端写入的 16 位字
-    case PLC_DATA_TYPE_SHORT:
-        if (ReadBytes(rd, 2, 1, &raw) != 0) return -1;
-        SetInt(v, (int32_t)raw);
-        return 0;
-    case PLC_DATA_TYPE_BIT:
-        if (ReadBytes(rd, 2, 1, &raw) != 0) return -1;
-        SetInt(v, raw & 0x0001);
-        return 0;
-    case PLC_DATA_TYPE_INT:
-        if (ReadBytes(rd, 4, 1, &raw) != 0) return -1;
-        SetInt(v, (int32_t)raw);
-        return 0;
-    case PLC_DATA_TYPE_FLOAT:
-        if (ReadBytes(rd, 4, 1, &raw) != 0) return -1;
-        SetFloat(v, U32ToFloat(raw));
-        return 0;
-#else
-    // 串口：协议层写入的是 ASCII 十六进制，每个字 4 个字符，低字在前
-    case PLC_DATA_TYPE_SHORT:
-        if (ReadAsciiHex(rd, 4, &raw) != 0) return -1;
-        SetInt(v, (int32_t)raw);
-        return 0;
-    case PLC_DATA_TYPE_BIT:
-        if (ReadAsciiHex(rd, 4, &raw) != 0) return -1;
-        SetInt(v, raw & 0x0001);
-        return 0;
-    case PLC_DATA_TYPE_INT:
-        if (ReadAsciiHex(rd, 4, &lo) != 0 || ReadAsciiHex(rd, 4, &hi) != 0) return -1;
-        SetInt(v, (int32_t)((hi << 16) | lo));
-        return 0;
-    case PLC_DATA_TYPE_FLOAT:
-        if (ReadAsciiHex(rd, 4, &lo) != 0 || ReadAsciiHex(rd, 4, &hi) != 0) return -1;
-        SetFloat(v, U32ToFloat((hi << 16) | lo));
-        return 0;
-#endif
-    default:
-        return -1;
-    }
-}
-
-void PlcReport_Fx(void)
-{
-    const int frnum = g_fxplccount;
-    PlcValue v;
-
-    if (FxDecode(g_fxplcdataformat, &v) != 0) {
-        ESP_LOGW(TAG, "fx decode failed, format %d", g_fxplcdataformat);
-        return;
-    }
-
-    if (v.kind != PLC_VAL_STR) {
 #if defined(CONFIG_PLC_FX_SN_CACLREFILMAC)
-        IotBatchCollector_Update(&s_snBatch, frnum, ValueAsDouble(&v));
-        return;
+    IotBatchCollector_Update(&s_snBatch, frnum, PlcValue_AsDouble(v));
+    return;
 #elif defined(CONFIG_PLC_FX_XF_CONTROLLER) || defined(CONFIG_PLC_FX_RY_LINE)
-        if (v.kind == PLC_VAL_INT && !FxValueChanged(frnum, v.i)) {
-            return;
-        }
-#endif
+    if (v->kind == PLC_VAL_INT && !FxValueChanged(frnum, v->i)) {
+        return;
     }
-    SendValue(&s_fxType, frnum, &v, 2);
+#endif
+    SendValue(&s_fxType, frnum, v, 2);
 }
 
 /* --------------------------------------------------------- 欧姆龙 HostLink */
 
-static int HostLinkDecode(int format, PlcValue *v)
+void PlcReport_HostLink(int frnum, const PlcValue *v, bool isBit)
 {
-    BufferReader rd = FXPLC_ReadBufferBytes;
-    uint32_t raw;
-
-    switch (format) {
-    case PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI:
-        return ReadString(rd, v);
-    case PLC_DATA_TYPE_SHORT:
-        if (ReadAsciiHex(rd, 4, &raw) != 0) return -1;
-        SetInt(v, (int32_t)raw);
-        return 0;
-    case PLC_DATA_TYPE_BCD:
-        if (ReadAsciiHex(rd, 4, &raw) != 0) return -1;
-        SetInt(v, BCDToInt((int)raw));
-        return 0;
-    case PLC_DATA_TYPE_BIT:
-        if (ReadAsciiHex(rd, 4, &raw) != 0) return -1;
-        HLReadDataCallback((int)raw);
-        SetInt(v, (raw >> g_hostlinkplcbitpos) & 0x0001);
-        return 0;
-    case PLC_DATA_TYPE_FLOAT:
-        // 8 个十六进制字符，低字在前，需要交换高低字
-        if (ReadAsciiHex(rd, 8, &raw) != 0) return -1;
-        SetFloat(v, U32ToFloat((raw << 16) | (raw >> 16)));
-        return 0;
-    default:
-        return -1;
-    }
-}
-
-void PlcReport_HostLink(void)
-{
-    const int frnum = g_hostlinkplccount;
-    const int format = g_hostlinkplcdataformat;
-    PlcValue v;
-
-    if (HostLinkDecode(format, &v) != 0) {
-        ESP_LOGW(TAG, "hostlink decode failed, format %d", format);
-        return;
-    }
-
 #if defined(CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC)
-    // 位数据和字符串始终单独上报，其余进入批量报文
-    if (format != PLC_DATA_TYPE_BIT && v.kind != PLC_VAL_STR) {
-        IotBatchCollector_Update(&s_snBatch, frnum, ValueAsDouble(&v));
+    // 位数据始终单独上报，其余进入批量报文
+    if (!isBit) {
+        IotBatchCollector_Update(&s_snBatch, frnum, PlcValue_AsDouble(v));
         return;
     }
+#else
+    (void)isBit;
 #endif
-    SendValue(&s_hostLinkType, frnum, &v, 2);
+    SendValue(&s_hostLinkType, frnum, v, 2);
 }
 
 /* ------------------------------------------------------------------ LS / DBS */
 
-void PlcReport_Ls(void)
+void PlcReport_Ls(int frnum, const PlcValue *v)
 {
-    const int frnum = g_lsplccount;
-    char buf[5] = {0};
-    PlcValue v;
-
-    if (g_lsplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-        if (ReadString(FXPLC_ReadBufferBytes, &v) != 0) {
-            return;
-        }
-        SendValue(&s_lsType, frnum, &v, 2);
-    } else if (g_lsplcdataformat == PLC_DATA_TYPE_SHORT) {
-        // 4 个十六进制字符，前后两个字节交换
-        for (int i = 0; i < 4; i++) {
-            if (FXPLC_ReadBufferBytes((uint8_t *)&buf[(i + 2) % 4], 1) != 0) {
-                return;
-            }
-        }
-        SetInt(&v, (int32_t)strtoul(buf, NULL, 16));
-        SendValue(&s_lsType, frnum, &v, 2);
-    }
+    SendValue(&s_lsType, frnum, v, 2);
 }
 
 /* ------------------------------------------------------- 西门子 PPI / S7 */
 
-// S7 网口：协议层写入的是本机（小端）内存；PPI 串口：报文原始大端字节
-#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
-#define PPI_LITTLE_ENDIAN 1
-#else
-#define PPI_LITTLE_ENDIAN 0
-#endif
-
-void PlcReport_Ppi(void)
+void PlcReport_Ppi(int frnum, const PlcValue *v)
 {
-    const int frnum = g_ppiplccount;
-    BufferReader rd = PPIPLC_ReadBufferBytes;
-    uint32_t raw;
-    PlcValue v;
-
-    switch (g_ppiplcdataformat) {
-    case PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI:
-    case PLC_DATA_TYPE_BIT:
-        if (ReadBytes(rd, 1, 1, &raw) != 0) return;
-        SetInt(&v, (int32_t)raw);
-        SendValue(&s_ppiType, frnum, &v, 2);
-        break;
-    case PLC_DATA_TYPE_SHORT:
-        if (ReadBytes(rd, 2, PPI_LITTLE_ENDIAN, &raw) != 0) return;
-        SetInt(&v, (int16_t)raw);          // S7 INT 为有符号 16 位
-        SendValue(&s_ppiType, frnum, &v, 2);
-        break;
-    case PLC_DATA_TYPE_INT:
-        if (ReadBytes(rd, 4, PPI_LITTLE_ENDIAN, &raw) != 0) return;
-        SetInt(&v, (int32_t)raw);
-        SendValue(&s_ppiType, frnum, &v, 2);
-        break;
-    case PLC_DATA_TYPE_FLOAT:
-        if (ReadBytes(rd, 4, PPI_LITTLE_ENDIAN, &raw) != 0) return;
-        SetFloat(&v, U32ToFloat(raw));
-        SendValue(&s_ppiType, frnum, &v, 2);
-        break;
-    default:
-        break;
-    }
+    SendValue(&s_ppiType, frnum, v, 2);
 }
 
 /* ------------------------------------------------------------- Modbus TCP */
 
-void PlcReport_ModbusNet(void)
+void PlcReport_ModbusNet(int frnum, const PlcValue *v)
 {
-    const int frnum = g_modbusplccount;
-    BufferReader rd = MODBUSPLC_ReadBufferBytes;
-    uint32_t raw;
-    PlcValue v;
-
-    // 协议层写入的是本机（小端）内存
-    switch (g_modbusplcdataformat) {
-    case PLC_DATA_TYPE_FLOAT:
-        if (ReadBytes(rd, 4, 1, &raw) != 0) return;
-        SetFloat(&v, U32ToFloat(raw));
-        SendValue(&s_modbusNetType, frnum, &v, 3);
-        break;
-    case PLC_DATA_TYPE_SHORT:
-        if (ReadBytes(rd, 2, 1, &raw) != 0) return;
-        SetInt(&v, (int32_t)raw);
-        SendValue(&s_modbusNetType, frnum, &v, 3);
-        break;
-    case PLC_DATA_TYPE_INT:
-        if (ReadBytes(rd, 4, 1, &raw) != 0) return;
-        SetInt(&v, (int32_t)raw);
-        SendValue(&s_modbusNetType, frnum, &v, 3);
-        break;
-    default:
-        break;
-    }
+    SendValue(&s_modbusNetType, frnum, v, 3);
 }

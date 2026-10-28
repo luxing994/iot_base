@@ -269,7 +269,7 @@ void AINUO_TTesterGetJsonData(char *str)
     strcpy(str, g_ainuottesterjsondatabuff);
 }
 
-int AINUO_TTesterResolve(void)
+int AINUO_TTesterResolve(void *ctx)
 {
 	char curData[5] = {0};
     char sum[2] = {0};

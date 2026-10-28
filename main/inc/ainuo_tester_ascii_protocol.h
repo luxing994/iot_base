@@ -181,7 +181,7 @@ extern AINUOTTesterSetCommonPara ainuosetcommontestdata;
 void AINUO_TTesterReadCurrentGroup(void);
 void AINUO_TTesterSetGroupPara(uint16_t group);
 void AINUO_TTesterGetJsonData(char *str);
-int AINUO_TTesterResolve(void);
+int AINUO_TTesterResolve(void *ctx);     // 串口事务解析函数（见 serial_txn.h）
 void AINUO_TTesterApplyItemParams(int item, parametersData *para);
 
 #endif

@@ -1,346 +1,156 @@
-#include <stdio.h>  
-#include <stdlib.h>  
-#include <string.h>  
-#include <ctype.h>  
 #include <string.h>
-#include "driver/uart.h"
-#include "esp_system.h"
 #include "esp_log.h"
 #include "hl_plc_protocol.h"
-#include "iot_common.h"
+#include "proto_util.h"
+#include "serial_txn.h"
 
-HostLinkCommandFrameFormat hlsdatabuff = {0};
-HostLinkResponseFrameFormat hlrdatabuff = {0};
-HostLinkWriteRealCommandFrameFormat hlwrdatabuff = {0};
-HostLinkWriteCIOCommandFrameFormat hlwbdatabuff = {0};
-int feedback_data;
+static const char *TAG = "HOSTLINK";
 
-static int HLPackReadWordDataRegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
+#define HL_HEAD             '@'
+#define HL_FRAME_MAX        48
+
+#define FINS_MEMORY_READ    0x0101
+#define FINS_MEMORY_WRITE   0x0102
+
+#define FINS_AREA_CIO_WORD  0xB0
+#define FINS_AREA_DM_WORD   0x82
+
+/* @ 单元号 00 | FA | 响应等待 0 | ICF 00 | DA2 00 | SA2 00 | SID 00 */
+static const char s_cmdHead[] = "@00FA000000000";
+#define HL_CMD_HEAD_LEN     (sizeof(s_cmdHead) - 1)
+
+/* 应答中 '@' 之后的固定部分：单元号(2) FA(2) 00(2) ICF(2) DA2(2) SA2(2) SID(2) 命令(4) 结束码(4) */
+#define HL_RESP_HEAD_LEN    22
+
+typedef struct {
+    uint16_t fins;          // 期望应答中的 FINS 命令
+    int words;              // 应答数据字数
+    uint32_t w[2];
+} HlCtx;
+
+static size_t HlBuild(uint8_t *f, uint16_t fins, uint8_t area, uint32_t addr, uint16_t count,
+                      const uint8_t *data, size_t dlen)
 {
-	char str[10] = {0};
+    size_t n = HL_CMD_HEAD_LEN;
 
-	if (rdata == NULL) {
-		return -1;
-	}
-
-	rdata->head = HOSTLINK_HEAD;
-	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
-    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
-	rdata->finscomdata.resptime = FINS_TIME;
-	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
-	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
-	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
-
-	sprintf(str, "%04X", READIO);
-	memcpy(rdata->finscomdata.code, str, 4);
-
-	sprintf(str, "%02X", DMWORD);
-	memcpy(rdata->finscomdata.mem, str, 2);
-
-	address *= 256;
-	sprintf(str, "%06X", address);
-	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
-	
-	sprintf(str, "%04X", length);
-	memcpy(rdata->finscomdata.text_num, str, 4);
-
-
-	sprintf(str, "%02X", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
-	memcpy(rdata->fcs, str, 2);
-	memcpy(rdata->end, HOSTLINK_END, 2);
-	return 0;
+    memcpy(f, s_cmdHead, HL_CMD_HEAD_LEN);
+    Proto_PutHex(&f[n], fins, 4);
+    n += 4;
+    Proto_PutHex(&f[n], area, 2);
+    n += 2;
+    Proto_PutHex(&f[n], addr << 8, 6);      // 字地址(4) + 位号(2)
+    n += 6;
+    Proto_PutHex(&f[n], count, 4);
+    n += 4;
+    if (dlen > 0) {
+        memcpy(&f[n], data, dlen);
+        n += dlen;
+    }
+    Proto_PutHex(&f[n], Proto_Xor8(f, n), 2);
+    n += 2;
+    f[n++] = '*';
+    f[n++] = '\r';
+    return n;
 }
 
-static int HLPackReadWordCIORegisterFrame(uint32_t address, uint16_t length, HostLinkCommandFrameFormat* rdata)
+static int HlParse(void *arg)
 {
-	char str[10] = {0};
+    HlCtx *ctx = arg;
+    uint8_t h[HL_RESP_HEAD_LEN];
+    uint8_t hex[4];
+    uint32_t cmd, end;
 
-	if (rdata == NULL) {
-		return -1;
-	}
+    if (SerialRx_SeekAny(HL_HEAD, HL_HEAD) < 0 || SerialRx_Read(h, sizeof(h)) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    if (memcmp(&h[2], "FA", 2) != 0 || memcmp(&h[6], "40", 2) != 0 ||
+        Proto_GetHex(&h[14], 4, &cmd) != 0 || Proto_GetHex(&h[18], 4, &end) != 0) {
+        ESP_LOGE(TAG, "bad response header: %.22s", (const char *)h);
+        return SERIAL_PARSE_ERROR;
+    }
+    if (cmd != ctx->fins) {
+        ESP_LOGE(TAG, "unexpected command %04X, want %04X", (unsigned)cmd, ctx->fins);
+        return SERIAL_PARSE_ERROR;
+    }
+    if (end != 0) {
+        ESP_LOGE(TAG, "end code %04X", (unsigned)end);
+        return SERIAL_PARSE_ERROR;
+    }
 
-	rdata->head = HOSTLINK_HEAD;
-	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
-    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
-	rdata->finscomdata.resptime = FINS_TIME;
-	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
-	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
-	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
-
-	sprintf(str, "%04X", READIO);
-	memcpy(rdata->finscomdata.code, str, 4);
-
-	sprintf(str, "%02X", CIOWORD);
-	memcpy(rdata->finscomdata.mem, str, 2);
-
-	address *= 256;
-	sprintf(str, "%06X", address);
-	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
-	
-	sprintf(str, "%04X", length);
-	memcpy(rdata->finscomdata.text_num, str, 4);
-
-
-	sprintf(str, "%02X", CalFCS(&hlsdatabuff, sizeof(HostLinkCommandFrameFormat) - 4));
-	memcpy(rdata->fcs, str, 2);
-	memcpy(rdata->end, HOSTLINK_END, 2);
-	return 0;
+    for (int i = 0; i < ctx->words; i++) {
+        if (SerialRx_Read(hex, sizeof(hex)) != 0) {
+            return SERIAL_PARSE_MORE;
+        }
+        if (Proto_GetHex(hex, 4, &ctx->w[i]) != 0) {
+            return SERIAL_PARSE_ERROR;
+        }
+    }
+    return SERIAL_PARSE_OK;
 }
 
-static int HLPackWriteWordCIORegisterFrame(uint32_t address, uint16_t bitpos, uint16_t data, HostLinkWriteCIOCommandFrameFormat* rdata)
+static int HlReadWords(uint8_t area, uint16_t address, HlCtx *ctx)
 {
-	char str[10] = {0};
+    uint8_t f[HL_FRAME_MAX];
+    size_t n;
 
-	if (rdata == NULL) {
-		return -1;
-	}
-
-	rdata->head = HOSTLINK_HEAD;
-	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
-    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
-	rdata->finscomdata.resptime = FINS_TIME;
-	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
-	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
-	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
-
-	sprintf(str, "%04X", WRITEIO);
-	memcpy(rdata->finscomdata.code, str, 4);
-
-	sprintf(str, "%02X", CIOBIT);
-	memcpy(rdata->finscomdata.mem, str, 2);
-
-	address *= 256;
-	address += bitpos;
-	sprintf(str, "%06X", address);
-	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
-
-	sprintf(str, "%04X", 1);
-	memcpy(rdata->finscomdata.text_num, str, 4);
-	sprintf(str, "%02X", data);
-	memcpy(rdata->finscomdata.text_data, str, 4);
-
-	sprintf(str, "%02X", CalFCS(&hlwbdatabuff, sizeof(HostLinkWriteCIOCommandFrameFormat) - 4));
-	memcpy(rdata->fcs, str, 2);
-	memcpy(rdata->end, HOSTLINK_END, 2);
-	return 0;
+    ctx->fins = FINS_MEMORY_READ;
+    n = HlBuild(f, FINS_MEMORY_READ, area, address, (uint16_t)ctx->words, NULL, 0);
+    if (SerialTxn_Request(f, n, HlParse, ctx, SERIAL_TXN_TIMEOUT_MS) != 0) {
+        return PLC_ERR_RESPONSE;
+    }
+    return PLC_OK;
 }
 
-static int HLPackWriteRealDataRegisterFrame(uint32_t address, uint8_t* wdata, HostLinkWriteRealCommandFrameFormat* rdata)
+int HL_ReadDM(uint16_t address, HlFormat fmt, PlcValue *out)
 {
-	char str[10] = {0};
+    HlCtx ctx = { .words = (fmt == HL_FMT_FLOAT) ? 2 : 1 };
 
-	if (rdata == NULL) {
-		return -1;
-	}
+    if (HlReadWords(FINS_AREA_DM_WORD, address, &ctx) != PLC_OK) {
+        return PLC_ERR_RESPONSE;
+    }
 
-	rdata->head = HOSTLINK_HEAD;
-	memcpy(rdata->plcnum, HOSTLINK_PLC_NUM, 2);
-    memcpy(rdata->finscomdata.head, FINS_HEAD, 2);
-	rdata->finscomdata.resptime = FINS_TIME;
-	memcpy(rdata->finscomdata.icf, FINS_ICF_LOCAL, 2);
-	memcpy(rdata->finscomdata.da2, FINS_DA2_CPU, 2);
-	memcpy(rdata->finscomdata.sa2, FINS_SA2_CPU, 2);
-	memcpy(rdata->finscomdata.sid, FINS_SID, 2);
-
-	sprintf(str, "%04X", WRITEIO);
-	memcpy(rdata->finscomdata.code, str, 4);
-
-	sprintf(str, "%02X", DMWORD);
-	memcpy(rdata->finscomdata.mem, str, 2);
-
-	address *= 256;
-	sprintf(str, "%06X", address);
-	memcpy(rdata->finscomdata.text_startaddr, str, strlen(str));
-
-	sprintf(str, "%04X", 2);
-	memcpy(rdata->finscomdata.text_num, str, 4);
-	memcpy(rdata->finscomdata.text_fdata, wdata, 8);
-
-	sprintf(str, "%02X", CalFCS(&hlwrdatabuff, sizeof(HostLinkWriteRealCommandFrameFormat) - 4));
-	memcpy(rdata->fcs, str, 2);
-	memcpy(rdata->end, HOSTLINK_END, 2);
-	return 0;
+    switch (fmt) {
+    case HL_FMT_FLOAT:
+        PlcValue_SetFloatBits(out, (ctx.w[1] << 16) | ctx.w[0]);
+        break;
+    case HL_FMT_BCD:
+        PlcValue_SetInt(out, Proto_BcdToInt(ctx.w[0]));
+        break;
+    default:
+        PlcValue_SetInt(out, (int32_t)ctx.w[0]);
+        break;
+    }
+    return PLC_OK;
 }
 
-void HLReadDataCallback(int data)
+int HL_ReadCIOBit(uint16_t address, uint8_t bit, PlcValue *out)
 {
-	feedback_data = data;
+    HlCtx ctx = { .words = 1 };
+
+    // 读整个字再取位
+    if (HlReadWords(FINS_AREA_CIO_WORD, address, &ctx) != PLC_OK) {
+        return PLC_ERR_RESPONSE;
+    }
+    PlcValue_SetInt(out, (int32_t)((ctx.w[0] >> (bit & 0x0F)) & 0x0001));
+    return PLC_OK;
 }
 
-void HLReadSingleDataRegister(uint32_t address, uint16_t frnum)
+int HL_WriteDMFloat(uint16_t address, float value)
 {
-	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
-	g_hostlinkplccount = frnum;
-	g_hostlinkplcdataformat = PLC_DATA_TYPE_SHORT;
-}
+    uint8_t f[HL_FRAME_MAX];
+    uint8_t data[8];
+    uint32_t raw;
+    HlCtx ctx = { .fins = FINS_MEMORY_WRITE, .words = 0 };
+    size_t n;
 
-void HLReadBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t frnum)
-{
-	HLPackReadWordCIORegisterFrame(address, 1, &hlsdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
-	g_hostlinkplccount = frnum;
-	g_hostlinkplcdataformat = PLC_DATA_TYPE_BIT;
-	g_hostlinkplcbitpos = bitpos;
-}
+    memcpy(&raw, &value, sizeof(raw));
+    Proto_PutHex(&data[0], raw & 0xFFFF, 4);    // 低字在前
+    Proto_PutHex(&data[4], raw >> 16, 4);
+    n = HlBuild(f, FINS_MEMORY_WRITE, FINS_AREA_DM_WORD, address, 2, data, sizeof(data));
 
-void HLReadFloatDataRegister(uint32_t address, uint16_t frnum)
-{
-	HLPackReadWordDataRegisterFrame(address, 2, &hlsdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
-	g_hostlinkplccount = frnum;
-	g_hostlinkplcdataformat = PLC_DATA_TYPE_FLOAT;
-}
-
-void HLReadBCDDataRegister(uint32_t address, uint16_t frnum)
-{
-	HLPackReadWordDataRegisterFrame(address, 1, &hlsdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlsdatabuff, sizeof(HostLinkCommandFrameFormat));
-	g_hostlinkplccount = frnum;
-	g_hostlinkplcdataformat = PLC_DATA_TYPE_BCD;
-}
-
-void HLWriteBitCIORegister(uint32_t address, uint16_t bitpos, uint16_t data, uint16_t frnum)
-{
-	// HLReadBitCIORegister(address, bitpos, frnum);
-	// feedback_data = feedback_data | (0x0001 << bitpos);
-	HLPackWriteWordCIORegisterFrame(address, bitpos, data, &hlwbdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwbdatabuff, sizeof(HostLinkWriteCIOCommandFrameFormat));
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
-}
-
-void HLWriteRealDataRegister(uint32_t address, float wdata)
-{
-	int idata;
-	char sfdata[9] = {0};
-
-	idata = *((int *)&wdata);
-	idata = (idata >> 16) + ((idata << 16) & 0xffff0000);
-	(void)sprintf(sfdata, "%08X", idata);
-	
-	HLPackWriteRealDataRegisterFrame(address, (uint8_t *)sfdata, &hlwrdatabuff);
-	uart_write_bytes(UART_NUM_1, (uint8_t *)&hlwrdatabuff, sizeof(HostLinkWriteRealCommandFrameFormat));
-    vTaskDelay(HOSTLINK_READ_DELAY_TIME);
-}
-
-int GetSerialWordDataFromHlPlc(void)
-{
-	uint8_t curData = 0;
-	uint8_t dataArry[4] = {0};
-	int ret, i, count = 0;
-	static const char *TAG = "GET_SERIAL_HLDATA";
-
-	while (curData != HOSTLINK_HEAD) {
-		ret = UART_ReadBufferBytes(&curData, 1);
-		if (ret != 0) {
-			return -1;
-		}
-	}
-
-	hlrdatabuff.head = HOSTLINK_HEAD;
-	ret = UART_ReadBufferBytes(hlrdatabuff.plcnum, sizeof(hlrdatabuff.plcnum));
-	if (ret != 0) {
-		return -1;
-	}
-	
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.head, 2);
-	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.head, "FA")) {
-		ESP_LOGE(TAG, "fins head error: %s", (char *)hlrdatabuff.finscomdata.head);
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.resdata, 2);
-	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.resdata, "00")) {
-		ESP_LOGE(TAG, "fins resdata error: %s", (char *)hlrdatabuff.finscomdata.resdata);
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.icf, 2);
-	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.icf, "40")) {
-		ESP_LOGE(TAG, "fins icf error: %s", (char *)hlrdatabuff.finscomdata.head);
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.da2, sizeof(hlrdatabuff.finscomdata.da2));
-	if (ret != 0) {
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.sa2, sizeof(hlrdatabuff.finscomdata.sa2));
-	if (ret != 0) {
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.sid, sizeof(hlrdatabuff.finscomdata.sid));
-	if (ret != 0) {
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.code, 4);
-	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.code, "0101") != 0) {
-		ESP_LOGE(TAG, "code error: %s", (char *)hlrdatabuff.finscomdata.code);
-		return -1;
-	}
-
-	ret = UART_ReadBufferBytes(hlrdatabuff.finscomdata.respcode, 4);
-	if (ret != 0 || strcmp((char *)hlrdatabuff.finscomdata.respcode, "0000") != 0) {
-		ESP_LOGE(TAG, "respcode error: %s", (char *)hlrdatabuff.finscomdata.code);
-		return -1;
-	}
-
-	if (g_hostlinkplcdataformat == PLC_DATA_TYPE_SHORT || g_hostlinkplcdataformat == PLC_DATA_TYPE_BCD || g_hostlinkplcdataformat == PLC_DATA_TYPE_BIT) {
-		ret = UART_ReadBufferBytes(dataArry, 4);
-		if (ret != 0) {
-			return -1;
-		}
-
-		ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
-		if (ret != 0) {
-			ESP_LOGE(TAG, "fx buffer error: %d", ret);
-			return -1;
-		}
-	} else if (g_hostlinkplcdataformat == PLC_DATA_TYPE_FLOAT) {
-		for (i = 0; i < 2; i++) {
-			ret = UART_ReadBufferBytes(dataArry, 4);
-			if (ret != 0) {
-				return -1;
-			}
-
-			ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
-			if (ret != 0) {
-				ESP_LOGE(TAG, "fx buffer error: %d", ret);
-				return -1;
-			}
-		}
-	}
-
-	// ret = UART_ReadBufferBytes(dataArry, 3);
-	// if (ret != 0 || dataArry[2] != '*') {
-	// 	return -1;
-	// }
-
-	// do {
-	// 	ret = UART_ReadBufferBytes(&curData, 1);
-	// 	if (ret != 0) {
-	// 		return -1;
-	// 	}
-	// 	dataArry[count] = curData;
-	// 	count++;
-	// 	if (count % 4 == 0) {
-	// 		count = 0;
-	// 		ret = FXPLC_WriteBufferBytes(dataArry, sizeof(dataArry));
-	// 		if (ret != 0) {
-	// 			ESP_LOGE(TAG, "fx buffer error: %d", ret);
-	// 			return -1;
-	// 		}
-	// 	}
-	// } while (curData != '*');
-
-	// hlrdatabuff.fcs[0] = dataArry[0];
-	// hlrdatabuff.fcs[1] = dataArry[1];
-
-	return 0;
+    if (SerialTxn_Request(f, n, HlParse, &ctx, SERIAL_TXN_TIMEOUT_MS) != 0) {
+        ESP_LOGE(TAG, "write D%u failed", address);
+        return PLC_ERR_RESPONSE;
+    }
+    return PLC_OK;
 }

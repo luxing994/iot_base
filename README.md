@@ -21,28 +21,31 @@ main/
 │   ├── uart_task.c       UART1 初始化与事件任务、命令执行任务 cmd_task
 │   ├── plc_points.c      ★ 设备点表：每种设备读哪些寄存器、对应哪个 FR 编号（按 menuconfig 选择）
 │   ├── plc_poll.c        按点表逐点轮询（串口事务 / 网口）
-│   ├── plc_report.c      ★ 各协议数据解码，选择单值 / 变化 / 批量上报
+│   ├── plc_report.c      ★ 选择单值 / 变化 / 批量上报
 │   └── ota_task.c        HTTP OTA
 ├── src/common/
 │   ├── iot_report.c      ★ 统一拼装上报 JSON（单值报文、批量报文、批量采集器）
-│   ├── iot_common.c      校验、BCD、环形缓冲区封装、上报队列
+│   ├── iot_common.c      串口接收缓冲封装、上报队列
 │   ├── serial_txn.c      串口同步事务（加锁、等待完整应答、回滚 / 提交）
+│   ├── net_io.c          网口 PLC 收发（按长度收全、超时）
 │   └── ringbuffer.c
 ├── src/driver/           GPIO 开关量、MAX6675 热电偶、时间基准
-└── src/protocol/         三菱 FX、欧姆龙 HostLink、西门子 PPI / S7、LS、
-                          Modbus RTU / TCP、76T 与艾诺安规测试仪
+└── src/protocol/         三菱 FX、欧姆龙 HostLink、西门子 PPI / S7、DBS 真空计、
+                          Modbus RTU / TCP、76T 与艾诺安规测试仪；proto_util.c 为公共编解码工具
 ```
 
 ## 数据流
 
 ```
-点表（plc_poll.c）逐点执行，每个点是一次同步事务：
+plc_poll.c     按点表（plc_points.c）逐点调用协议层的读函数
    │
-   │  串口：SerialTxn_Begin → 发请求 → SerialTxn_Wait(协议解析函数) → 解码上报 → SerialTxn_End
-   │        （serial_txn.c：串口加锁；应答未收全时回滚读位置继续等，超时放弃）
-   │  网口：由各连接任务调用 PlcPoll_xxxNet()，收到应答立即解码上报（链路失效则重连）
+   │  协议层（src/protocol）：组帧 → 收发 → 校验 → 解码，直接返回 PlcValue（plc_value.h）
+   │    串口：FX_LinkRead() 等内部是一次同步事务（serial_txn.c：串口加锁，
+   │          应答未收全时回滚读位置继续等，设备回 NAK 或超时则放弃该点）
+   │    网口：FX_NetRead() / S7_NetRead() / MODBUS_NetRead()，按报文头长度收全应答（net_io.c），
+   │          返回 PLC_ERR_LINK 时由连接任务重连
    ▼
-plc_report.c   按协议 / 格式 / 字节序解码，按设备类型选择上报方式
+plc_report.c   按设备类型选择单值 / 变化 / 批量上报
    │
    ▼
 iot_report.c   拼装 JSON（以 ";;**##" 结尾）→ 上报队列 → tcp_client_task → 上位机
@@ -93,6 +96,11 @@ PLC 每次只返回一个点、需要收齐后一起发送时，用 `IotBatchCol
 **新增一种固定设备类型**：在 `plc_points.c` 增加该设备的点表并在文件末尾的选择逻辑中加一行，
 在 `Kconfig.projbuild` 对应协议的 `Device` 下增加一个选项；若上报方式特殊（变化上报、批量上报），
 在 `plc_report.c` 中处理。Modbus RTU 设备的参数表在 `master.c` 中。
+
+**新增一种 PLC 协议**：在 `src/protocol/` 下实现读函数，返回 `PlcValue`：
+串口协议写一个解析函数，用 `SerialTxn_Request()` 发请求并等应答（参考 `ls_plc_load_protocol.c`，最简单）；
+网口协议用 `net_io.h` 收发（参考 `lx_modbus_tcp_master.c`）。
+然后在 `plc_points.h` 增加点类型，在 `plc_poll.c` 增加"点类型 → 读函数"的翻译。
 
 ## 配置与编译
 

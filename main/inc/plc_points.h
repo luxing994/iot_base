@@ -35,7 +35,7 @@ typedef enum {
     S7_I_BIT,       // I 输入位
     S7_M_BIT,       // M 位
 
-    /* Modbus TCP 保持寄存器 */
+    /* Modbus TCP 保持寄存器（地址从 0 开始） */
     MB_HR16,        // 16 位整数
     MB_HR32,        // 32 位整数（高字在前）
     MB_HRFLOAT,     // 32 位浮点（高字在前）

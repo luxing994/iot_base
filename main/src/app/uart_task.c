@@ -24,8 +24,6 @@
 #include "serial_txn.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
-#include "ls_plc_load_protocol.h"
-#include "ppi_plc_protocol.h"
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
 
@@ -188,14 +186,13 @@ static void ApplyChargeSetting(void)
 
     HostCmd_GetChargeSetting(&charge);
 #ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-    SerialTxn_Begin();
-    SerialWriteSingleFloatDataRegister(0, 255, 10, 16, charge.setchargeamount);
-    SerialTxn_End();
+    FX_LinkWriteFloat(16, charge.setchargeamount);      // D16：充注量设定值
 #endif
 
 #ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-    uint32_t address = 0;
+    uint16_t address = 0;
     int frnum = 0;
+    PlcValue v;
 
     if (strcmp(charge.select, "A") == 0) {
         address = 8150;     // A充注量设定值 -> FR026
@@ -205,11 +202,10 @@ static void ApplyChargeSetting(void)
         frnum = 27;
     }
     if (address != 0) {
-        SerialTxn_Begin();
-        HLWriteRealDataRegister(address, charge.setchargeamount);
-        SerialTxn_End();
-        SERIAL_TXN(HLReadFloatDataRegister(address, frnum), GetSerialWordDataFromHlPlc,
-                   SERIAL_TXN_TIMEOUT_MS, PlcReport_HostLink());
+        HL_WriteDMFloat(address, charge.setchargeamount);
+        if (HL_ReadDM(address, HL_FMT_FLOAT, &v) == PLC_OK) {
+            PlcReport_HostLink(frnum, &v, false);
+        }
     }
 #endif
     (void)charge;
@@ -221,14 +217,14 @@ static void ApplyTesterGroup(void)
 #ifdef CONFIG_TESTER_76T
     SerialTxn_Begin();
     TTesterSetGroupPara(HostCmd_GetTesterGroup());
-    SerialTxn_Wait(TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_Wait(TTesterResolve, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
     SerialTxn_End();
 #endif
 
 #ifdef CONFIG_TESTER_AINUO
     SerialTxn_Begin();
     AINUO_TTesterSetGroupPara(HostCmd_GetTesterGroup());
-    SerialTxn_Wait(AINUO_TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_Wait(AINUO_TTesterResolve, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
     SerialTxn_End();
 #endif
 }

@@ -1,52 +1,32 @@
 #ifndef LX_MODBUS_TCP_MASTER_H
 #define LX_MODBUS_TCP_MASTER_H
 
+/*
+ * Modbus TCP 主站（保持寄存器读写）
+ *
+ * 寄存器地址为协议地址，从 0 开始（手册中的 40001 / 1 号寄存器对应地址 0）。
+ * 所有函数返回 PLC_OK、PLC_ERR_RESPONSE（异常应答等）或 PLC_ERR_LINK（需重连）。
+ */
+
 #include <stdint.h>
+#include "plc_value.h"
 
-// Modbus TCP常量
-#define MODBUS_TCP_PORT              502
-#define MODBUS_TCP_PROTOCOL_ID       0x0000
-#define MODBUS_TCP_HEADER_SIZE       7   // MBAP头长度
-#define MODBUS_TCP_MAX_ADU_LENGTH    260
+#define MODBUS_TCP_PORT         502
+#define MODBUS_TCP_UNIT_ID      1
+#define MODBUS_MAX_READ_REGS    125
 
-// Modbus功能码
-#define MODBUS_FUNC_READ_HOLDING_REGS     0x03
-#define MODBUS_FUNC_WRITE_SINGLE_REG      0x06
-#define MODBUS_FUNC_WRITE_MULTIPLE_REGS   0x10
+typedef enum {
+    MODBUS_FMT_U16,     // 1 个寄存器，无符号
+    MODBUS_FMT_I32,     // 2 个寄存器，高字在前
+    MODBUS_FMT_FLOAT,   // 2 个寄存器，高字在前，IEEE754
+} ModbusFormat;
 
-// 错误码
-#define MODBUS_OK                 0
-#define MODBUS_ERR_SEND           -1
-#define MODBUS_ERR_RECV           -2
-#define MODBUS_ERR_RESP_LENGTH    -3
-#define MODBUS_ERR_FUNC_MISMATCH  -4
-#define MODBUS_ERR_DATA_MISMATCH  -5
+/* 读一个数据点 */
+int MODBUS_NetRead(int sock, uint16_t address, ModbusFormat fmt, PlcValue *out);
 
-#define MODBUS_READ_DATA_TIME     30
-
-// 16位寄存器读取
-int modbus_tcp_read_holding_registers(int sock, uint16_t trans_id,
-                                      uint8_t unit_id, uint16_t start_addr,
-                                      uint16_t quantity, uint16_t *out_data);
-
-// 32位寄存器读取（高字优先/大端模式）
-int modbus_tcp_read_holding_registers_32(int sock, uint16_t trans_id,
-                                         uint8_t unit_id, uint16_t start_addr,
-                                         uint16_t quantity_32, uint32_t *out_data_32,
-                                         int high_word_first);
-
-// 单个寄存器写入
-int modbus_tcp_write_single_register(int sock, uint16_t trans_id,
-                                     uint8_t unit_id, uint16_t reg_addr,
-                                     uint16_t value);
-
-// 多个寄存器写入
-int modbus_tcp_write_multiple_registers(int sock, uint16_t trans_id,
-                                        uint8_t unit_id, uint16_t start_addr,
-                                        uint16_t quantity, const uint16_t *values);
-int GetNetDataFromModbusPlc(void);
-int MODBUS_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
-int MODBUS_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum);
-int MODBUS_NetReadFloatRegister(int sock, uint32_t address, uint16_t frnum);
+/* 通用读写 */
+int MODBUS_NetReadHolding(int sock, uint16_t address, uint16_t count, uint16_t *regs);
+int MODBUS_NetWriteSingle(int sock, uint16_t address, uint16_t value);
+int MODBUS_NetWriteMultiple(int sock, uint16_t address, uint16_t count, const uint16_t *values);
 
 #endif

@@ -1,232 +1,46 @@
 #ifndef FX_PLC_PROTOCOL_H
 #define FX_PLC_PROTOCOL_H
 
-#include <stdint.h>
-
 /*
-UART传输格式
-数据位：7位
-波特率:9600bps
-奇偶:even(偶校验)
-停止位：0位
-*/
+ * 三菱 FX 系列 PLC
+ *
+ *   编程口（RS232）      FX_ProgReadD()          只支持读 D 寄存器 16 位
+ *   计算机链接（RS485）  FX_LinkRead() / FX_LinkWriteFloat()   专用协议格式 1，带和校验
+ *   以太网（MC 协议）    FX_NetRead()            3E 帧，二进制
+ *
+ * 串口：9600bps，7 位数据，偶校验，1 位停止位
+ * 串口读写函数内部完成一次完整的串口事务（见 serial_txn.h），返回时已拿到应答或超时。
+ */
 
-#define PLC_D_BASE_ADDRESS  4096 
-#define PLC_D_SPECIAL_BASE_ADDRESS  3584 
-#define PLC_Y_GROUP_BASE_ADDRESS  160 
-#define PLC_PY_GROUP_BASE_ADDRESS  672 
-#define PLC_T_GROUP_BASE_ADDRESS  192 
-#define PLC_OT_GROUP_BASE_ADDRESS  704 
-#define PLC_RT_GROUP_BASE_ADDRESS  1216 
-#define PLC_M_SINGLE_BASE_ADDRESS  2048
-#define PLC_M_GROUP_BASE_ADDRESS  256 
-#define PLC_PM_GROUP_BASE_ADDRESS  768 
-#define PLC_S_GROUP_BASE_ADDRESS  0 
-#define PLC_X_GROUP_BASE_ADDRESS  128 
-#define PLC_C_GROUP_BASE_ADDRESS  448 
-#define PLC_OC_GROUP_BASE_ADDRESS  960 
-#define PLC_RC_GROUP_BASE_ADDRESS  1472 
-#define PLC_TV_GROUP_BASE_ADDRESS  2048 
-#define PLC_CV16_GROUP_BASE_ADDRESS  2560
+#include <stdint.h>
+#include "plc_value.h"
 
-// FX PLC 控制字符
-#define PLC_STX 0x02
-#define PLC_ETX 0x03
-#define PLC_EOT 0X04
-#define PLC_ENQ 0x05
-#define PLC_ACK 0x06
-#define PLC_LF  0x0A
-#define PLC_CL  0x0C
-#define PLC_CR  0x0D
-#define PLC_NAK 0x15
+/* 计算机链接参数（与 PLC 中 D8120 / D8121 的设置一致） */
+#define FX_LINK_STATION     0       // 站号
+#define FX_LINK_PC_NUMBER   0xFF    // PC 号
+#define FX_LINK_WAIT_MS     10      // 报文等待时间，0~150ms，10ms 为单位
 
-// FX 软元件类型
-#define PLC_TYPE_D 'D'
-#define PLC_TYPE_X 'X'
-#define PLC_TYPE_Y 'Y'
-#define PLC_TYPE_M 'M'
+/* 软元件 */
+typedef enum {
+    FX_DEV_D = 'D',
+    FX_DEV_Y = 'Y',
+    FX_DEV_M = 'M',
+} FxDevice;
 
-// FX PLC 串口指令
-#define PLC_BR  "BR"   // 位单位成批读出
-#define PLC_WR  "WR"   // 字单位成批读出（5字符） 
-#define PLC_QR  "QR"   // 字单位成批读取（7字符）
-#define PLC_BW  "BW"   // 位单位成批写入
-#define PLC_WW  "WW"   // 字单位成批写入（5字符） 
-#define PLC_QW  "QW"   // 字单位成批写入（7字符）
+/* 读出的数据格式 */
+typedef enum {
+    FX_FMT_U16,     // 1 个字，无符号
+    FX_FMT_I32,     // 2 个字，低字在前
+    FX_FMT_FLOAT,   // 2 个字，低字在前，IEEE754
+    FX_FMT_BIT,     // 读 1 个字（16 个位元件），取最低位
+} FxFormat;
 
-// FX PLC 编程口指令
-#define PLC_READ 0x30      // '0'
-#define PLC_WRITE 0x31     // '1'
-#define PLC_ON 0x37        // '7'
-#define PLC_OFF 0x38       // '8'
+/* 串口：返回 PLC_OK 或 PLC_ERR_RESPONSE */
+int FX_ProgReadD(uint16_t address, PlcValue *out);
+int FX_LinkRead(FxDevice dev, uint16_t address, FxFormat fmt, PlcValue *out);
+int FX_LinkWriteFloat(uint16_t address, float value);
 
-#define PLC_READ_DATA_FRAME_LEAGTH  11
-#define PLC_READ_DATA_FRAME_CAL_LEAGTH  8
-
-#define PLC_SERIAL_READ_DATA_FRAME_LEAGTH  17
-#define PLC_SERIAL_READ_DATA_FRAME_CAL_LEAGTH  14
-
-#define PLC_SERIAL_QREAD_DATA_FRAME_LEAGTH  19
-#define PLC_SERIAL_QREAD_DATA_FRAME_CAL_LEAGTH  16
-
-#define PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_LEAGTH  25
-#define PLC_SERIAL_WREITE_SINGLE_REAL_DATA_FRAME_CAL_LEAGTH  22
-
-#define FX_PLC_MAX_X  32
-#define FX_PLC_MAX_X_LEN  (FX_PLC_MAX_X / 8)
-
-#define FX_PLC_MAX_Y  32
-#define FX_PLC_MAX_Y_LEN  (FX_PLC_MAX_Y / 8)
-
-// FX PLC 以太网口指令
-#define FX_PLC_NET_REQUIRE_START_FIRST 0x50
-#define FX_PLC_NET_REQUIRE_START_SECOND 0x00
-#define FX_PLC_NET_RESPONSE_START_FIRST 0xD0
-#define FX_PLC_NET_RESPONSE_START_SECOND 0x00
-#define FX_PLC_NET_NET_NUMBER 0x00
-#define FX_PLC_NET_PLC_NUMBER 0xFF
-#define FX_PLC_NET_IO_NUMBER 0x03FF
-#define FX_PLC_NET_MODULE_NUMBER 0x00
-#define FX_PLC_NET_WATCHTIMER 0x000A
-
-#define FX_PLC_NET_FIRST_INS_MWORD_MB_READ 0x0406      // Multiple block(1 block contain n word)
-#define FX_PLC_NET_FIRST_INS_MWORD_MB_WRITE 0x1406      // Multiple block(1 block contain n word)
-#define FX_PLC_NET_FIRST_INS_MDATA_OB_READ 0x0401      // One block(1 block contain n data:word or bit)
-#define FX_PLC_NET_FIRST_INS_MDATA_OB_WRITE 0x1401      // One block(1 block contain n data:word or bit)
-
-#define FX_PLC_NET_SECOND_INSTRUCTION_WORD 0x0000      // word
-#define FX_PLC_NET_SECOND_INSTRUCTION_BIT 0x0001      // bit: 0401 1401 
-
-#define FX_PLC_NET_FIRST_LEN_MDATA_OB_READ 0x000C
-#define FX_PLC_NET_RESPONSE_FRAME_MIN_SIZE 11
-
-#define FX_PLC_NET_REGISTER_D 0xA8
-#define FX_PLC_NET_REGISTER_X 0x9C
-#define FX_PLC_NET_REGISTER_Y 0x9D
-#define FX_PLC_NET_REGISTER_M 0x90
-#define FX_PLC_NET_REGISTER_L 0x92
-#define FX_PLC_NET_REGISTER_F 0x93
-#define FX_PLC_NET_REGISTER_V 0x94
-#define FX_PLC_NET_REGISTER_B 0xA0
-#define FX_PLC_NET_REGISTER_W 0xB4
-
-#define FX_PLC_READ_DELAY_TIME 20
-
-// FX PLC 编程口通讯格式
-#pragma pack(1)
-typedef struct {
-    uint8_t stx;
-    uint8_t cmd;
-    uint8_t address[4];
-    uint8_t length[2];
-    uint8_t etx;
-    uint8_t sum[2];
-} FxPlcReadFrameFormat;
-
-// FX PLC 串口通讯格式
-typedef struct {
-    uint8_t enq;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-    uint8_t cmd[2];
-    uint8_t timeout;      // 0-150ms -> 0x0-0xf
-    uint8_t address[5];   
-    uint8_t length[2];
-    uint8_t sum[2];
-} FxPlcSerialAskReadFrameFormat;
-
-typedef struct {
-    uint8_t enq;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-    uint8_t cmd[2];
-    uint8_t timeout;      // 0-150ms -> 0x0-0xf
-    uint8_t address[7];
-    uint8_t length[2];
-    uint8_t sum[2];
-} FxPlcSerialAskQReadFrameFormat;
-
-typedef struct {
-    uint8_t enq;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-    uint8_t cmd[2];
-    uint8_t timeout;      // 0-150ms -> 0x0-0xf
-    uint8_t address[5];
-    uint8_t length[2];
-    uint8_t data[8];
-    uint8_t sum[2];
-} FxPlcSerialAskWriteFrameFormat;
-
-typedef struct {
-    uint8_t stx;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-    uint8_t databuf[256];           // 64 * 4
-    uint8_t etx;
-    uint8_t sum[2];
-} FxPlcSerialAskReadBackFrameFormat;
-
-typedef struct {
-    uint8_t ack;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-} FxPlcSerialAnsAckFrameFormat;
-
-typedef struct {
-    uint8_t nak;
-    uint8_t plcnum[2];
-    uint8_t pcnum[2];
-    uint8_t errorcode[2];
-} FxPlcSerialAnsNackFrameFormat;
-
-// FX PLC 以太网口通讯格式
-typedef struct {
-    uint8_t sechead[2];
-    uint8_t netnum;
-    uint8_t plcnum;
-    uint8_t ionum[2];
-    uint8_t modulenum;  
-    uint8_t length[2];        // start:watchtimer[0]
-    uint8_t watchtimer[2];
-    uint8_t instruction[2];
-    uint8_t secinstruction[2];
-    uint8_t startregaddr[3];
-    uint8_t regcode;
-    uint8_t regnum[2];
-} FxPlcInternetAskReadFrameFormat;
-
-typedef struct {
-    uint8_t sechead[2];
-    uint8_t netnum;
-    uint8_t plcnum;
-    uint8_t ionum[2];
-    uint8_t modulenum;  
-    uint8_t length[2];    // start:endcode[0]
-    uint8_t endcode[2];
-    uint8_t* data;
-} FxPlcInternetAskReadBackFrameFormat;
-#pragma pack()
-
-void ReadSingleDataRegister(uint16_t address, uint16_t frnum);
-void SerialReadSingleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
-void SerialReadSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
-void SerialReadDoubleDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
-void SerialWriteSingleFloatDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, float wdata);
-void SerialReadSingleYDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
-void SerialReadSingleMDataRegister(uint16_t plcnum, uint16_t pcnum, uint8_t timeout, uint16_t address, uint16_t frnum);
-void SendAckToPlc(void);
-void SendNackToPlc(void);
-void FX_PackNetReadSingleDataRegister(uint32_t address, uint16_t frnum);
-void FX_PackNetReadSingleYDataRegister(uint32_t address, uint16_t frnum);
-void FX_PackNetReadDoubleDataRegister(uint32_t address, uint16_t frnum);
-int FX_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum);
-int FX_NetReadDoubleDataRegister(int sock, uint32_t address, uint16_t frnum);
-int FX_NetReadSingleYDataRegister(int sock, uint32_t address, uint16_t frnum);
-int ReadInputRelayData();
-int ReadOutputRelayData();
-int GetDataFromFxPlc(void);
-int GetSerialDataFromFxPlc(void);
-int GetNetDataFromFxPlc(void);
+/* 网口：返回 PLC_OK、PLC_ERR_RESPONSE 或 PLC_ERR_LINK（需重连） */
+int FX_NetRead(int sock, FxDevice dev, uint32_t address, FxFormat fmt, PlcValue *out);
 
 #endif

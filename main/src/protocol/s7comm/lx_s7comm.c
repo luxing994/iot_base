@@ -1,616 +1,171 @@
-#include "lx_s7comm.h"
 #include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include "esp_log.h"
-#include "iot_common.h"
-
-#define MAX_PDU_SIZE 1024                   // 最大 PDU 大小
+#include "lx_s7comm.h"
+#include "proto_util.h"
+#include "net_io.h"
 
 static const char *TAG = "S7COMM";
-uint32_t s7dataunitreference = 0;
-uint32_t s7netsrdatabuffaddr = 0;
-uint32_t s7netsrdatalen = 0;
-int s7netdatarecvflag = 0;
 
-// 读到的数据放在模块静态区，接收任务稍后从这里取（原实现传的是读函数的栈变量地址）
-static uint8_t s_s7readbuf[4];
+#define TPKT_VERSION        0x03
+#define TPKT_HEADER_LEN     4
+#define COTP_CC_PDU_TYPE    0xD0
+#define S7_PROTOCOL_ID      0x32
+#define S7_ROSCTR_ACK_DATA  0x03
+#define S7_RESP_MAX         256
 
-static void S7_NetDataRecvNotice(const void *data, uint32_t size, uint32_t len, uint16_t frnum, uint8_t datatype)
-{
-	memcpy(s_s7readbuf, data, size);
-	s7netsrdatabuffaddr = (uint32_t)s_s7readbuf;
-	s7netsrdatalen = len;
-	g_ppiplccount = frnum;
-	g_ppiplcdataformat = datatype;
-	s7netdatarecvflag = 1;
-}
+static uint16_t s_pduRef;
 
-// -------------------------- 发送和接收数据的工具函数 --------------------------
-
-static int send_all(int fd, const uint8_t *buf, size_t len) {
-    int err = send(fd, buf, len, 0);
-    if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-        return errno;
-    }
-    return 0;
-}
-
-static int recv_some(int fd, void *buf, size_t cap) {
-    int len = recv(fd, buf, cap, 0);
-     ESP_LOGI(TAG, "read data size :%d", len);
-    if (len <= 0) {
-        ESP_LOGE(TAG, "Error occurred during recving: errno %d", errno);
-        return errno;
-    }
-    return 0;
-}
-
-// 构建 TPKT 头部
-static void tpkt(uint8_t *p, uint16_t len_without_tpkt) {
-    p[0] = TPKT_VERSION;
-    p[1] = 0x00;
-    uint16_t tot = htons((uint16_t)(len_without_tpkt + 4));
-    memcpy(p + 2, &tot, 2);
-}
-
-// -------------------------- COTP 连接请求和确认 --------------------------
-
-/**
- * @brief COTP Connection Request (CR)，期望接收 Confirm (CC)
- * 
- * @param fd 已连接的 TCP socket
- * @param local_tsap 本地 TSAP 地址
- * @param remote_tsap 远程 TSAP 地址
- * @return int 0 成功，负值失败
+/*
+ * 接收一个完整的 TPKT 报文（按报文头中的总长度读取），返回报文总长度。
+ * 超出缓冲区的部分读出后丢弃。失败返回 -1。
  */
-static int cotp_cr_cc(int fd) 
+static int S7_RecvTpkt(int sock, uint8_t *buf, size_t cap)
 {
-    uint8_t pkt[22] = { 
-        0x03, 0x0, 0x0, 0x16,   // TPKT Header (4 bytes)
-        0x11, 0xe0, 0x00, 0x00, // COTP Header (4 bytes)
-        0x04, 0x30, 0x0, 
-        0xc1, 0x02, 0x01, 0x01,  // Source TSAP
-        0xc2, 0x02, 0x01, 0x01,  // Destination TSAP
-        0xc0, 0x01, 0x0a
+    uint16_t total;
+    size_t keep;
+
+    if (Net_RecvExact(sock, buf, TPKT_HEADER_LEN) != 0) {
+        return -1;
+    }
+    total = Proto_Be16(&buf[2]);
+    if (buf[0] != TPKT_VERSION || total < TPKT_HEADER_LEN) {
+        ESP_LOGE(TAG, "bad TPKT header %02X len %u", buf[0], total);
+        return -1;
+    }
+    keep = (total < cap) ? total : cap;
+    if (Net_RecvExact(sock, buf + TPKT_HEADER_LEN, keep - TPKT_HEADER_LEN) != 0) {
+        return -1;
+    }
+    if (total > keep && Net_Discard(sock, total - keep) != 0) {
+        return -1;
+    }
+    return (int)keep;
+}
+
+/* ------------------------------------------------------------------ 建立连接 */
+
+// COTP 连接请求（CR），本地 / 远端 TSAP 均为 0x0101
+static int S7_CotpConnect(int sock)
+{
+    static const uint8_t cr[] = {
+        0x03, 0x00, 0x00, 0x16,                 // TPKT
+        0x11, 0xE0, 0x00, 0x00, 0x04, 0x30, 0x00,   // COTP CR
+        0xC1, 0x02, 0x01, 0x01,                 // 源 TSAP
+        0xC2, 0x02, 0x01, 0x01,                 // 目的 TSAP
+        0xC0, 0x01, 0x0A,                       // TPDU 大小 1024
     };
+    uint8_t rsp[64];
+    int len;
 
-    // 发送 COTP CR 请求
-    if (send_all(fd, pkt, sizeof(pkt)) != 0) return -1;
-     
-    uint8_t rsp[128];
-    int got = recv_some(fd, rsp, sizeof(rsp));
-    if (got != 0) {
+    if (Net_SendAll(sock, cr, sizeof(cr)) != 0) {
         return -1;
     }
-
-    if (rsp[0] != TPKT_VERSION) {
+    len = S7_RecvTpkt(sock, rsp, sizeof(rsp));
+    if (len < 6 || rsp[5] != COTP_CC_PDU_TYPE) {
+        ESP_LOGE(TAG, "COTP connect refused");
         return -1;
     }
-
-    if (rsp[5] != COTP_CC_PDU_TYPE) {
-        return -1;
-    }  // 确认 COTP CC 类型
     return 0;
 }
 
-/**
- * @brief 设置 S7 通信（协商 PDU 长度）
- * 
- * @param fd 已连接的 TCP socket
- * @param out_pdu_len 输出协商的 PDU 长度
- * @return int 0 成功，负值失败
- */
-static int s7_setup_comm(int fd, uint16_t *out_pdu_len) 
+// S7 通信设置：协商 PDU 长度
+static int S7_SetupCommunication(int sock)
 {
-    uint8_t pkt[25] = { 
-        0x03, 0x0, 0x0, 0x19,  // TPKT Header (4 bytes)
-        0x02, 0xf0, 0x80,      // COTP Header (3 bytes)
-        0x32, 0x01, 0x00, 0x00, 0xcc, 0xc1, 0x00, 0x08, 0x00, 0x00, 
-        0xf0, 0x00, 0x00, 0x01, 0x00, 0x01, 0x03, 0xc0
+    static const uint8_t req[] = {
+        0x03, 0x00, 0x00, 0x19,                 // TPKT
+        0x02, 0xF0, 0x80,                       // COTP DT
+        0x32, 0x01, 0x00, 0x00, 0xCC, 0xC1, 0x00, 0x08, 0x00, 0x00,   // S7 头
+        0xF0, 0x00, 0x00, 0x01, 0x00, 0x01, 0x03, 0xC0,               // 最大 PDU 960
     };
+    uint8_t rsp[64];
+    int len;
 
-    if (send_all(fd, pkt, sizeof(pkt)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
-        return -1;
-    }   
-
-    uint8_t rsp[256];
-    int got = recv_some(fd, rsp, sizeof(rsp));
-    if (got != 0) {
+    if (Net_SendAll(sock, req, sizeof(req)) != 0) {
         return -1;
     }
-    if (rsp[0] != TPKT_VERSION) return -1;
-    if (rsp[5] != 0xf0) return -1;
-    uint16_t pdu = ((uint16_t)rsp[25] << 8) | rsp[26];
-    if (out_pdu_len) *out_pdu_len = pdu;
-    ESP_LOGI(TAG, "true pdu size:%d", pdu);
-    return fd;
-}
-
-/**
- * @brief 设置 S7 通信（协商 PDU 长度）
- * 
- * @param fd 已连接的 TCP socket
- * @param out_pdu_len 输出协商的 PDU 长度
- * @return int 0 成功，负值失败
- */
-static int s7_begin_data_trans(int fd) 
-{
-    uint8_t pkt[7] = { 
-        0x03, 0x0, 0x0, 0x07,  // TPKT Header (4 bytes)
-        0x02, 0xf0, 0x00     // COTP Header (3 bytes)
-    };
-
-    if (send_all(fd, pkt, sizeof(pkt)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
+    len = S7_RecvTpkt(sock, rsp, sizeof(rsp));
+    if (len < 27 || rsp[5] != 0xF0 || rsp[7] != S7_PROTOCOL_ID) {
+        ESP_LOGE(TAG, "setup communication failed");
         return -1;
-    }  
-
+    }
+    ESP_LOGI(TAG, "PDU size: %u", Proto_Be16(&rsp[25]));
     return 0;
 }
 
-static int s7_read_bit(int sock, uint8_t area, uint32_t address, uint8_t bitoffset, uint8_t *out_word) 
+int S7_Handshake(int sock)
 {
-    // 构造 S7 请求数据包
-    uint8_t s7p[31];  // 包括 S7 header 和 ReadVar 请求
-    // TPKT Header (4 bytes)
-    s7p[0] = 0x03;
-    s7p[1] = 0x0;
-    s7p[2] = 0x0;
-    s7p[3] = 0x1f;
-    // COTP Header (3 bytes)
-    s7p[4] = 0x02;
-    s7p[5] = 0xf0;
-    s7p[6] = 0x80;
-    // S7 Header
-    s7p[7] = 0x32;
-    s7p[8] = 0x01; 
-    s7p[9] = 0x00;
-    s7p[10] = 0x00;
-    s7p[11] = (s7dataunitreference >> 8) & 0xff;   //data unit reference high
-    s7p[12] = s7dataunitreference  & 0xff;    //data unit reference low
-    s7p[13] = 0x00;  
-    s7p[14] = 0x0e;
-    s7p[15] = 0x00;
-    s7p[16] = 0x00;
-    // Parameter
-    s7p[17] = 0x04;   // Read Var 
-    s7p[18] = 0x01;
-    // Item
-    s7p[19] = 0x12;
-    s7p[20] = 0x0a;
-    s7p[21] = 0x10;
-    s7p[22] = 0x01;   // Data size: bit
-    s7p[23] = 0x00;
-    s7p[24] = 0x01;   // Data length
-    s7p[25] = 0x00;
-    s7p[26] = 0x00;
-    s7p[27] = area;   // Data Area
-
-    address <<= 3;
-    address += bitoffset;
-    s7p[28] = (address >> 16) & 0xff;    // Data Address
-    s7p[29] = (address >> 8) & 0xff; 
-    s7p[30] = address & 0xff; 
-
-    s7_begin_data_trans(sock);
-    if (send_all(sock, s7p, sizeof(s7p)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
+    if (S7_CotpConnect(sock) != 0 || S7_SetupCommunication(sock) != 0) {
         return -1;
     }
-    s7dataunitreference++;
-
-    uint8_t rsp[1024];  // 接收响应
-    int got = recv_some(sock, rsp, sizeof(rsp));  // 接收响应数据
-    if (got != 0) {
-        return -2;  // 数据长度错误
-    }
-
-    const uint8_t *h = rsp + 7;
-    if (h[0] != 0x32) {
-        return -3;  // 错误的响应
-    }
-    
-    if (h[1] != 0x03) {
-        return -4;  // 错误的响应类型   
-    }
-
-    uint16_t data_len = (h[16] << 8) | h[17];
-
-    if (data_len != 0x01) {
-        ESP_LOGE(TAG, "data length = %d", data_len);
-        return -5;  // 数据长度小于预期
-    }
-    
-    *out_word = h[18];
-
-    return 0;  // 成功
+    ESP_LOGI(TAG, "S7 connection established");
+    return 0;
 }
 
-static int s7_read_bit_for_v(int sock, uint8_t area, uint32_t address, uint8_t bitoffset, uint8_t *out_word) 
-{
-    // 构造 S7 请求数据包
-    uint8_t s7p[31];  // 包括 S7 header 和 ReadVar 请求
-    // TPKT Header (4 bytes)
-    s7p[0] = 0x03;
-    s7p[1] = 0x0;
-    s7p[2] = 0x0;
-    s7p[3] = 0x1f;
-    // COTP Header (3 bytes)
-    s7p[4] = 0x02;
-    s7p[5] = 0xf0;
-    s7p[6] = 0x80;
-    // S7 Header
-    s7p[7] = 0x32;
-    s7p[8] = 0x01; 
-    s7p[9] = 0x00;
-    s7p[10] = 0x00;
-    s7p[11] = (s7dataunitreference >> 8) & 0xff;   //data unit reference high
-    s7p[12] = s7dataunitreference  & 0xff;    //data unit reference low
-    s7p[13] = 0x00;  
-    s7p[14] = 0x0e;
-    s7p[15] = 0x00;
-    s7p[16] = 0x00;
-    // Parameter
-    s7p[17] = 0x04;   // Read Var 
-    s7p[18] = 0x01;
-    // Item
-    s7p[19] = 0x12;
-    s7p[20] = 0x0a;
-    s7p[21] = 0x10;
-    s7p[22] = 0x01;   // Data size: bit
-    s7p[23] = 0x00;
-    s7p[24] = 0x01;   // Data length
-    s7p[25] = 0x00;
-    s7p[26] = 0x01;
-    s7p[27] = area;   // Data Area
+/* ------------------------------------------------------------------ 读变量 */
 
-    address <<= 3;
-    address += bitoffset;
-    s7p[28] = (address >> 16) & 0xff;    // Data Address
-    s7p[29] = (address >> 8) & 0xff; 
-    s7p[30] = address & 0xff; 
-
-    s7_begin_data_trans(sock);
-    if (send_all(sock, s7p, sizeof(s7p)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
-        return -1;
-    }
-    s7dataunitreference++;
-
-    uint8_t rsp[1024];  // 接收响应
-    int got = recv_some(sock, rsp, sizeof(rsp));  // 接收响应数据
-    if (got != 0) {
-        return -2;  // 数据长度错误
-    }
-
-    const uint8_t *h = rsp + 7;
-    if (h[0] != 0x32) {
-        return -3;  // 错误的响应
-    }
-    
-    if (h[1] != 0x03) {
-        return -4;  // 错误的响应类型   
-    }
-
-    uint16_t data_len = (h[16] << 8) | h[17];
-
-    if (data_len != 0x01) {
-        ESP_LOGE(TAG, "data length = %d", data_len);
-        return -5;  // 数据长度小于预期
-    }
-    
-    *out_word = h[18];
-
-    return 0;  // 成功
-}
-
-static int s7_read_word(int sock, uint8_t area, uint32_t address, uint16_t *out_word) 
-{
-    // 构造 S7 请求数据包
-    uint8_t s7p[31];  // 包括 S7 header 和 ReadVar 请求
-    // TPKT Header (4 bytes)
-    s7p[0] = 0x03;
-    s7p[1] = 0x0;
-    s7p[2] = 0x0;
-    s7p[3] = 0x1f;
-    // COTP Header (3 bytes)
-    s7p[4] = 0x02;
-    s7p[5] = 0xf0;
-    s7p[6] = 0x80;
-    // S7 Header
-    s7p[7] = 0x32;
-    s7p[8] = 0x01; 
-    s7p[9] = 0x00;
-    s7p[10] = 0x00;
-    s7p[11] = (s7dataunitreference >> 8) & 0xff;   //data unit reference high
-    s7p[12] = s7dataunitreference  & 0xff;    //data unit reference low
-    s7p[13] = 0x00;  
-    s7p[14] = 0x0e;
-    s7p[15] = 0x00;
-    s7p[16] = 0x00;
-    // Parameter
-    s7p[17] = 0x04;   // Read Var 
-    s7p[18] = 0x01;
-    // Item
-    s7p[19] = 0x12;
-    s7p[20] = 0x0a;
-    s7p[21] = 0x10;
-    s7p[22] = 0x04;   // Data size: word
-    s7p[23] = 0x00;
-    s7p[24] = 0x01;   // Data length
-    s7p[25] = 0x00;
-    s7p[26] = 0x01;
-    s7p[27] = area;   // Data Area
-
-    address <<= 3;
-    s7p[28] = (address >> 16) & 0xff;    // Data Address
-    s7p[29] = (address >> 8) & 0xff; 
-    s7p[30] = address & 0xff; 
-
-    s7_begin_data_trans(sock);
-    if (send_all(sock, s7p, sizeof(s7p)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
-        return -1;
-    }
-    s7dataunitreference++;
-
-    uint8_t rsp[1024];  // 接收响应
-    int got = recv_some(sock, rsp, sizeof(rsp));  // 接收响应数据
-    if (got != 0) {
-        return -2;  // 数据长度错误
-    }
-
-    const uint8_t *h = rsp + 7;
-    if (h[0] != 0x32) {
-        return -3;  // 错误的响应
-    }
-    
-    if (h[1] != 0x03) {
-        return -4;  // 错误的响应类型   
-    }
-
-    uint16_t data_len = ((h[16] << 8) | h[17]) / 8;
-
-    if (data_len != 0x02) {
-        return -5;  // 数据长度小于预期
-    }
-    
-    *out_word = (h[18] << 8) | h[19];
-
-    return 0;  // 成功
-}
-
-static int s7_read_dword(int sock, uint8_t area, uint32_t address, uint32_t *out_word) 
-{
-    // 构造 S7 请求数据包
-    uint8_t s7p[31];  // 包括 S7 header 和 ReadVar 请求
-    // TPKT Header (4 bytes)
-    s7p[0] = 0x03;
-    s7p[1] = 0x0;
-    s7p[2] = 0x0;
-    s7p[3] = 0x1f;
-    // COTP Header (3 bytes)
-    s7p[4] = 0x02;
-    s7p[5] = 0xf0;
-    s7p[6] = 0x80;
-    // S7 Header
-    s7p[7] = 0x32;
-    s7p[8] = 0x01; 
-    s7p[9] = 0x00;
-    s7p[10] = 0x00;
-    s7p[11] = (s7dataunitreference >> 8) & 0xff;   //data unit reference high
-    s7p[12] = s7dataunitreference  & 0xff;    //data unit reference low
-    s7p[13] = 0x00;  
-    s7p[14] = 0x0e;
-    s7p[15] = 0x00;
-    s7p[16] = 0x00;
-    // Parameter
-    s7p[17] = 0x04;   // Read Var 
-    s7p[18] = 0x01;
-    // Item
-    s7p[19] = 0x12;
-    s7p[20] = 0x0a;
-    s7p[21] = 0x10;
-    s7p[22] = 0x04;   // Data size: word
-    s7p[23] = 0x00;
-    s7p[24] = 0x02;   // Data length
-    s7p[25] = 0x00;
-    s7p[26] = 0x01;
-    s7p[27] = area;   // Data Area
-
-    address <<= 3;
-    s7p[28] = (address >> 16) & 0xff;    // Data Address
-    s7p[29] = (address >> 8) & 0xff; 
-    s7p[30] = address & 0xff; 
-
-    s7_begin_data_trans(sock);
-    if (send_all(sock, s7p, sizeof(s7p)) != 0) {
-        ESP_LOGE(TAG, "send failed, errno=%d", errno);
-        return -1;
-    }
-    s7dataunitreference++;
-
-    uint8_t rsp[1024];  // 接收响应
-    int got = recv_some(sock, rsp, sizeof(rsp));  // 接收响应数据
-    if (got != 0) {
-        return -2;  // 数据长度错误
-    }
-
-    const uint8_t *h = rsp + 7;
-    if (h[0] != 0x32) {
-        return -3;  // 错误的响应
-    }
-    
-    if (h[1] != 0x03) {
-        return -4;  // 错误的响应类型   
-    }
-
-    uint16_t data_len = ((h[16] << 8) | h[17]) / 8;
-
-    if (data_len != 0x04) {
-        return -5;  // 数据长度小于预期
-    }
-    
-    *out_word = (h[18] << 24) | (h[19] << 16) | (h[20] << 8) | h[21];
-
-    return 0;  // 成功
-}
-
-// -------------------------- S7 通信函数 --------------------------
-
-/**
- * @brief 创建与 PLC 的 TCP 连接，并初始化 S7 通信
- * 
- * @param ip 目标 PLC 的 IP 地址
- * @param local_tsap 本地 TSAP 地址
- * @param remote_tsap 远程 TSAP 地址
- * @param pdu_len 协商的 PDU 长度
- * @return int 成功时返回连接的 socket，失败时返回 -1
+/*
+ * 请求的传输尺寸沿用现场验证过的写法：
+ * 位 -> BIT x1，字节 -> BYTE x1，16 位 -> WORD x1，32 位 -> WORD x2
  */
-int s7_connect(const char *ip, uint16_t port, uint16_t *pdu_len) 
+static void S7_NetTransport(uint8_t type, uint8_t *ts, uint16_t *count)
 {
-    struct sockaddr_in dest_addr;
-    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock < 0) {
-        return -1;
+    switch (type) {
+    case S7_BIT:  *ts = S7_TS_BIT;  *count = 1; break;
+    case S7_BYTE: *ts = S7_TS_BYTE; *count = 1; break;
+    case S7_INT:  *ts = S7_TS_WORD; *count = 1; break;
+    default:      *ts = S7_TS_WORD; *count = 2; break;
+    }
+}
+
+int S7_NetRead(int sock, const S7Var *var, PlcValue *out)
+{
+    // 每次请求前发一个空的 COTP 数据帧，与现场验证过的原实现保持一致
+    static const uint8_t cotp_dt[] = { 0x03, 0x00, 0x00, 0x07, 0x02, 0xF0, 0x00 };
+    uint8_t req[31] = {
+        0x03, 0x00, 0x00, 31,                   // TPKT，总长 31
+        0x02, 0xF0, 0x80,                       // COTP DT
+        S7_PROTOCOL_ID, 0x01, 0x00, 0x00,       // S7 头：作业请求
+        0x00, 0x00,                             // PDU 参考（下面填写）
+        0x00, 0x0E, 0x00, 0x00,                 // 参数长度 14，数据长度 0
+        0x04, 0x01,                             // ReadVar，1 个 Item
+    };
+    uint8_t rsp[S7_RESP_MAX];
+    const uint8_t *h = &rsp[7];     // S7 头
+    uint8_t ts;
+    uint16_t count;
+    int len, dlen;
+
+    s_pduRef++;
+    req[11] = (uint8_t)(s_pduRef >> 8);
+    req[12] = (uint8_t)s_pduRef;
+    S7_NetTransport(var->type, &ts, &count);
+    S7_PutItem(&req[19], ts, count, var);
+
+    if (Net_SendAll(sock, cotp_dt, sizeof(cotp_dt)) != 0 ||
+        Net_SendAll(sock, req, sizeof(req)) != 0) {
+        return PLC_ERR_LINK;
+    }
+    len = S7_RecvTpkt(sock, rsp, sizeof(rsp));
+    if (len < 0) {
+        return PLC_ERR_LINK;
     }
 
-    dest_addr.sin_addr.s_addr = inet_addr(ip);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(port);
-
-    // 尝试建立 TCP 连接
-    if (connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0) {
-        close(sock);
-        return -1;
+    // S7 头(12) | 04 01 | 返回码 类型 长度(2) | 数据
+    if (len < 7 + 18 || h[0] != S7_PROTOCOL_ID || h[1] != S7_ROSCTR_ACK_DATA) {
+        ESP_LOGE(TAG, "bad response (len %d)", len);
+        return PLC_ERR_RESPONSE;
+    }
+    if (h[10] != 0 || h[11] != 0 || h[14] != 0xFF) {
+        ESP_LOGE(TAG, "read area 0x%02X byte %u failed: error %02X%02X, return code %02X",
+                 var->area, (unsigned)var->byte, h[10], h[11], h[14]);
+        return PLC_ERR_RESPONSE;
+    }
+    dlen = S7_RespDataBytes(var, Proto_Be16(&h[16]));
+    if (dlen != S7_TypeBytes(var->type) || len < 7 + 18 + dlen) {
+        ESP_LOGE(TAG, "unexpected data length %d", dlen);
+        return PLC_ERR_RESPONSE;
     }
 
-    ESP_LOGI(TAG, "TCP connection established");
-
-    // 发送 COTP 连接请求（CR）并等待确认（CC）
-    if (cotp_cr_cc(sock) != 0) {
-        close(sock);
-        return -1;
-    }
-
-    ESP_LOGI(TAG, "COTP connection successful");
-
-    // 设置 S7 通信参数；失败时关闭 socket，避免每次重连泄漏一个句柄
-    if (s7_setup_comm(sock, pdu_len) < 0) {
-        close(sock);
-        return -1;
-    }
-
-    return sock;
-}
-
-int GetNetDataFromS7PlcNet(void)
-{
-	uint16_t datalen;
-	int16_t tdata;
-	uint8_t* data = NULL;
-	static const char *TAG = "S7_GET_NET_DATA";
-	int i, ret;
-
-	if (s7netdatarecvflag != 1 || s7netsrdatabuffaddr == NULL || s7netsrdatalen == 0) {
-		return -1;
-	}
-
-	data = (uint8_t *)s7netsrdatabuffaddr;
-    if (g_ppiplcdataformat == PLC_DATA_TYPE_BIT || g_ppiplcdataformat == PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI) {
-        ret = PPIPLC_WriteBufferBytes(&data[0], 1);
-        if (ret != 0) {
-            ESP_LOGE(TAG, "buffer error: %d", ret);
-            return -1;
-        }
-    } else if (g_ppiplcdataformat == PLC_DATA_TYPE_SHORT) {
-        for (i = 0; i < s7netsrdatalen * 2; i++) {
-            ret = PPIPLC_WriteBufferBytes(&data[i], 1);
-            if (ret != 0) {
-                ESP_LOGE(TAG, "buffer error: %d", ret);
-                return -1;
-            }
-        }
-    } else if (g_ppiplcdataformat == PLC_DATA_TYPE_FLOAT || g_ppiplcdataformat == PLC_DATA_TYPE_INT) {
-        for (i = 0; i < s7netsrdatalen * 4; i++) {
-            ret = PPIPLC_WriteBufferBytes(&data[i], 1);
-            if (ret != 0) {
-                ESP_LOGE(TAG, "buffer error: %d", ret);
-                return -1;
-            }
-        }
-    }
-	
-	s7netdatarecvflag = 0;
-
-	return 0;
-}
-
-// s7_read_* 返回 -1 发送失败、-2 接收失败，这两种说明链路失效需要重连；其余为应答内容异常
-static int S7_Finish(int err, const void *data, uint32_t size, uint16_t frnum, uint8_t datatype)
-{
-    static const char *RTAG = "S7_READ";
-
-    if (err == 0) {
-        S7_NetDataRecvNotice(data, size, 1, frnum, datatype);
-    } else {
-        ESP_LOGE(RTAG, "read FR%03d failed: %d", frnum, err);
-    }
-    vTaskDelay(S7_READ_DATA_TIME);
-
-    return (err == -1 || err == -2) ? -1 : 0;
-}
-
-int S7_NetReadBitDataRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
-{
-    uint8_t read_regs = 0;
-    int err = s7_read_bit_for_v(sock, S7_DATA_AREA_DB, address, bitoffset, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
-}
-
-int S7_NetReadSingleDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    uint16_t read_regs = 0;
-    int err = s7_read_word(sock, S7_DATA_AREA_DB, address, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_SHORT);
-}
-
-int S7_NetReadIntDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    uint32_t read_regs = 0;
-    int err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_INT);
-}
-
-int S7_NetReadFloatDataRegister(int sock, uint32_t address, uint16_t frnum)
-{
-    uint32_t read_regs = 0;
-    int err = s7_read_dword(sock, S7_DATA_AREA_DB, address, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_FLOAT);
-}
-
-int S7_NetReadBitMRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
-{
-    uint8_t read_regs = 0;
-    int err = s7_read_bit(sock, S7_DATA_AREA_MERKER, address, bitoffset, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
-}
-
-int S7_NetReadBitIRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
-{
-    uint8_t read_regs = 0;
-    int err = s7_read_bit(sock, S7_DATA_AREA_INPUT, address, bitoffset, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
-}
-
-int S7_NetReadBitQRegister(int sock, uint32_t address, uint16_t bitoffset, uint16_t frnum)
-{
-    uint8_t read_regs = 0;
-    int err = s7_read_bit(sock, S7_DATA_AREA_OUTPUT, address, bitoffset, &read_regs);
-    return S7_Finish(err, &read_regs, sizeof(read_regs), frnum, PLC_DATA_TYPE_BIT);
+    S7_SetValue(var, &h[18], out);
+    return PLC_OK;
 }

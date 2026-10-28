@@ -14,7 +14,6 @@ extern EventGroupHandle_t xEventGroup2;
 extern EventGroupHandle_t xEventGroup3;
 
 #define UART_BUFF_SIZE 1024
-#define FXPLC_BUFF_SIZE 1024
 
 // 上报队列：元素为 char *（堆上的 JSON 副本），消费者负责 free
 #define IOT_MSG_QUEUE_LEN      32
@@ -80,13 +79,6 @@ extern EventGroupHandle_t xEventGroup3;
 #define HLPLCDEVTYPEID    "HLPLC"
 #define MDPLCDEVTYPEID    "MDPLC"
 #define PPIPLCDEVTYPEID   "PPIPLC"
-
-#define PLC_DATA_TYPE_CHAR_POINT_OR_BYTE_FOR_PPI 0
-#define PLC_DATA_TYPE_SHORT                      1
-#define PLC_DATA_TYPE_FLOAT                      2
-#define PLC_DATA_TYPE_BCD                        3
-#define PLC_DATA_TYPE_INT                        4
-#define PLC_DATA_TYPE_BIT                        5
 
 // 命令接收JSON格式
 /*
@@ -170,49 +162,20 @@ typedef struct {
     float setchargeamount;
 } SNSetCaclReFillingMachine;
 
-extern int g_fxplccount;
-extern int g_fxplcdataformat;
-extern int g_fxplcbitpos;
-extern int g_modbusplccount;
-extern int g_modbusplcdataformat;
-extern int g_ppiplccount;
-extern int g_ppiplcdataformat;
-extern int g_hostlinkplccount;
-extern int g_hostlinkplcdataformat;
-extern int g_hostlinkplcbitpos;
-extern int g_lsplccount;
-extern int g_lsplcdataformat;
 extern uint64_t g_baseTime;
 
-uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len);
 int CalFloatStrPointPos(char *str);
-int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc);
-uint8_t CalFCS(uint8_t* pbuff, uint16_t len);
-uint16_t CalSumCheckData(uint8_t *data, uint16_t len);
 uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len);
-int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum);
-uint16_t CalReadDataRegister(uint8_t *data);
-uint16_t CalSerialReadDataRegister(uint8_t *data);
-int BCDToInt(int bcd);
+
+/* UART1 接收缓冲（事务模式，见 serial_txn.c） */
 int UART_InitBuffer(void);
 int UART_WriteBufferBytes(uint8_t *data, uint32_t size);
 int UART_ReadBufferBytes(uint8_t *data, uint32_t size);
-int FXPLC_InitBuffer(void);
-int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
-int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
-int MODBUSPLC_InitBuffer(void);
-int MODBUSPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
-int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
-int PPIPLC_InitBuffer(void);
-int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size);
-int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size);
 void UART_CommitBuffer(void);
 void UART_RollbackBuffer(void);
 void UART_FlushBuffer(void);
 uint32_t UART_BufferedBytes(void);
-void FXPLC_FlushBuffer(void);
-void PPIPLC_FlushBuffer(void);
-void MODBUSPLC_FlushBuffer(void);
+
 int get_random_range_freq(int min_val, int max_val);
 int IOT_PostMessage(const char *msg);
 

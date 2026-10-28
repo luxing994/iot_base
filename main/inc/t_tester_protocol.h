@@ -391,7 +391,7 @@ void TTesterSetGroupPara(uint16_t group);
 void TTesterGetJsonData(char *str);
 uint16_t TTesterStrChangeToUint(char *str);
 int TTesterGetSetParaStatus(char *str);
-int TTesterResolve(void);
+int TTesterResolve(void *ctx);     // 串口事务解析函数（见 serial_txn.h）
 
 // 测试项参数个数 / 字节数表与当前 group 命令选中的测试项（定义于 t_tester_protocol.c）
 extern int ttestparanum[10];

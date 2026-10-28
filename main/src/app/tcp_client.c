@@ -22,8 +22,7 @@
 #include "protocol_examples_common.h"
 #include "iot_time.h"
 #include "tcp_client.h"
-#include "fx_plc_protocol.h"
-#include "lx_modbus_tcp_master.h"
+#include "net_io.h"
 #include "lx_s7comm.h"
 #include "ota_task.h"
 #include "plc_poll.h"
@@ -322,11 +321,38 @@ void tcp_client3_task(void *pvParameters)
 
 /* ---------------------------------------------------------- 网口 PLC 轮询 */
 
+#define PLC_NET_TIMEOUT_MS      3000    // 网口 PLC 收发超时，超时视为链路失效并重连
+
 typedef int (*PlcConnectFunc)(void);
 typedef int (*PlcPollFunc)(int sock);
 
+// 网口 PLC 地址都是 IPv4（与上位机使用 IPv4 还是 IPv6 无关）
+static __attribute__((unused)) int PlcTcpConnect(const char *ip, uint16_t port, const char *tag)
+{
+    struct sockaddr_in dest_addr = { 0 };
+    int sock;
 
-static void PlcNetClientLoop(const char *tag, PlcConnectFunc connect_fn, PlcPollFunc poll_fn)
+    dest_addr.sin_addr.s_addr = inet_addr(ip);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(port);
+
+    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(tag, "Unable to create socket: errno %d", errno);
+        return -1;
+    }
+    ESP_LOGI(tag, "connecting to plc %s:%d", ip, port);
+    if (connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0) {
+        ESP_LOGE(tag, "Socket unable to connect: errno %d", errno);
+        close(sock);
+        return -1;
+    }
+    Net_SetTimeout(sock, PLC_NET_TIMEOUT_MS);
+    return sock;
+}
+
+static __attribute__((unused)) void PlcNetClientLoop(const char *tag, PlcConnectFunc connect_fn,
+                                                     PlcPollFunc poll_fn)
 {
     while (1) {
         int sock = connect_fn();
@@ -353,7 +379,7 @@ static void PlcNetClientLoop(const char *tag, PlcConnectFunc connect_fn, PlcPoll
 #if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
 static int ModbusConnect(void)
 {
-    return TcpConnect(CONFIG_PLC_MODBUS_IPV4_ADDR, CONFIG_PLC_MODBUS_TCP_PORT, "tcp modbus client");
+    return PlcTcpConnect(CONFIG_PLC_MODBUS_IPV4_ADDR, CONFIG_PLC_MODBUS_TCP_PORT, "tcp modbus client");
 }
 
 void tcp_modbus_client_task(void *pvParameters)
@@ -365,7 +391,7 @@ void tcp_modbus_client_task(void *pvParameters)
 #if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
 static int FxConnect(void)
 {
-    return TcpConnect(CONFIG_PLC_FX_IPV4_ADDR, CONFIG_PLC_FX_TCP_PORT, "tcp fx client");
+    return PlcTcpConnect(CONFIG_PLC_FX_IPV4_ADDR, CONFIG_PLC_FX_TCP_PORT, "tcp fx client");
 }
 
 void tcp_fx_client_task(void *pvParameters)
@@ -377,8 +403,13 @@ void tcp_fx_client_task(void *pvParameters)
 #if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
 static int S7Connect(void)
 {
-    uint16_t pdu_len = 0;
-    return s7_connect(CONFIG_PLC_PPI_IPV4_ADDR, CONFIG_PLC_PPI_TCP_PORT, &pdu_len);
+    int sock = PlcTcpConnect(CONFIG_PLC_PPI_IPV4_ADDR, CONFIG_PLC_PPI_TCP_PORT, "tcp ppi client");
+
+    if (sock >= 0 && S7_Handshake(sock) != 0) {
+        close(sock);
+        return -1;
+    }
+    return sock;
 }
 
 void tcp_ppi_client_task(void *pvParameters)

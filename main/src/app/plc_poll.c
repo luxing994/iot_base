@@ -5,10 +5,10 @@
  *   PlcPoll_xxxNet()    网口 PLC，由 tcp_client.c 中的连接任务每秒调用一次
  *
  * 读哪些寄存器由点表决定（plc_points.c，按 menuconfig 选择），这里只负责按表逐点执行：
- *   串口：每个点一次同步事务（发请求 -> 等完整应答 -> 解码上报，见 serial_txn.h）
- *   网口：每个点读完立即解码上报，链路失效时返回 -1 由调用方重连
+ * 把点表类型翻译成协议层的读函数，读到值后交给 plc_report.c 上报。
+ * 串口读函数内部是一次同步事务（见 serial_txn.h）；网口读函数返回 PLC_ERR_LINK 时
+ * 结束本轮，由调用方重连。
  */
-#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -18,8 +18,10 @@
 #include "plc_poll.h"
 #include "plc_points.h"
 #include "plc_report.h"
+#include "plc_value.h"
 #include "host_cmd.h"
 #include "serial_txn.h"
+#include "s7_area.h"
 #include "fx_plc_protocol.h"
 #include "hl_plc_protocol.h"
 #include "ppi_plc_protocol.h"
@@ -34,10 +36,17 @@ static const char *TAG = "PLC_POLL";
 
 #define POLL_INTERVAL_MS    1000
 
-/* FX 计算机链接的站号、PC 号和报文等待时间 */
-#define FX_STATION          0
-#define FX_PC_NUMBER        255
-#define FX_WAIT             10
+/* 网口每读一个点之后的间隔（沿用原实现） */
+#define FX_NET_GAP_MS       200
+#define S7_NET_GAP_MS       100
+#define MODBUS_NET_GAP_MS   300
+
+/* DBS 真空计只有一个读数，沿用原实现上报为 FR000 */
+#define DBS_FRNUM           0
+
+typedef int (*PointReader)(const PlcPoint *p, PlcValue *v);
+typedef int (*NetPointReader)(int sock, const PlcPoint *p, PlcValue *v);
+typedef void (*PointReporter)(const PlcPoint *p, const PlcValue *v);
 
 static __attribute__((unused)) void LogUnsupported(const char *protocol, const PlcPoint *p)
 {
@@ -45,92 +54,212 @@ static __attribute__((unused)) void LogUnsupported(const char *protocol, const P
              protocol, p->type, p->frnum, p->name);
 }
 
-/* ============================================================ 串口 */
-
-#if defined(CONFIG_PLC_FX_CONNECT_RS232)
-#define FX_SERIAL_PARSE   GetDataFromFxPlc          // 编程口
-#else
-#define FX_SERIAL_PARSE   GetSerialDataFromFxPlc    // 计算机链接
-#endif
-
-static __attribute__((unused)) void FxOnResponse(void)
-{
-    SendAckToPlc();
-    PlcReport_Fx();
-}
-
-#define FX_POINT(request)      SERIAL_TXN(request, FX_SERIAL_PARSE, SERIAL_TXN_TIMEOUT_MS, FxOnResponse())
-#define HL_POINT(request)      SERIAL_TXN(request, GetSerialWordDataFromHlPlc, SERIAL_TXN_TIMEOUT_MS, PlcReport_HostLink())
-#define PPI_POINT(request)     SERIAL_TXN(request, GetSerialWordDataFromPpiPlc, SERIAL_TXN_TIMEOUT_MS, PlcReport_Ppi())
-#define LS_POINT(request)      SERIAL_TXN(request, DBSGetData, SERIAL_TXN_TIMEOUT_MS, PlcReport_Ls())
-
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-static void PollFxSerial(const PlcPointTable *table)
+/* 串口：逐点读取并上报，读失败的点跳过 */
+static __attribute__((unused)) void PollTable(const char *protocol, const PlcPointTable *table,
+                                              PointReader read, PointReporter report)
 {
     for (size_t i = 0; i < table->count; i++) {
         const PlcPoint *p = &table->points[i];
+        PlcValue v;
+        int ret = read(p, &v);
 
-        switch (p->type) {
-#if defined(CONFIG_PLC_FX_CONNECT_RS232)
-        case FX_D16:    FX_POINT(ReadSingleDataRegister(p->address, p->frnum)); break;
-#else
-        case FX_D16:    FX_POINT(SerialReadSingleDataRegister(FX_STATION, FX_PC_NUMBER, FX_WAIT, p->address, p->frnum)); break;
-        case FX_D32:    FX_POINT(SerialReadDoubleDataRegister(FX_STATION, FX_PC_NUMBER, FX_WAIT, p->address, p->frnum)); break;
-        case FX_DFLOAT: FX_POINT(SerialReadSingleFloatDataRegister(FX_STATION, FX_PC_NUMBER, FX_WAIT, p->address, p->frnum)); break;
-        case FX_Y:      FX_POINT(SerialReadSingleYDataRegister(FX_STATION, FX_PC_NUMBER, FX_WAIT, p->address, p->frnum)); break;
-        case FX_M:      FX_POINT(SerialReadSingleMDataRegister(FX_STATION, FX_PC_NUMBER, FX_WAIT, p->address, p->frnum)); break;
-#endif
-        default:        LogUnsupported("FX", p); break;
+        if (ret == PLC_OK) {
+            report(p, &v);
+        } else if (ret == PLC_ERR_UNSUPPORTED) {
+            LogUnsupported(protocol, p);
         }
+    }
+}
+
+/* 网口：逐点读取并上报，链路失效时返回 -1 */
+static __attribute__((unused)) int PollNetTable(const char *protocol, int sock, const PlcPointTable *table,
+                                                NetPointReader read, PointReporter report, int gap_ms)
+{
+    for (size_t i = 0; i < table->count; i++) {
+        const PlcPoint *p = &table->points[i];
+        PlcValue v;
+        int ret = read(sock, p, &v);
+
+        if (ret == PLC_ERR_LINK) {
+            return -1;
+        }
+        if (ret == PLC_OK) {
+            report(p, &v);
+        } else if (ret == PLC_ERR_UNSUPPORTED) {
+            LogUnsupported(protocol, p);
+            continue;
+        }
+        vTaskDelay(pdMS_TO_TICKS(gap_ms));
+    }
+    return 0;
+}
+
+/* ============================================================ 各协议的点表翻译 */
+
+#if defined(CONFIG_PLC_FX)
+static void FxReport(const PlcPoint *p, const PlcValue *v)
+{
+    PlcReport_Fx(p->frnum, v);
+}
+#endif
+
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
+static int FxSerialRead(const PlcPoint *p, PlcValue *v)
+{
+    switch (p->type) {
+#if defined(CONFIG_PLC_FX_CONNECT_RS232)
+    case FX_D16:    return FX_ProgReadD(p->address, v);         // 编程口
+#else
+    case FX_D16:    return FX_LinkRead(FX_DEV_D, p->address, FX_FMT_U16, v);   // 计算机链接
+    case FX_D32:    return FX_LinkRead(FX_DEV_D, p->address, FX_FMT_I32, v);
+    case FX_DFLOAT: return FX_LinkRead(FX_DEV_D, p->address, FX_FMT_FLOAT, v);
+    case FX_Y:      return FX_LinkRead(FX_DEV_Y, p->address, FX_FMT_BIT, v);
+    case FX_M:      return FX_LinkRead(FX_DEV_M, p->address, FX_FMT_BIT, v);
+#endif
+    default:        return PLC_ERR_UNSUPPORTED;
+    }
+}
+#endif
+
+#if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
+static int FxNetRead(int sock, const PlcPoint *p, PlcValue *v)
+{
+    switch (p->type) {
+    case FX_D16:    return FX_NetRead(sock, FX_DEV_D, p->address, FX_FMT_U16, v);
+    case FX_D32:    return FX_NetRead(sock, FX_DEV_D, p->address, FX_FMT_I32, v);
+    case FX_DFLOAT: return FX_NetRead(sock, FX_DEV_D, p->address, FX_FMT_FLOAT, v);
+    case FX_Y:      return FX_NetRead(sock, FX_DEV_Y, p->address, FX_FMT_BIT, v);
+    case FX_M:      return FX_NetRead(sock, FX_DEV_M, p->address, FX_FMT_BIT, v);
+    default:        return PLC_ERR_UNSUPPORTED;
     }
 }
 #endif
 
 #if defined(CONFIG_PLC_HOSTLINK)
-static void PollHostLink(const PlcPointTable *table)
+static int HostLinkRead(const PlcPoint *p, PlcValue *v)
 {
-    for (size_t i = 0; i < table->count; i++) {
-        const PlcPoint *p = &table->points[i];
-
-        switch (p->type) {
-        case HL_DM:       HL_POINT(HLReadSingleDataRegister(p->address, p->frnum)); break;
-        case HL_DM_BCD:   HL_POINT(HLReadBCDDataRegister(p->address, p->frnum)); break;
-        case HL_DM_FLOAT: HL_POINT(HLReadFloatDataRegister(p->address, p->frnum)); break;
-        case HL_CIO_BIT:  HL_POINT(HLReadBitCIORegister(p->address, p->bit, p->frnum)); break;
-        default:          LogUnsupported("HostLink", p); break;
-        }
+    switch (p->type) {
+    case HL_DM:       return HL_ReadDM(p->address, HL_FMT_U16, v);
+    case HL_DM_BCD:   return HL_ReadDM(p->address, HL_FMT_BCD, v);
+    case HL_DM_FLOAT: return HL_ReadDM(p->address, HL_FMT_FLOAT, v);
+    case HL_CIO_BIT:  return HL_ReadCIOBit(p->address, p->bit, v);
+    default:          return PLC_ERR_UNSUPPORTED;
     }
+}
+
+static void HostLinkReport(const PlcPoint *p, const PlcValue *v)
+{
+    PlcReport_HostLink(p->frnum, v, p->type == HL_CIO_BIT);
+}
+#endif
+
+#if defined(CONFIG_PLC_PPI)
+// 点表类型 -> S7 变量（PPI 串口和 S7 网口共用）
+static int S7VarFromPoint(const PlcPoint *p, S7Var *var)
+{
+    var->byte = p->address;
+    var->bit = p->bit;
+    switch (p->type) {
+    case S7_VB:    var->area = S7_AREA_V; var->type = S7_BYTE; break;
+    case S7_VW:    var->area = S7_AREA_V; var->type = S7_INT;  break;
+    case S7_VD:    var->area = S7_AREA_V; var->type = S7_DINT; break;
+    case S7_VREAL: var->area = S7_AREA_V; var->type = S7_REAL; break;
+    case S7_V_BIT: var->area = S7_AREA_V; var->type = S7_BIT;  break;
+    case S7_Q_BIT: var->area = S7_AREA_Q; var->type = S7_BIT;  break;
+    case S7_I_BIT: var->area = S7_AREA_I; var->type = S7_BIT;  break;
+    case S7_M_BIT: var->area = S7_AREA_M; var->type = S7_BIT;  break;
+    default:       return -1;
+    }
+    return 0;
+}
+
+static void PpiReport(const PlcPoint *p, const PlcValue *v)
+{
+    PlcReport_Ppi(p->frnum, v);
 }
 #endif
 
 #if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-static void PollPpiSerial(const PlcPointTable *table)
+static int PpiSerialRead(const PlcPoint *p, PlcValue *v)
 {
-    for (size_t i = 0; i < table->count; i++) {
-        const PlcPoint *p = &table->points[i];
+    S7Var var;
 
-        switch (p->type) {
-        case S7_VB:    PPI_POINT(PPIReadByteDataRegister(p->address, 1, p->frnum)); break;
-        case S7_VW:    PPI_POINT(PPIReadShortDataRegister(p->address, 1, p->frnum)); break;
-        case S7_VD:    PPI_POINT(PPIReadSIntDataRegister(p->address, 1, p->frnum)); break;
-        case S7_VREAL: PPI_POINT(PPIReadFloatDataRegister(p->address, 1, p->frnum)); break;
-        case S7_V_BIT: PPI_POINT(PPIReadBitDataRegister(p->address, p->bit, 1, p->frnum)); break;
-        case S7_Q_BIT: PPI_POINT(PPIReadBitOutputRegister(p->address, p->bit, 1, p->frnum)); break;
-        case S7_I_BIT: PPI_POINT(PPIReadBitInputRegister(p->address, p->bit, 1, p->frnum)); break;
-        case S7_M_BIT: PPI_POINT(PPIReadBitMDataRegister(p->address, p->bit, 1, p->frnum)); break;
-        default:       LogUnsupported("PPI", p); break;
-        }
+    if (S7VarFromPoint(p, &var) != 0) {
+        return PLC_ERR_UNSUPPORTED;
     }
+    return PPI_Read(&var, v);
 }
 #endif
+
+#if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
+static int S7NetRead(int sock, const PlcPoint *p, PlcValue *v)
+{
+    S7Var var;
+
+    if (S7VarFromPoint(p, &var) != 0) {
+        return PLC_ERR_UNSUPPORTED;
+    }
+    return S7_NetRead(sock, &var, v);
+}
+#endif
+
+#if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
+static int ModbusNetRead(int sock, const PlcPoint *p, PlcValue *v)
+{
+    switch (p->type) {
+    case MB_HR16:    return MODBUS_NetRead(sock, p->address, MODBUS_FMT_U16, v);
+    case MB_HR32:    return MODBUS_NetRead(sock, p->address, MODBUS_FMT_I32, v);
+    case MB_HRFLOAT: return MODBUS_NetRead(sock, p->address, MODBUS_FMT_FLOAT, v);
+    default:         return PLC_ERR_UNSUPPORTED;
+    }
+}
+
+static void ModbusNetReport(const PlcPoint *p, const PlcValue *v)
+{
+    PlcReport_ModbusNet(p->frnum, v);
+}
+#endif
+
+/* ============================================================ 串口轮询任务 */
 
 #if defined(CONFIG_TESTER_76T) || defined(CONFIG_TESTER_AINUO)
 static char s_testerJson[2048];
 
-static void PostTesterJson(void (*get_json)(char *str))
+// 测试仪：发读命令 -> 等应答 -> 上报协议层生成的 JSON
+static void PollTester(void (*request)(uint16_t group), uint16_t group,
+                       SerialParseFn parse, void (*get_json)(char *str))
 {
-    get_json(s_testerJson);
-    IOT_PostMessage(s_testerJson);
+    int ret;
+
+    SerialTxn_Begin();
+    request(group);
+    ret = SerialTxn_Wait(parse, NULL, SERIAL_TXN_TESTER_TIMEOUT_MS);
+    SerialTxn_End();
+
+    if (ret == 0) {
+        get_json(s_testerJson);
+        IOT_PostMessage(s_testerJson);
+    }
+}
+#endif
+
+#if defined(CONFIG_TESTER_76T)
+static void TTesterRequest(uint16_t group)
+{
+    // 上位机下发过 group 命令后读该组历史结果，否则读当前组
+    if (group == 0) {
+        TTesterReadCurrentGroup();
+    } else {
+        TTesterReadHistoryGroup(group);
+    }
+}
+#endif
+
+#if defined(CONFIG_TESTER_AINUO)
+static void AinuoRequest(uint16_t group)
+{
+    (void)group;
+    AINUO_TTesterReadCurrentGroup();
 }
 #endif
 
@@ -145,35 +274,32 @@ void plc_poll_task(void *pvParameters)
         }
 
 #if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-        PollFxSerial(&g_fxPoints);
+        PollTable("FX", &g_fxPoints, FxSerialRead, FxReport);
 #endif
 
 #if defined(CONFIG_PLC_HOSTLINK)
-        PollHostLink(&g_hostLinkPoints);
+        PollTable("HostLink", &g_hostLinkPoints, HostLinkRead, HostLinkReport);
 #endif
 
 #if defined(CONFIG_PLC_PPI_CONNECT_RS485)
-        PollPpiSerial(&g_ppiPoints);
+        PollTable("PPI", &g_ppiPoints, PpiSerialRead, PpiReport);
 #endif
 
 #if defined(CONFIG_PLC_LS_LOAD)
-        LS_POINT(DBSReadData());
-#endif
-
-#if defined(CONFIG_TESTER_76T)
-        // 上位机下发过 group 命令后读该组历史结果，否则读当前组
-        if (HostCmd_GetTesterGroup() == 0) {
-            SERIAL_TXN(TTesterReadCurrentGroup(), TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS,
-                       PostTesterJson(TTesterGetJsonData));
-        } else {
-            SERIAL_TXN(TTesterReadHistoryGroup(HostCmd_GetTesterGroup()), TTesterResolve,
-                       SERIAL_TXN_TESTER_TIMEOUT_MS, PostTesterJson(TTesterGetJsonData));
+        {
+            PlcValue v;
+            if (DBS_Read(&v) == PLC_OK) {
+                PlcReport_Ls(DBS_FRNUM, &v);
+            }
         }
 #endif
 
+#if defined(CONFIG_TESTER_76T)
+        PollTester(TTesterRequest, HostCmd_GetTesterGroup(), TTesterResolve, TTesterGetJsonData);
+#endif
+
 #if defined(CONFIG_TESTER_AINUO)
-        SERIAL_TXN(AINUO_TTesterReadCurrentGroup(), AINUO_TTesterResolve, SERIAL_TXN_TESTER_TIMEOUT_MS,
-                   PostTesterJson(AINUO_TTesterGetJsonData));
+        PollTester(AinuoRequest, 0, AINUO_TTesterResolve, AINUO_TTesterGetJsonData);
 #endif
 
 #if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)
@@ -199,72 +325,24 @@ void send_command_task(void *pvParameters)
 
 /* ============================================================ 网口 */
 
-// 读寄存器返回 <0 表示链路失效，立即结束本轮由调用方重连；读到数据后立即解码上报
-#define NET_POINT(call, fetch, report)      \
-    do {                                    \
-        if ((call) < 0) {                   \
-            return -1;                      \
-        }                                   \
-        if ((fetch) == 0) {                 \
-            report;                         \
-        }                                   \
-    } while (0)
-
-#define MODBUS_NET(call)   NET_POINT(call, GetNetDataFromModbusPlc(), PlcReport_ModbusNet())
-#define FX_NET(call)       NET_POINT(call, GetNetDataFromFxPlc(), PlcReport_Fx())
-#define S7_NET(call)       NET_POINT(call, GetNetDataFromS7PlcNet(), PlcReport_Ppi())
-
 #if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
 int PlcPoll_ModbusNet(int sock)
 {
-    for (size_t i = 0; i < g_modbusNetPoints.count; i++) {
-        const PlcPoint *p = &g_modbusNetPoints.points[i];
-
-        switch (p->type) {
-        case MB_HR16:    MODBUS_NET(MODBUS_NetReadSingleDataRegister(sock, p->address, p->frnum)); break;
-        case MB_HR32:    MODBUS_NET(MODBUS_NetReadDoubleDataRegister(sock, p->address, p->frnum)); break;
-        case MB_HRFLOAT: MODBUS_NET(MODBUS_NetReadFloatRegister(sock, p->address, p->frnum)); break;
-        default:         LogUnsupported("Modbus TCP", p); break;
-        }
-    }
-    return 0;
+    return PollNetTable("Modbus TCP", sock, &g_modbusNetPoints, ModbusNetRead, ModbusNetReport,
+                        MODBUS_NET_GAP_MS);
 }
 #endif
 
 #if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
 int PlcPoll_FxNet(int sock)
 {
-    for (size_t i = 0; i < g_fxPoints.count; i++) {
-        const PlcPoint *p = &g_fxPoints.points[i];
-
-        switch (p->type) {
-        case FX_D16: FX_NET(FX_NetReadSingleDataRegister(sock, p->address, p->frnum)); break;
-        case FX_D32: FX_NET(FX_NetReadDoubleDataRegister(sock, p->address, p->frnum)); break;
-        case FX_Y:   FX_NET(FX_NetReadSingleYDataRegister(sock, p->address, p->frnum)); break;
-        default:     LogUnsupported("FX MC", p); break;
-        }
-    }
-    return 0;
+    return PollNetTable("FX MC", sock, &g_fxPoints, FxNetRead, FxReport, FX_NET_GAP_MS);
 }
 #endif
 
 #if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
 int PlcPoll_S7Net(int sock)
 {
-    for (size_t i = 0; i < g_s7Points.count; i++) {
-        const PlcPoint *p = &g_s7Points.points[i];
-
-        switch (p->type) {
-        case S7_VW:    S7_NET(S7_NetReadSingleDataRegister(sock, p->address, p->frnum)); break;
-        case S7_VD:    S7_NET(S7_NetReadIntDataRegister(sock, p->address, p->frnum)); break;
-        case S7_VREAL: S7_NET(S7_NetReadFloatDataRegister(sock, p->address, p->frnum)); break;
-        case S7_V_BIT: S7_NET(S7_NetReadBitDataRegister(sock, p->address, p->bit, p->frnum)); break;
-        case S7_Q_BIT: S7_NET(S7_NetReadBitQRegister(sock, p->address, p->bit, p->frnum)); break;
-        case S7_I_BIT: S7_NET(S7_NetReadBitIRegister(sock, p->address, p->bit, p->frnum)); break;
-        case S7_M_BIT: S7_NET(S7_NetReadBitMRegister(sock, p->address, p->bit, p->frnum)); break;
-        default:       LogUnsupported("S7", p); break;
-        }
-    }
-    return 0;
+    return PollNetTable("S7", sock, &g_s7Points, S7NetRead, PpiReport, S7_NET_GAP_MS);
 }
 #endif

@@ -2,38 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <math.h>
 #include "esp_log.h"
 #include "iot_common.h"
 #include "iot_time.h"
 
-const uint16_t polynom = 0xA001;
 RingBuffer uart2Buffer;
-RingBuffer dataRegisterBuffer;
-RingBuffer modbusdataRegisterBuffer;
-RingBuffer ppidataRegisterBuffer;
-
-static int CharToInt(char ch)  
-{  
-        // 如果是数字，则用数字的ASCII码减去48, 如果ch = '2' ,则 '2' - 48 = 2  
-        if(isdigit(ch)) {
-			return ch - 48;  
-		}
-  
-        // 如果是字母，但不是A~F,a~f则返回  
-        if( ch < 'A' || (ch > 'F' && ch < 'a') || ch > 'z' ) {
-			return -1; 
-		}
-  
-        // 如果是大写字母，则用数字的ASCII码减去55, 如果ch = 'A' ,则 'A' - 55 = 10  
-        // 如果是小写字母，则用数字的ASCII码减去87, 如果ch = 'a' ,则 'a' - 87 = 10  
-        if(isalpha(ch))  {
-			return isupper(ch) ? ch - 55 : ch - 87;  
-		}
-  
-        return -1;  
-}
 
 int CalFloatStrPointPos(char *str)
 {
@@ -44,130 +17,18 @@ int CalFloatStrPointPos(char *str)
     }
 }
 
-uint16_t crc16bitbybit(uint8_t *ptr, uint16_t len)
-{
-	uint8_t i;
-	uint16_t crc = 0xffff;
- 
-	if (len == 0) {
-		len = 1;
-	}
-	while (len--) {
-		crc ^= *ptr;
-		for (i = 0; i<8; i++)
-		{
-			if (crc & 1) {
-				crc >>= 1;
-				crc ^= polynom;
-			}
-			else {
-				crc >>= 1;
-			}
-		}
-		ptr++;
-	}
-	return(crc);
-}
-
-int CheckCRC16(uint8_t *ptr, uint16_t len, uint16_t rcrc)
-{
-    uint16_t crc;
-
-    crc = crc16bitbybit(ptr, len);
-    if (rcrc != crc) {
-        return -1; 
-    }
-
-    return 0;
-}
-
-uint8_t CalFCS(uint8_t* pbuff, uint16_t len)
-{
-	uint8_t ret = 0;
-
-	while (len--) {
-		ret ^= *pbuff++;
-	}
-
-	return ret;
-}
-
 uint8_t CalSumCheckDataLow(uint8_t *data, uint16_t len)
 {
     int i;
     uint16_t sum = 0;
     uint8_t checksum = 0;
-    
+
     for (i = 0; i < len; i++) {
-        sum += data[i]; 
+        sum += data[i];
     }
     checksum = sum & 0xff;
-    
-    return checksum;
-}
-
-uint16_t CalSumCheckData(uint8_t *data, uint16_t len)
-{
-    int i, num, sum = 0;
-    char str[8] = {0};
-    uint16_t checksum = 0;
-
-    for (i = 0; i < len; i++) {
-        sum += data[i]; 
-    }
-
-    num = sprintf(str, "%x", sum);
-    for (i = 0; i < num; i++) {
-        if (str[i] > 'F') {
-            str[i] -= 32;
-        }
-    }
-
-    if (num >= 2) {
-        memcpy(&checksum, &str[num - 2], sizeof(checksum));
-    }
 
     return checksum;
-}
-
-int CheckSumData(uint8_t *data, uint16_t len, uint16_t checksum)
-{
-    uint16_t check;
-
-    check = CalSumCheckData(data, len);
-    if (check != checksum) {
-        return -1;
-    }
-
-    return 0;
-}
-
-uint16_t CalReadDataRegister(uint8_t *data)
-{
-	uint16_t rdata;
-
-	rdata = CharToInt(data[2]) * 4096 + CharToInt(data[3]) * 256 + CharToInt(data[0]) * 16 + CharToInt(data[1]);
-	return rdata;
-}
-
-uint16_t CalSerialReadDataRegister(uint8_t *data)
-{
-	uint16_t rdata;
-
-	rdata = CharToInt(data[0]) * 4096 + CharToInt(data[1]) * 256 + CharToInt(data[2]) * 16 + CharToInt(data[3]);
-	return rdata;
-}
-
-int BCDToInt(int bcd)
-{
-    int i, sum = 0;
-
-    for (i = 0; i < 4; i++) {
-        sum += (bcd & 0xf) * pow(10, i);
-        bcd >>= 4;
-    }
-
-    return sum;
 }
 
 int UART_InitBuffer(void)
@@ -197,82 +58,7 @@ int UART_ReadBufferBytes(uint8_t *data, uint32_t size)
 	return 0;
 }
 
-int FXPLC_InitBuffer(void)
-{
-    if (RING_InitBuffer(&dataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int FXPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_WriteBufferBytes(&dataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int FXPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_ReadBufferBytes(&dataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int MODBUSPLC_InitBuffer(void)
-{
-    if (RING_InitBuffer(&modbusdataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int MODBUSPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_WriteBufferBytes(&modbusdataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int MODBUSPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_ReadBufferBytes(&modbusdataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int PPIPLC_InitBuffer(void)
-{
-    if (RING_InitBuffer(&ppidataRegisterBuffer, FXPLC_BUFF_SIZE) != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-int PPIPLC_WriteBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_WriteBufferBytes(&ppidataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-int PPIPLC_ReadBufferBytes(uint8_t *data, uint32_t size)
-{
-    if (RING_ReadBufferBytes(&ppidataRegisterBuffer, data, size) != 0) {
-        return -1;
-    }
-	return 0;
-}
-
-// 
+//
 int IOT_PostMessage(const char *msg)
 {
     char *copy;
@@ -341,20 +127,4 @@ void UART_FlushBuffer(void)
 uint32_t UART_BufferedBytes(void)
 {
     return RING_Count(&uart2Buffer);
-}
-
-/* 协议层解码数据缓冲：每次解析前清空，避免半帧残留 */
-void FXPLC_FlushBuffer(void)
-{
-    RING_Flush(&dataRegisterBuffer);
-}
-
-void PPIPLC_FlushBuffer(void)
-{
-    RING_Flush(&ppidataRegisterBuffer);
-}
-
-void MODBUSPLC_FlushBuffer(void)
-{
-    RING_Flush(&modbusdataRegisterBuffer);
 }

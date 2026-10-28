@@ -606,7 +606,7 @@ void TTesterGetJsonData(char *str)
     strcpy(str, ttesterjsondatabuff);
 }
 
-int TTesterResolve(void)
+int TTesterResolve(void *ctx)
 {
 	uint8_t curData[4] = {0};
     uint8_t length, sum;
