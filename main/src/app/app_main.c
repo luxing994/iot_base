@@ -20,6 +20,8 @@
 #include "max6675.h"
 #include "master.h"
 #include "serial_txn.h"
+#include "gw_config.h"
+#include "host_cmd.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -82,11 +84,23 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+
+    // 运行参数（设备号、上位机地址、PLC 地址等）从 NVS 加载，之后各模块只读
+    GwConfig_Init();
+    HostCmd_Init();
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // 按 menuconfig 配置连接 Wi-Fi 或以太网
     ESP_ERROR_CHECK(example_connect());
+    {
+        char wifiMac[GW_STR_MAC], ethMac[GW_STR_MAC];
+
+        GwConfig_GetMacStr(GW_MAC_WIFI, wifiMac, sizeof(wifiMac));
+        GwConfig_GetMacStr(GW_MAC_ETH, ethMac, sizeof(ethMac));
+        ESP_LOGI(TAG, "MAC: eth %s, wifi %s", ethMac, wifiMac);    // 网口实际使用的 MAC
+    }
 
     // 队列和事件组必须先于 GPIO 中断和各任务创建：中断回调里会直接置 xEventGroup1 的位
     xQueue1 = xQueueCreate(IOT_MSG_QUEUE_LEN, sizeof(char *));

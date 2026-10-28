@@ -22,9 +22,10 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include "sdkconfig.h"
+#include "gw_config.h"
 
 #define IOT_MSG_END              ";;**##"
-#define IOT_DEV_NUMBER           CONFIG_IOT_DEVICE_NUMBER   // 报文 devNumber 字段默认值（menuconfig -> Device Identity）
+#define IOT_DEV_NUMBER           (GwConfig_Get()->devNumber)   // 报文 devNumber 字段默认值（运行参数，见 gw_config.h）
 #define IOT_BATCH_ORDER_ID       "BatchParameters"
 #define IOT_BATCH_MAX_POINTS     40
 

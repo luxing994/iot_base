@@ -38,6 +38,9 @@ typedef struct {
     char orderName[CMD_STR_LEN];
 } HostCmdIdentity;
 
+/* 初始化命令状态，须在 GwConfig_Init() 之后、创建任务之前调用 */
+void HostCmd_Init(void);
+
 /*
  * 处理一条完整的 JSON 命令。
  * 返回需要回复给上位机的字符串（例如 "true"），无需回复时返回 NULL。

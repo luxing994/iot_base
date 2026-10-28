@@ -1,10 +1,10 @@
 /*
  * 本机 TCP 服务端（只负责传输，业务处理见 host_cmd.c / file_transfer.c）
  *
- *   tcp_server_task   CONFIG_IOT_CMD_PORT  : 上位机 JSON 命令。TCP 是字节流，一次 recv 可能
+ *   tcp_server_task   命令端口 cmdPort  : 上位机 JSON 命令。TCP 是字节流，一次 recv 可能
  *                                           只有半条命令，也可能有多条，这里按花括号配对切分出
  *                                           完整的 JSON 对象后再交给 HostCmd_HandleMessage()
- *   tcp_server1_task  CONFIG_IOT_FILE_PORT : 文件分包，交给 FileTransfer_HandlePacket()
+ *   tcp_server1_task  文件端口 filePort : 文件分包，交给 FileTransfer_HandlePacket()
  */
 #include <string.h>
 #include <stdbool.h>
@@ -19,9 +19,9 @@
 #include "host_cmd.h"
 #include "file_transfer.h"
 
-#define PORT                CONFIG_IOT_CMD_PORT      // 命令端口
+#define PORT                (GwConfig_Get()->cmdPort)    // 命令端口（运行参数）
 #ifdef CONFIG_IOT_FILE_SERVER
-#define PORT1               CONFIG_IOT_FILE_PORT     // 文件端口
+#define PORT1               (GwConfig_Get()->filePort)   // 文件端口（运行参数）
 #endif
 #define KEEPALIVE_IDLE      CONFIG_IOT_KEEPALIVE_IDLE
 #define KEEPALIVE_INTERVAL  CONFIG_IOT_KEEPALIVE_INTERVAL

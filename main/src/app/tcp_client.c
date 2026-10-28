@@ -29,19 +29,13 @@
 #include "plc_poll.h"
 #include "host_cmd.h"
 
-#if defined(CONFIG_IOT_HOST_IPV4)
-#define HOST_IP_ADDR CONFIG_IOT_HOST_IPV4_ADDR
-#elif defined(CONFIG_IOT_HOST_IPV6)
-#define HOST_IP_ADDR CONFIG_IOT_HOST_IPV6_ADDR
-#else
-#define HOST_IP_ADDR ""
-#endif
+/* 上位机地址和端口为运行参数（gw_config.h），可在配置网页修改 */
+#define HOST_IP_ADDR    (GwConfig_Get()->hostAddr)
+#define PORT            (GwConfig_Get()->hostReportPort)    // 数据上报
+#define PORT1           (GwConfig_Get()->hostLinkPort)      // 上线 / 心跳
+#define OTA_PORT        (GwConfig_Get()->hostOtaPort)       // OTA 控制通道
+#define CONNECT_PORT    (GwConfig_Get()->advertisedPort)    // 上线包 connectPort 字段
 
-#define PORT     CONFIG_IOT_HOST_REPORT_PORT     // 数据上报
-#define PORT1    CONFIG_IOT_HOST_LINK_PORT    // 上线 / 心跳
-#define OTA_PORT CONFIG_IOT_HOST_OTA_PORT     // OTA 控制通道
-
-#define CONNECT_PORT            CONFIG_IOT_ADVERTISED_PORT   // 上线包 connectPort 字段
 #define CLIENT_RECONNECT_MS     CONFIG_IOT_RECONNECT_INTERVAL_MS
 #define HEART_BEAT_MS           CONFIG_IOT_HEARTBEAT_INTERVAL_MS
 #define PLC_POLL_INTERVAL_MS    1000
@@ -387,7 +381,7 @@ static __attribute__((unused)) void PlcNetClientLoop(const char *tag, PlcConnect
 #if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
 static int ModbusConnect(void)
 {
-    return PlcTcpConnect(CONFIG_PLC_MODBUS_IPV4_ADDR, CONFIG_PLC_MODBUS_TCP_PORT, "tcp modbus client");
+    return PlcTcpConnect(GwConfig_Get()->modbusIp, GwConfig_Get()->modbusPort, "tcp modbus client");
 }
 
 void tcp_modbus_client_task(void *pvParameters)
@@ -399,7 +393,7 @@ void tcp_modbus_client_task(void *pvParameters)
 #if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
 static int FxConnect(void)
 {
-    return PlcTcpConnect(CONFIG_PLC_FX_IPV4_ADDR, CONFIG_PLC_FX_TCP_PORT, "tcp fx client");
+    return PlcTcpConnect(GwConfig_Get()->fxIp, GwConfig_Get()->fxPort, "tcp fx client");
 }
 
 void tcp_fx_client_task(void *pvParameters)
@@ -411,7 +405,7 @@ void tcp_fx_client_task(void *pvParameters)
 #if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
 static int S7Connect(void)
 {
-    int sock = PlcTcpConnect(CONFIG_PLC_PPI_IPV4_ADDR, CONFIG_PLC_PPI_TCP_PORT, "tcp ppi client");
+    int sock = PlcTcpConnect(GwConfig_Get()->s7Ip, GwConfig_Get()->s7Port, "tcp ppi client");
 
     if (sock >= 0 && S7_Handshake(sock) != 0) {
         close(sock);

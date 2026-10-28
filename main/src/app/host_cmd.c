@@ -19,19 +19,29 @@ static const char *TAG = "HOST_CMD";
 // 命令状态由命令端口任务写入、多个任务读取，读写都在临界区内拷贝
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 
-static HostCmdIdentity s_identity = {
-    .devId = DEVID,
-    .devName = DEVID,
-    .devTypeId = DEVTYPEID,
-    .orderId = ORDERID,
-    .orderName = ORDERNAME,
-};
+static HostCmdIdentity s_identity;     // HostCmd_Init() 中按运行参数初始化
 static volatile bool s_collectEnabled = true;
 static volatile int s_testerGroup = 0;
 static SNSetCaclReFillingMachine s_charge;
 
 // group 命令的测试项参数，只在命令端口任务中使用
 static parametersData s_groupParams[CMD_PARA_GROUPS][CMD_PARA_ITEMS];
+
+void HostCmd_Init(void)
+{
+    HostCmdIdentity id = { 0 };
+
+    // 收到上位机第一条命令之前，devId / devName 使用本机设备号
+    strlcpy(id.devId, DEVID, sizeof(id.devId));
+    strlcpy(id.devName, DEVID, sizeof(id.devName));
+    strlcpy(id.devTypeId, DEVTYPEID, sizeof(id.devTypeId));
+    strlcpy(id.orderId, ORDERID, sizeof(id.orderId));
+    strlcpy(id.orderName, ORDERNAME, sizeof(id.orderName));
+
+    taskENTER_CRITICAL(&s_lock);
+    s_identity = id;
+    taskEXIT_CRITICAL(&s_lock);
+}
 
 void HostCmd_GetIdentity(HostCmdIdentity *out)
 {

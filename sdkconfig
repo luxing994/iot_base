@@ -368,6 +368,10 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Device identity
 #
+
+#
+# Factory defaults - values saved on the web config page take precedence
+#
 CONFIG_IOT_DEVICE_ID="JXGS001"
 CONFIG_IOT_DEVICE_NUMBER="IIIG_1.0"
 # end of Device identity
@@ -378,6 +382,10 @@ CONFIG_IOT_DEVICE_NUMBER="IIIG_1.0"
 
 #
 # Gateway connects to the host (upper computer)
+#
+
+#
+# Address and ports: factory defaults, overridden by the web config page
 #
 CONFIG_IOT_HOST_IPV4=y
 # CONFIG_IOT_HOST_IPV6 is not set
@@ -396,6 +404,10 @@ CONFIG_IOT_RECONNECT_INTERVAL_MS=5000
 #
 # Host connects to the gateway
 #
+
+#
+# Ports: factory defaults, overridden by the web config page
+#
 CONFIG_IOT_CMD_PORT=8765
 CONFIG_IOT_ADVERTISED_PORT=8766
 # CONFIG_IOT_FILE_SERVER is not set
@@ -403,6 +415,16 @@ CONFIG_IOT_KEEPALIVE_IDLE=5
 CONFIG_IOT_KEEPALIVE_INTERVAL=5
 CONFIG_IOT_KEEPALIVE_COUNT=3
 # end of Local server
+
+#
+# Network
+#
+
+#
+# Factory defaults - values saved on the web config page take precedence
+#
+CONFIG_IOT_ETH_MAC="02:00:00:11:42:03"
+# end of Network
 
 #
 # Data acquisition

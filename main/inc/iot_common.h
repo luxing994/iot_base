@@ -3,6 +3,7 @@
 
 #include "sdkconfig.h"
 #include "ringbuffer.h"
+#include "gw_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -58,7 +59,7 @@ extern EventGroupHandle_t xEventGroup3;
 #define EVT_CHARGE_FAIL     BIT_19      // cmd_task -> host_cmd：写入失败、回读失败或不一致
 
 #define ID           "123"
-#define DEVID        CONFIG_IOT_DEVICE_ID   // menuconfig -> Device Identity
+#define DEVID        (GwConfig_Get()->devId)    // 运行参数（gw_config.h），出厂默认值见 menuconfig
 #define DEVNAME      "Hello"
 #define DEVTYPEID    "Hello"
 #define DEVTYPENAME  "Hello"

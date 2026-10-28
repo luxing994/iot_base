@@ -3,12 +3,17 @@ menu "IoT Gateway Configuration"
 # =====================================================================
 menu "Device identity"
 
+    comment "Factory defaults - values saved on the web config page take precedence"
+
     config IOT_DEVICE_ID
         string "Device ID (devId)"
         default "JXGS001"
         help
             设备号。用于上线包 / 心跳包的 devId，以及上位机下发命令之前数据报文的默认 devId。
             每台网关必须唯一。
+
+            这里是出厂默认值。设备上电后以 NVS 中保存的运行参数为准（在配置网页中修改），
+            menuconfig 中的设备号、上位机地址和端口、网口 PLC 地址只在出厂状态或恢复出厂后生效。
 
     config IOT_DEVICE_NUMBER
         string "Device number (devNumber)"
@@ -22,6 +27,7 @@ endmenu
 menu "Host connection"
 
     comment "Gateway connects to the host (upper computer)"
+    comment "Address and ports: factory defaults, overridden by the web config page"
 
     choice IOT_HOST_IP_MODE
         prompt "IP version"
@@ -94,6 +100,7 @@ endmenu
 menu "Local server"
 
     comment "Host connects to the gateway"
+    comment "Ports: factory defaults, overridden by the web config page"
 
     config IOT_CMD_PORT
         int "Command port"
@@ -143,6 +150,22 @@ menu "Local server"
         default 3
         help
             连续多少次探测无应答后判定连接断开。
+
+endmenu
+
+# =====================================================================
+menu "Network"
+
+    comment "Factory defaults - values saved on the web config page take precedence"
+
+    config IOT_ETH_MAC
+        string "Ethernet MAC address"
+        default ""
+        help
+            以太网（W5500）使用的 MAC 地址，格式 AA:BB:CC:DD:EE:FF。
+            W5500 没有出厂 MAC。留空时由 ESP32 芯片出厂 MAC 自动生成，每台设备都不同，一般不用填写。
+            需要按自己的编号规则指定时再填，例如 02:00:00:11:42:03（02 开头是本地管理地址）。
+            这里是出厂默认值，现场可在配置网页修改。
 
 endmenu
 
