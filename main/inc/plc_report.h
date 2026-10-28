@@ -20,10 +20,4 @@ void PlcReport_Ls(int frnum, const PlcValue *v);
 void PlcReport_Ppi(int frnum, const PlcValue *v);          // PPI 串口和 S7 网口共用
 void PlcReport_ModbusNet(int frnum, const PlcValue *v);
 
-/*
- * 读取批量设备（冷媒灌注机）最近一次采集到的第 frnum 个数据点。
- * 未启用批量设备或 frnum 无效时返回 -1。
- */
-int PlcReport_GetBatchValue(int frnum, double *value);
-
 #endif

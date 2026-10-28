@@ -52,6 +52,11 @@ extern EventGroupHandle_t xEventGroup3;
 #define BIT_30	( 1 << 30 )
 #define BIT_31	( 1 << 31 )
 
+/* xEventGroup1 中冷媒充注量设定的请求与结果（host_cmd <-> cmd_task） */
+#define EVT_CHARGE_REQUEST  BIT_14      // host_cmd -> cmd_task：执行写入
+#define EVT_CHARGE_OK       BIT_18      // cmd_task -> host_cmd：写入并回读一致
+#define EVT_CHARGE_FAIL     BIT_19      // cmd_task -> host_cmd：写入失败、回读失败或不一致
+
 #define ID           "123"
 #define DEVID        CONFIG_IOT_DEVICE_ID   // menuconfig -> Device Identity
 #define DEVNAME      "Hello"

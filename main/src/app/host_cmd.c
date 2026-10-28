@@ -9,7 +9,6 @@
 #include "iot_common.h"
 #include "iot_time.h"
 #include "host_cmd.h"
-#include "plc_report.h"
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
 
@@ -88,22 +87,25 @@ static int JsonGetNumber(const cJSON *obj, const char *key, double *out)
 
 /* ------------------------------------------------------------- 命令解析 */
 
-// single 模式：冷媒灌注机充注量设定
-static void ParseSingleCommand(const cJSON *root)
+// single 模式：冷媒灌注机充注量设定；没有充注量时返回 -1（回复 false，不写 PLC）
+static int ParseSingleCommand(const cJSON *root)
 {
     SNSetCaclReFillingMachine charge;
     double number;
 
     HostCmd_GetChargeSetting(&charge);
-    if (JsonGetNumber(root, "parameters", &number) == 0) {
-        charge.setchargeamount = (float)number;
+    if (JsonGetNumber(root, "parameters", &number) != 0) {
+        ESP_LOGE(TAG, "single command without parameters");
+        return -1;
     }
+    charge.setchargeamount = (float)number;
     JsonCopyString(root, "parameterType", charge.select, sizeof(charge.select));
     ESP_LOGI(TAG, "charge amount: %.2f, select: %s", charge.setchargeamount, charge.select);
 
     taskENTER_CRITICAL(&s_lock);
     s_charge = charge;
     taskEXIT_CRITICAL(&s_lock);
+    return 0;
 }
 
 /*
@@ -208,45 +210,46 @@ static const struct {
     { "PowerOff",   CmdPowerOff },
 };
 
-// 按 deviceOrderMode 识别的参数命令，解析成功后通知 cmd_task 执行
-static void DispatchModeCommand(const cJSON *root, const char *mode, const char *groupId)
+/*
+ * single 命令：通知 cmd_task 写入充注量，等待它写入并回读校验后再回复上位机。
+ * 在命令端口任务中同步等待，期间该端口不处理下一条命令。
+ */
+#define CHARGE_ACK_TIMEOUT_MS   5000    // 需要排在正在进行的串口事务之后，留足余量
+
+static const char *ApplyChargeAndWait(void)
+{
+    EventBits_t bits;
+
+    xEventGroupClearBits(xEventGroup1, EVT_CHARGE_OK | EVT_CHARGE_FAIL);   // 丢弃上一次超时后才到的结果
+    xEventGroupSetBits(xEventGroup1, EVT_CHARGE_REQUEST);
+    bits = xEventGroupWaitBits(xEventGroup1, EVT_CHARGE_OK | EVT_CHARGE_FAIL, pdTRUE, pdFALSE,
+                               pdMS_TO_TICKS(CHARGE_ACK_TIMEOUT_MS));
+    if (bits & EVT_CHARGE_OK) {
+        return "true";
+    }
+    ESP_LOGE(TAG, "charge setting %s", (bits & EVT_CHARGE_FAIL) ? "failed" : "timeout");
+    return "false";
+}
+
+// 按 deviceOrderMode 识别的参数命令，返回需要回复上位机的内容（无需回复时为 NULL）
+static const char *DispatchModeCommand(const cJSON *root, const char *mode, const char *groupId)
 {
     if (strcmp(mode, "single") == 0) {
-        ParseSingleCommand(root);
-        xEventGroupSetBits(xEventGroup1, BIT_14);
-    } else if (strcmp(mode, "group") == 0) {
+        if (ParseSingleCommand(root) != 0) {
+            return "false";
+        }
+        return ApplyChargeAndWait();
+    }
+    if (strcmp(mode, "group") == 0) {
         if (ParseGroupCommand(root) != 0) {
-            return;
+            return NULL;
         }
         if (groupId[0] != '\0') {
             s_testerGroup = atoi(groupId);
         }
         xEventGroupSetBits(xEventGroup1, BIT_15);
     }
-}
-
-// 冷媒灌注机：PLC 回读到的设定充注量与上位机下发值一致时，回复 "true"
-static const char *ChargeAmountAck(void)
-{
-    SNSetCaclReFillingMachine charge;
-    int frnum = 0;
-    double applied;
-
-    HostCmd_GetChargeSetting(&charge);
-#if defined(CONFIG_PLC_FX_SN_CACLREFILMAC)
-    frnum = 10;                                     // FR010 实际设定灌注量
-#elif defined(CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC)
-    if (strcmp(charge.select, "A") == 0) {
-        frnum = 26;                                 // FR026 A充注设定值
-    } else if (strcmp(charge.select, "B") == 0) {
-        frnum = 27;                                 // FR027 B充注设定值
-    }
-#endif
-
-    if (frnum == 0 || PlcReport_GetBatchValue(frnum, &applied) != 0) {
-        return NULL;
-    }
-    return ((float)applied == charge.setchargeamount) ? "true" : NULL;
+    return NULL;
 }
 
 const char *HostCmd_HandleMessage(const char *json)
@@ -256,13 +259,14 @@ const char *HostCmd_HandleMessage(const char *json)
     char groupId[CMD_SHORT_STR_LEN] = {0};
     char timeStamp[CMD_STR_LEN] = {0};
     cJSON *root;
+    const char *reply = NULL;
     size_t i;
 
     ESP_LOGI(TAG, "command: %s", json);
     root = cJSON_Parse(json);
     if (root == NULL) {
         ESP_LOGW(TAG, "invalid json");
-        return ChargeAmountAck();
+        return NULL;
     }
 
     // 标识字段缺失时沿用上一次命令的值
@@ -291,9 +295,9 @@ const char *HostCmd_HandleMessage(const char *json)
         }
     }
     if (i == sizeof(s_controlCmds) / sizeof(s_controlCmds[0])) {
-        DispatchModeCommand(root, mode, groupId);
+        reply = DispatchModeCommand(root, mode, groupId);
     }
 
     cJSON_Delete(root);
-    return ChargeAmountAck();
+    return reply;
 }

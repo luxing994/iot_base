@@ -22,7 +22,8 @@
  * }
  *
  * orderId 为 StartFlush / EndFlush / PowerOn / PowerOff 时为控制命令；
- * deviceOrderMode 为 single 时为冷媒灌注机充注量设定（parameters 为数值，parameterType 为 "A"/"B"）。
+ * deviceOrderMode 为 single 时为冷媒灌注机充注量设定（parameters 为数值，parameterType 为 "A"/"B"），
+ * 写入 PLC 并回读一致后回复 "true"，写入失败、回读不一致或超时回复 "false"；其他命令不回复。
  */
 
 #include <stdbool.h>

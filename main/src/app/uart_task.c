@@ -179,20 +179,28 @@ static void ReportSwitch(int value)
     IotReport_SendValueMsg(&msg);
 }
 
-// 上位机 single 模式命令：写冷媒灌注机充注量（写完回读设定值，供 host_cmd 判断是否回复 "true"）
-static void ApplyChargeSetting(void)
+/*
+ * 上位机 single 模式命令：写冷媒灌注机充注量，写完立即回读同一寄存器。
+ * 写入成功且回读值与下发值一致时返回 0，否则返回 -1；结果由 host_cmd 回复上位机 true / false。
+ */
+static int ApplyChargeSetting(void)
 {
     SNSetCaclReFillingMachine charge;
+    PlcValue v;
 
     HostCmd_GetChargeSetting(&charge);
-#ifdef CONFIG_PLC_FX_SN_CACLREFILMAC
-    FX_LinkWriteFloat(16, charge.setchargeamount);      // D16：充注量设定值
-#endif
+    (void)v;
 
-#ifdef CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC
-    uint16_t address = 0;
-    int frnum = 0;
-    PlcValue v;
+#if defined(CONFIG_PLC_FX_SN_CACLREFILMAC)
+    const uint16_t address = 16;                        // D16：实际设定灌注量（FR010）
+
+    if (FX_LinkWriteFloat(address, charge.setchargeamount) != PLC_OK ||
+        FX_LinkRead(FX_DEV_D, address, FX_FMT_FLOAT, &v) != PLC_OK) {
+        return -1;
+    }
+#elif defined(CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC)
+    uint16_t address;
+    int frnum;
 
     if (strcmp(charge.select, "A") == 0) {
         address = 8150;     // A充注量设定值 -> FR026
@@ -200,15 +208,29 @@ static void ApplyChargeSetting(void)
     } else if (strcmp(charge.select, "B") == 0) {
         address = 8550;     // B充注量设定值 -> FR027
         frnum = 27;
+    } else {
+        ESP_LOGE("CHARGE", "unknown parameterType \"%s\", expect A or B", charge.select);
+        return -1;
     }
-    if (address != 0) {
-        HL_WriteDMFloat(address, charge.setchargeamount);
-        if (HL_ReadDM(address, HL_FMT_FLOAT, &v) == PLC_OK) {
-            PlcReport_HostLink(frnum, &v, false);
-        }
+    if (HL_WriteDMFloat(address, charge.setchargeamount) != PLC_OK ||
+        HL_ReadDM(address, HL_FMT_FLOAT, &v) != PLC_OK) {
+        return -1;
     }
+    PlcReport_HostLink(frnum, &v, false);
+#else
+    ESP_LOGE("CHARGE", "charge setting not supported by current device type");
+    return -1;
 #endif
-    (void)charge;
+
+#if defined(CONFIG_PLC_FX_SN_CACLREFILMAC) || defined(CONFIG_PLC_HOSTLINK_SN_CACLREFILMAC)
+    // PLC 中保存的就是下发的 32 位浮点，回读值应逐位相等
+    if (v.f != charge.setchargeamount) {
+        ESP_LOGE("CHARGE", "read back %.3f, expect %.3f", v.f, charge.setchargeamount);
+        return -1;
+    }
+    ESP_LOGI("CHARGE", "charge amount %.3f applied", v.f);
+    return 0;
+#endif
 }
 
 // 上位机 group 模式命令：下发安规测试仪组参数（应答只用于确认，不上报）
@@ -231,10 +253,11 @@ void cmd_task(void *arg)
     esp_log_level_set(TAG, ESP_LOG_ERROR);
     while (1) {
         // 返回时所有等待位都会被清除，因此每一位都要独立处理（原实现用 else if，同时到达的事件会丢失）
-        uxBits = xEventGroupWaitBits(xEventGroup1, BIT_14 | BIT_15 | BIT_16 | BIT_17,
+        uxBits = xEventGroupWaitBits(xEventGroup1, EVT_CHARGE_REQUEST | BIT_15 | BIT_16 | BIT_17,
                                      pdTRUE, pdFALSE, portMAX_DELAY);
-        if (uxBits & BIT_14) {
-            ApplyChargeSetting();
+        if (uxBits & EVT_CHARGE_REQUEST) {
+            // 结果通知 host_cmd，由它回复上位机 true / false
+            xEventGroupSetBits(xEventGroup1, (ApplyChargeSetting() == 0) ? EVT_CHARGE_OK : EVT_CHARGE_FAIL);
         }
         if (uxBits & BIT_15) {
             ApplyTesterGroup();

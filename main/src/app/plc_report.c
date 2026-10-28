@@ -97,17 +97,6 @@ static IotBatchCollector s_snBatch = {
 };
 #endif
 
-int PlcReport_GetBatchValue(int frnum, double *value)
-{
-#ifdef SN_BATCH_ENABLED
-    return IotBatchCollector_Get(&s_snBatch, frnum, value);
-#else
-    (void)frnum;
-    (void)value;
-    return -1;
-#endif
-}
-
 /* ------------------------------------------------------------- 三菱 FX */
 
 #if defined(CONFIG_PLC_FX_XF_CONTROLLER) || defined(CONFIG_PLC_FX_RY_LINE)
