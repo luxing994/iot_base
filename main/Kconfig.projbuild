@@ -693,6 +693,14 @@ endmenu
 # =====================================================================
 menu "Debug"
 
+    config IOT_HEALTH_LOG_INTERVAL_S
+        int "Health log interval (s)"
+        range 5 3600
+        default 300
+        help
+            运行状况日志（HEALTH：运行时长、内存、网口、与上位机的连接）的打印间隔。
+            排查"运行一段时间后断线"之类的问题时可临时改小，如 5。
+
     config IOT_DEBUG_STACK_MONITOR
         bool "Print task stack high water marks"
         default n

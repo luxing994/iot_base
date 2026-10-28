@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -9,6 +10,8 @@
 #include "nvs_flash.h"
 #include "esp_netif.h"
 #include "esp_mac.h"
+#include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "driver/gpio.h"
 #include "lwip/sockets.h"   // AF_INET
 #include "sdkconfig.h"
@@ -59,6 +62,45 @@ static void StartTask(TaskFunction_t fn, const char *name, uint32_t stack, void 
     }
     if (s_taskCount < APP_MAX_TASKS) {
         s_tasks[s_taskCount++] = handle;
+    }
+}
+
+#define HEALTH_LOG_INTERVAL_MS  (CONFIG_IOT_HEALTH_LOG_INTERVAL_S * 1000)
+
+/*
+ * 运行状况：定期打印一行内存、网口、与上位机的连接（间隔见 menuconfig IOT_HEALTH_LOG_INTERVAL_S）。
+ * 现场出现"运行一段时间后连不上"之类的问题时，看最后几行就能判断是内存耗尽、网络掉线还是程序卡住
+ */
+static void health_task(void *arg)
+{
+    TcpLinkState links[8];
+    NetStatus st;
+    char linkText[96];
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(HEALTH_LOG_INTERVAL_MS));
+        uint32_t up = (uint32_t)(esp_timer_get_time() / 1000000);
+        int n = TcpClient_GetLinks(links, sizeof(links) / sizeof(links[0]));
+
+        linkText[0] = '\0';
+        for (int i = 0; i < n; i++) {
+            char item[32];
+
+            snprintf(item, sizeof(item), "%s%s %s", (i == 0) ? "" : ", ", links[i].peer, links[i].up ? "up" : "DOWN");
+            strlcat(linkText, item, sizeof(linkText));
+        }
+        NetMgr_GetStatus(&st);
+        char rssi[16] = "";
+
+        if (st.wifiUp) {
+            snprintf(rssi, sizeof(rssi), " %ddBm", st.wifiRssi);
+        }
+        ESP_LOGI("HEALTH", "up %uh%02um%02us, heap %uK (min %uK, block %uK), eth %s, wifi %s%s%s, %s",
+                 (unsigned)(up / 3600), (unsigned)(up / 60 % 60), (unsigned)(up % 60),
+                 (unsigned)(esp_get_free_heap_size() / 1024), (unsigned)(esp_get_minimum_free_heap_size() / 1024),
+                 (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024),
+                 !st.ethPresent ? "off" : st.ethUp ? st.ethIp : st.ethLink ? "no IP" : "no link",
+                 !st.wifiEnabled ? "off" : st.wifiUp ? st.wifiIp : "DOWN", rssi, st.apOn ? ", hotspot on" : "", linkText);
     }
 }
 
@@ -283,6 +325,7 @@ void app_main(void)
     StartTask(tcp_server1_task, "file_server", 1024 * 4, (void *)AF_INET, PRIO_NETWORK);
 #endif
 
+    xTaskCreate(health_task, "health", 1024 * 3, NULL, 1, NULL);
 #ifdef CONFIG_IOT_DEBUG_STACK_MONITOR
     xTaskCreate(stack_monitor_task, "stack_monitor", 1024 * 3, NULL, 1, NULL);
 #endif
