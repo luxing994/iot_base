@@ -20,6 +20,9 @@ typedef enum {
     HL_FMT_FLOAT,   // 2 个字，低字在前，IEEE754
 } HlFormat;
 
+/* 单元号 0~31（默认 0） */
+void HL_SetUnit(uint8_t unit);
+
 /* 返回 PLC_OK 或 PLC_ERR_RESPONSE */
 int HL_ReadDM(uint16_t address, HlFormat fmt, PlcValue *out);
 int HL_ReadCIOBit(uint16_t address, uint8_t bit, PlcValue *out);

@@ -1,0 +1,9 @@
+{"t":"meta","schema":1,"rev":"test-hl-1","source":"HostLink 真机 RS232 测试（点位取自生能冷媒灌注机旧点表）"}
+{"t":"device","name":"HostLink 真机","number":"TEST-HL-001","category":"plc","brand":"欧姆龙","model":"CP","protocol":"hostlink","iface":"rs232","baud":115200,"dataBits":8,"parity":"N","stopBits":1,"station":0,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"HLPLC"}
+{"t":"point","fr":1,"name":"A模式选择","area":"DM","addr":8101,"type":"u16"}
+{"t":"point","fr":2,"name":"A检测时间","area":"DM","addr":8824,"type":"bcd16"}
+{"t":"point","fr":3,"name":"A抽空上限","area":"DM","addr":8820,"type":"f32","dec":2}
+{"t":"point","fr":4,"name":"A充注压力","area":"DM","addr":19704,"type":"f32","dec":2}
+{"t":"point","fr":5,"name":"A工作状态","area":"DM","addr":8102,"type":"u16"}
+{"t":"point","fr":6,"name":"结果判定","area":"DM","addr":8940,"type":"u16","mode":"change"}
+{"t":"point","fr":7,"name":"CIO100.00","area":"CIO","addr":100,"bit":0,"type":"bit"}

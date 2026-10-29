@@ -26,6 +26,7 @@
 #include "serial_txn.h"
 #include "gw_config.h"
 #include "devcfg.h"
+#include "acq.h"
 #include "host_cmd.h"
 #include "net_manager.h"
 #include "app_info.h"
@@ -209,6 +210,10 @@ const char *App_CollectText(void)
 {
     static char text[96];
 
+    if (text[0] == '\0' && DevCfg_Get() != NULL) {
+        // 按设备配置采集（menuconfig 中选的设备不再启动）
+        snprintf(text, sizeof(text), "%s (devcfg)", DevCfg_Get()->dev.proto->name);
+    }
     if (text[0] == '\0') {
         for (int i = 0; s_devices[i] != NULL; i++) {
             strlcat(text, (i == 0) ? "" : ", ", sizeof(text));
@@ -239,10 +244,14 @@ static void PrintBanner(void)
         DevCfg_LinkText(&DevCfg_Get()->dev, link, sizeof(link));
         ESP_LOGI(TAG, " devcfg    : rev %s, %s, %s, %s, %u points", DevCfg_Get()->rev, DevCfg_Get()->dev.name,
                  DevCfg_Get()->dev.proto->id, link, (unsigned)DevCfg_Get()->count);
+        if (DevCfg_Get()->dev.iface & IFACE_SERIAL) {
+            // 现场常把网关上的 232/485 拨码开关拨错，启动时明确提示
+            ESP_LOGI(TAG, " serial    : switch must be on %s", DevCfg_Get()->dev.iface == IFACE_RS485 ? "RS485" : "RS232");
+        }
     } else {
         ESP_LOGI(TAG, " devcfg    : %s", DevCfg_ProblemText());
     }
-    if (UART_InterfaceText() != NULL) {
+    if (DevCfg_Get() == NULL && UART_InterfaceText() != NULL) {     // 有设备配置时见上面的 devcfg 行
         // 现场常把网关上的 232/485 拨码开关拨错，启动时明确提示
         ESP_LOGI(TAG, " serial    : %s  (switch must be on %s)", UART_InterfaceText(), UART_InterfaceName());
     }
@@ -338,37 +347,39 @@ void app_main(void)
 
     /* 外设初始化 */
     SerialTxn_Init();
-#if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)
-    master_init();
-#endif
-#ifdef APP_UART_ENABLED
-    uart_init();
-#endif
     InitSensorGpio();
 #ifdef CONFIG_SENSOR_MAX6675
     MAX6675_Init();
 #endif
+    StartTask(cmd_task, "cmd", 1024 * 8, NULL, PRIO_COMMAND);    // 上位机命令、开关量上报
 
-    /* 串口收发与命令执行 */
-#ifdef APP_UART_ENABLED
-    StartTask(uart_event_task, "uart_event", 1024 * 4, NULL, PRIO_UART_EVENT);
-#endif
-    StartTask(cmd_task, "cmd", 1024 * 8, NULL, PRIO_COMMAND);
-
-    /* 设备轮询：串口为同步事务（发请求-等应答-解码上报），网口读到即上报 */
-    StartTask(plc_poll_task, "plc_poll", 1024 * 6, NULL, PRIO_POLL);
+    /*
+     * 设备采集：导入了设备配置时按配置采集（acq.c）；
+     * 否则按 menuconfig 启动原来的采集任务（过渡期，P3 后删除）
+     */
+    if (!Acq_Start(PRIO_POLL, PRIO_UART_EVENT)) {
 #if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)
-    StartTask(send_command_task, "modbus_cmd", 1024 * 4, NULL, PRIO_COMMAND);
+        master_init();
+#endif
+#ifdef APP_UART_ENABLED
+        uart_init();
+        StartTask(uart_event_task, "uart_event", 1024 * 4, NULL, PRIO_UART_EVENT);
+#endif
+        /* 串口为同步事务（发请求-等应答-解码上报），网口读到即上报 */
+        StartTask(plc_poll_task, "plc_poll", 1024 * 6, NULL, PRIO_POLL);
+#if defined(CONFIG_PLC_MODBUS_CONNECT_RS232) || defined(CONFIG_PLC_MODBUS_CONNECT_RS485)
+        StartTask(send_command_task, "modbus_cmd", 1024 * 4, NULL, PRIO_COMMAND);
 #endif
 #if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)
-    StartTask(tcp_modbus_client_task, "modbus_net", 1024 * 8, NULL, PRIO_POLL);
+        StartTask(tcp_modbus_client_task, "modbus_net", 1024 * 8, NULL, PRIO_POLL);
 #endif
 #if defined(CONFIG_PLC_FX_CONNECT_NETWORK)
-    StartTask(tcp_fx_client_task, "fx_net", 1024 * 8, NULL, PRIO_POLL);
+        StartTask(tcp_fx_client_task, "fx_net", 1024 * 8, NULL, PRIO_POLL);
 #endif
 #if defined(CONFIG_PLC_PPI_CONNECT_NETWORK)
-    StartTask(tcp_ppi_client_task, "s7_net", 1024 * 8, NULL, PRIO_POLL);
+        StartTask(tcp_ppi_client_task, "s7_net", 1024 * 8, NULL, PRIO_POLL);
 #endif
+    }
 #ifdef CONFIG_SENSOR_MAX6675
     StartTask(max6675_task, "max6675", 1024 * 4, NULL, PRIO_POLL);
 #endif

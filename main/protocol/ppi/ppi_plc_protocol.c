@@ -11,7 +11,7 @@ static const char *TAG = "PPI";
 #define PPI_ED              0x16
 #define PPI_SHORT_ACK       0xE5
 
-#define PPI_DA              0x02    // PLC 地址
+#define PPI_DA_DEFAULT      0x02    // PLC 地址默认值（设备配置中可改，见 PPI_SetStation）
 #define PPI_SA              0x00    // 本机地址
 #define PPI_FC_READ         0x6C
 #define PPI_FC_CONFIRM      0x5C
@@ -21,8 +21,15 @@ static const char *TAG = "PPI";
 #define PPI_DATA_MAX        8
 
 /* 读请求中 DA 之后的固定部分：S7 头 + ReadVar 参数（Item 由 S7_PutItem 填写） */
+static uint8_t s_da = PPI_DA_DEFAULT;
+
+void PPI_SetStation(uint8_t station)
+{
+    s_da = station;
+}
+
 static const uint8_t s_readHead[] = {
-    PPI_DA, PPI_SA, PPI_FC_READ,
+    0x00, PPI_SA, PPI_FC_READ,              // DA 在组帧时填入
     0x32, 0x01, 0x00, 0x00, 0x00, 0x00,     // 协议 ID、作业请求、冗余、PDU 参考
     0x00, 0x0E,                             // 参数长度
     0x00, 0x00,                             // 数据长度
@@ -47,8 +54,8 @@ static uint8_t PpiTransport(uint8_t type)
 static void PpiSendConfirm(void)
 {
     const uint8_t f[] = {
-        PPI_SD1, PPI_DA, PPI_SA, PPI_FC_CONFIRM,
-        (uint8_t)(PPI_DA + PPI_SA + PPI_FC_CONFIRM), PPI_ED,
+        PPI_SD1, s_da, PPI_SA, PPI_FC_CONFIRM,
+        (uint8_t)(s_da + PPI_SA + PPI_FC_CONFIRM), PPI_ED,
     };
     SerialTxn_Send(f, sizeof(f));
 }
@@ -115,6 +122,7 @@ int PPI_Read(const S7Var *var, PlcValue *out)
     f[n++] = PPI_READ_LE;
     f[n++] = PPI_SD2;
     memcpy(&f[n], s_readHead, sizeof(s_readHead));
+    f[n] = s_da;
     n += sizeof(s_readHead);
     S7_PutItem(&f[n], PpiTransport(var->type), 1, var);
     n += 12;

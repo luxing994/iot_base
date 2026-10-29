@@ -21,9 +21,25 @@
 #define APP_UART_ENABLED 1
 #endif
 
-#ifdef APP_UART_ENABLED
-void uart_init(void);
+#include <stdbool.h>
+#include <stdint.h>
+
+/* 串口参数（设备配置导入后由采集模块按配置设置） */
+typedef struct {
+    uint32_t baud;
+    uint8_t dataBits;       // 7 / 8
+    char parity;            // 'N' / 'E' / 'O'
+    uint8_t stopBits;       // 1 / 2
+    bool rs485;             // RS485 半双工（RTS 控制方向）
+    const char *name;       // "RS485" / "RS232" / "RS422"，用于提示拨码开关位置
+} UartParams;
+
+/* 安装 UART1 驱动并按参数配置；之后创建 uart_event_task 开始接收 */
+void UART_Start(const UartParams *p);
 void uart_event_task(void *pvParameters);
+
+#ifdef APP_UART_ENABLED
+void uart_init(void);       // menuconfig 选择设备时：按所选协议调用 UART_Start()
 #endif
 
 /*

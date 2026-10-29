@@ -39,54 +39,18 @@
 
 /* ------------------------------------------------------------------ UART */
 
-#ifdef APP_UART_ENABLED
-
-/*
- * UART1 同一时间只能服务一种串口协议（uart_task.h 中有编译期检查），按该协议设置串口参数。
- */
-#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
-#define APP_UART_BAUD    9600
-#define APP_UART_DATA    UART_DATA_7_BITS
-#define APP_UART_PARITY  UART_PARITY_EVEN
-#define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_PLC_LS_LOAD)
-#define APP_UART_BAUD    9600
-#define APP_UART_DATA    UART_DATA_8_BITS
-#define APP_UART_PARITY  UART_PARITY_DISABLE
-#define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_PLC_HOSTLINK)
-// 标准 HostLink 为 9600 7E2，现场设备改成了 115200 8N1
-#define APP_UART_BAUD    115200
-#define APP_UART_DATA    UART_DATA_8_BITS
-#define APP_UART_PARITY  UART_PARITY_DISABLE
-#define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_TESTER_76T)
-#define APP_UART_BAUD    9600
-#define APP_UART_DATA    UART_DATA_8_BITS
-#define APP_UART_PARITY  UART_PARITY_DISABLE
-#define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_TESTER_AINUO)
-#define APP_UART_BAUD    19200
-#define APP_UART_DATA    UART_DATA_8_BITS
-#define APP_UART_PARITY  UART_PARITY_DISABLE
-#define APP_UART_STOP    UART_STOP_BITS_1
-#elif defined(CONFIG_PLC_PPI_CONNECT_RS485)
-#define APP_UART_BAUD    9600
-#define APP_UART_DATA    UART_DATA_8_BITS
-#define APP_UART_PARITY  UART_PARITY_EVEN
-#define APP_UART_STOP    UART_STOP_BITS_1
-#endif
-
 static QueueHandle_t uart1_queue;
+static const char *s_ifName;        // UART_Start() 设置的接口名称："RS485" / "RS232" / "RS422"
+static char s_ifText[40];
 
-void uart_init(void)
+void UART_Start(const UartParams *p)
 {
     static const char *UART_INIT_TAG = "UART_INIT";
     const uart_config_t uart_config = {
-        .baud_rate = APP_UART_BAUD,
-        .data_bits = APP_UART_DATA,
-        .parity = APP_UART_PARITY,
-        .stop_bits = APP_UART_STOP,
+        .baud_rate = (int)p->baud,
+        .data_bits = (p->dataBits == 7) ? UART_DATA_7_BITS : UART_DATA_8_BITS,
+        .parity = (p->parity == 'E') ? UART_PARITY_EVEN : (p->parity == 'O') ? UART_PARITY_ODD : UART_PARITY_DISABLE,
+        .stop_bits = (p->stopBits == 2) ? UART_STOP_BITS_2 : UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
@@ -94,18 +58,74 @@ void uart_init(void)
     esp_log_level_set(UART_INIT_TAG, ESP_LOG_ERROR);
     uart_driver_install(UART_NUM_1, UART_BUFF_SIZE * 2, UART_BUFF_SIZE * 2, 20, &uart1_queue, 0);
     uart_param_config(UART_NUM_1, &uart_config);
-#ifdef CONFIG_APP_USE_RS232
-    uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (p->rs485) {
+        // RS485 半双工：RTS 控制收发器方向
+        uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, RTS_PIN, UART_PIN_NO_CHANGE);
+        uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
+    } else {
+        uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    }
+    if (UART_InitBuffer() != 0) {
+        ESP_LOGE(UART_INIT_TAG, "uart buffer init failed");
+    }
+    s_ifName = p->name;
+    snprintf(s_ifText, sizeof(s_ifText), "%s %u %u%c%u", p->name, (unsigned)p->baud, (unsigned)p->dataBits,
+             p->parity, (unsigned)p->stopBits);
+}
+
+#ifdef APP_UART_ENABLED
+
+/*
+ * menuconfig 选择设备时（没有导入设备配置）：UART1 同一时间只能服务一种串口协议
+ * （uart_task.h 中有编译期检查），按该协议设置串口参数。
+ */
+#if defined(CONFIG_PLC_FX_CONNECT_RS232) || defined(CONFIG_PLC_FX_CONNECT_RS485)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    7
+#define APP_UART_PARITY  'E'
+#elif defined(CONFIG_PLC_LS_LOAD)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    8
+#define APP_UART_PARITY  'N'
+#elif defined(CONFIG_PLC_HOSTLINK)
+// 标准 HostLink 为 9600 7E2，现场设备改成了 115200 8N1
+#define APP_UART_BAUD    115200
+#define APP_UART_DATA    8
+#define APP_UART_PARITY  'N'
+#elif defined(CONFIG_TESTER_76T)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    8
+#define APP_UART_PARITY  'N'
+#elif defined(CONFIG_TESTER_AINUO)
+#define APP_UART_BAUD    19200
+#define APP_UART_DATA    8
+#define APP_UART_PARITY  'N'
+#elif defined(CONFIG_PLC_PPI_CONNECT_RS485)
+#define APP_UART_BAUD    9600
+#define APP_UART_DATA    8
+#define APP_UART_PARITY  'E'
 #endif
 
+void uart_init(void)
+{
+    const UartParams p = {
+        .baud = APP_UART_BAUD,
+        .dataBits = APP_UART_DATA,
+        .parity = APP_UART_PARITY,
+        .stopBits = 1,
 #ifdef CONFIG_APP_USE_RS485
-    uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, RTS_PIN, UART_PIN_NO_CHANGE);
-    uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
+        .rs485 = true,
+        .name = "RS485",
+#else
+        .rs485 = false,
+        .name = "RS232",
 #endif
-    if (UART_InitBuffer() != 0) {
-        ESP_LOGE(UART_INIT_TAG, "uart buffer init failed\n");
-    }
+    };
+
+    UART_Start(&p);
 }
+
+#endif /* APP_UART_ENABLED */
 
 void uart_event_task(void *pvParameters)
 {
@@ -161,12 +181,13 @@ void uart_event_task(void *pvParameters)
     }
 }
 
-#endif /* APP_UART_ENABLED */
-
 const char *UART_InterfaceName(void)
 {
+    if (s_ifName != NULL) {
+        return s_ifName;
+    }
 #if defined(CONFIG_APP_USE_RS485)
-    return "RS485";
+    return "RS485";         // menuconfig 选了 Modbus RTU（esp-modbus 自己管理串口）
 #elif defined(CONFIG_APP_USE_RS232)
     return "RS232";
 #else
@@ -176,19 +197,8 @@ const char *UART_InterfaceName(void)
 
 const char *UART_InterfaceText(void)
 {
-#ifdef APP_UART_ENABLED
-    static char text[32];
-
-    if (text[0] == '\0') {
-        snprintf(text, sizeof(text), "%s %d %d%c%s", UART_InterfaceName() ? UART_InterfaceName() : "UART",
-                 APP_UART_BAUD, 5 + (int)APP_UART_DATA,
-                 APP_UART_PARITY == UART_PARITY_EVEN ? 'E' : APP_UART_PARITY == UART_PARITY_ODD ? 'O' : 'N',
-                 APP_UART_STOP == UART_STOP_BITS_2 ? "2" : APP_UART_STOP == UART_STOP_BITS_1_5 ? "1.5" : "1");
-    }
-    return text;
-#else
-    return UART_InterfaceName();     // Modbus RTU 由 esp-modbus 管理，参数见 master.c
-#endif
+    // UART_Start() 之后为实际参数；menuconfig 的 Modbus RTU 由 esp-modbus 管理，参数见 master.c
+    return (s_ifText[0] != '\0') ? s_ifText : UART_InterfaceName();
 }
 
 /* ------------------------------------------------------------- 命令任务 */

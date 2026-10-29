@@ -13,6 +13,13 @@ static const char *TAG = "FX";
 #define FX_ACK  0x06
 #define FX_NAK  0x15
 
+static uint8_t s_station = FX_LINK_STATION;
+
+void FX_SetStation(uint8_t station)
+{
+    s_station = station;
+}
+
 static int FxWords(FxFormat fmt)
 {
     return (fmt == FX_FMT_I32 || fmt == FX_FMT_FLOAT) ? 2 : 1;
@@ -132,7 +139,7 @@ typedef struct {
 static void FxLinkHeader(uint8_t *f, const char *cmd, FxDevice dev, uint16_t address, int count)
 {
     f[0] = FX_ENQ;
-    Proto_PutHex(&f[1], FX_LINK_STATION, 2);
+    Proto_PutHex(&f[1], s_station, 2);
     Proto_PutHex(&f[3], FX_LINK_PC_NUMBER, 2);
     f[5] = (uint8_t)cmd[0];
     f[6] = (uint8_t)cmd[1];
@@ -260,6 +267,7 @@ int FX_LinkWriteFloat(uint16_t address, float value)
 static int FxNetDeviceCode(FxDevice dev)
 {
     switch (dev) {
+    case FX_DEV_X: return 0x9C;
     case FX_DEV_Y: return 0x9D;
     case FX_DEV_M: return 0x90;
     default:       return 0xA8;     // D

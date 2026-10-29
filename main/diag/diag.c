@@ -28,6 +28,7 @@
 #include "event_log.h"
 #include "gw_config.h"
 #include "devcfg.h"
+#include "acq.h"
 #include "iot_common.h"
 #include "iot_time.h"
 #include "log_buffer.h"
@@ -252,13 +253,15 @@ static void CheckSerial(Checks *c)
     }
 }
 
-// 设备配置（P0 阶段采集仍按 menuconfig 运行，未导入只作提示）
+// 设备配置（过渡期：没有设备配置时按 menuconfig 采集，只作提示）
 static void CheckDevCfg(Checks *c)
 {
     const DevCfg *cfg = DevCfg_Get();
 
     if (cfg == NULL) {
         Add(c, "info", "采集配置", "厂家账号在“采集”页导入设备配置表。", "%s", DevCfg_ProblemText());
+    } else if (Acq_ProblemText() != NULL) {
+        Add(c, "error", "采集配置", "请联系厂家升级固件，或导入本固件支持的设备配置。", "%s", Acq_ProblemText());
     }
 }
 

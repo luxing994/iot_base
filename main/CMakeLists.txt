@@ -19,6 +19,7 @@ idf_component_register(
         "host/file_transfer.c"
         "host/ota_task.c"
         # collect：设备数据采集（点表、轮询、上报、串口 / 网口收发）
+        "collect/acq.c"
         "collect/plc_points.c"
         "collect/plc_poll.c"
         "collect/plc_report.c"

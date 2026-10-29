@@ -18,4 +18,7 @@
 /* 返回 PLC_OK 或 PLC_ERR_RESPONSE */
 int PPI_Read(const S7Var *var, PlcValue *out);
 
+/* PLC 站地址（默认 2） */
+void PPI_SetStation(uint8_t station);
+
 #endif

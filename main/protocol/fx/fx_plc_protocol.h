@@ -16,16 +16,20 @@
 #include "plc_value.h"
 
 /* 计算机链接参数（与 PLC 中 D8120 / D8121 的设置一致） */
-#define FX_LINK_STATION     0       // 站号
+#define FX_LINK_STATION     0       // 站号默认值（设备配置中可改，见 FX_SetStation）
 #define FX_LINK_PC_NUMBER   0xFF    // PC 号
 #define FX_LINK_WAIT_MS     10      // 报文等待时间，0~150ms，10ms 为单位
 
 /* 软元件 */
 typedef enum {
     FX_DEV_D = 'D',
+    FX_DEV_X = 'X',
     FX_DEV_Y = 'Y',
     FX_DEV_M = 'M',
 } FxDevice;
+
+/* 计算机链接站号 0~15，与 PLC 中 D8121 一致 */
+void FX_SetStation(uint8_t station);
 
 /* 读出的数据格式 */
 typedef enum {

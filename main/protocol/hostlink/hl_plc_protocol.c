@@ -19,6 +19,13 @@ static const char *TAG = "HOSTLINK";
 static const char s_cmdHead[] = "@00FA000000000";
 #define HL_CMD_HEAD_LEN     (sizeof(s_cmdHead) - 1)
 
+static uint8_t s_unit;
+
+void HL_SetUnit(uint8_t unit)
+{
+    s_unit = unit;
+}
+
 /* 应答中 '@' 之后的固定部分：单元号(2) FA(2) 00(2) ICF(2) DA2(2) SA2(2) SID(2) 命令(4) 结束码(4) */
 #define HL_RESP_HEAD_LEN    22
 
@@ -34,6 +41,8 @@ static size_t HlBuild(uint8_t *f, uint16_t fins, uint8_t area, uint32_t addr, ui
     size_t n = HL_CMD_HEAD_LEN;
 
     memcpy(f, s_cmdHead, HL_CMD_HEAD_LEN);
+    f[1] = (uint8_t)('0' + s_unit / 10);   // 单元号，两位十进制
+    f[2] = (uint8_t)('0' + s_unit % 10);
     Proto_PutHex(&f[n], fins, 4);
     n += 4;
     Proto_PutHex(&f[n], area, 2);

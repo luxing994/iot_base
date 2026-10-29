@@ -1,0 +1,5 @@
+{"t":"meta","schema":1,"rev":"sim-fx-1","source":"串口调试助手模拟 FX 计算机链接"}
+{"t":"device","name":"FX 模拟","number":"SIM-FX-001","category":"plc","brand":"三菱","model":"FX3U","protocol":"fx_link","iface":"rs485","station":0,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"FXPLC"}
+{"t":"point","fr":1,"name":"原始值","area":"D","addr":200,"type":"i16"}
+{"t":"point","fr":2,"name":"倍率 0.1","area":"D","addr":200,"type":"i16","scale":0.1,"dec":1}
+{"t":"point","fr":3,"name":"变化才报","area":"D","addr":200,"type":"u16","mode":"change"}
