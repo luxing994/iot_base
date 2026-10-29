@@ -53,7 +53,9 @@ static char s_problem[96];
 /* 每个点最近一次的结果（网页显示） */
 static double *s_values;
 static int8_t *s_states;            // 0 未读，1 成功，-1 失败
-static int64_t *s_times;            // 最近一次成功的时刻（us）
+static int64_t *s_times;            // 最近一次成功的时刻（us），0 表示从未成功
+static int64_t s_roundTime;         // 最近一轮采集结束的时刻（us）
+static bool s_running;
 /* 变化上报：上次上报的值 */
 static double *s_reported;
 static bool *s_hasReported;
@@ -369,6 +371,7 @@ static void AcqTask(void *arg)
         } else {
             PollRound(c);
         }
+        s_roundTime = esp_timer_get_time();
     }
 }
 
@@ -446,6 +449,7 @@ bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio)
         ESP_LOGE(TAG, "%s", s_problem);
         return true;
     }
+    s_running = true;
     ESP_LOGI(TAG, "%s: %s %s, station %u, %u points every %u ms", d->name, d->proto->id, UART_InterfaceText(),
              (unsigned)d->station, (unsigned)c->count, (unsigned)d->pollMs);
     return true;
@@ -456,14 +460,28 @@ const char *Acq_ProblemText(void)
     return (s_problem[0] != '\0') ? s_problem : NULL;
 }
 
-int Acq_GetPointValue(uint16_t index, double *value, uint32_t *ageS)
+bool Acq_IsRunning(void)
+{
+    return s_running;
+}
+
+int32_t Acq_RoundAgeS(void)
+{
+    return (s_roundTime == 0) ? -1 : (int32_t)((esp_timer_get_time() - s_roundTime) / 1000000);
+}
+
+int Acq_GetPointText(uint16_t index, char *text, size_t size, uint32_t *ageS)
 {
     const DevCfg *c = DevCfg_Get();
 
-    if (c == NULL || index >= c->count || s_states == NULL || s_states[index] == 0) {
+    text[0] = '\0';
+    *ageS = 0;
+    if (c == NULL || index >= c->count || s_states == NULL) {
         return 0;
     }
-    *value = s_values[index];
-    *ageS = (uint32_t)((esp_timer_get_time() - s_times[index]) / 1000000);
+    if (s_times[index] != 0) {
+        FormatValue(&c->points[index], s_values[index], text, size);
+        *ageS = (uint32_t)((esp_timer_get_time() - s_times[index]) / 1000000);
+    }
     return s_states[index];
 }

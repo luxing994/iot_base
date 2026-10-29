@@ -28,6 +28,8 @@
 #include "diag.h"
 #include "monitor.h"
 #include "uart_task.h"
+#include "acq.h"
+#include "host_cmd.h"
 #include "iot_time.h"
 #include <time.h>
 
@@ -986,6 +988,51 @@ static esp_err_t ProtocolsHandler(httpd_req_t *req)
     return SendJson(req, root);
 }
 
+/*
+ * 实时数据（客户、厂家账号都可查看），points 与 /api/devcfg 的点表一一对应：
+ *   [状态, 值, 秒前]  状态 0 未读，1 正常，-1 最近一次读取失败；值为最近一次读到的值
+ */
+static esp_err_t AcqHandler(httpd_req_t *req)
+{
+    const DevCfg *c = DevCfg_Get();
+    const char *problem = Acq_ProblemText();
+    char line[96];
+    char text[32];
+    uint32_t age;
+    ChunkOut *o;
+    int n;
+
+    if (!CheckAuth(req)) {
+        return ESP_OK;
+    }
+    o = BeginChunks(req, "application/json; charset=utf-8");
+    if (o == NULL) {
+        return httpd_resp_send_500(req);
+    }
+    n = snprintf(line, sizeof(line), "{\"running\":%s,\"paused\":%s,\"roundAge\":%ld,\"problem\":",
+                 Acq_IsRunning() ? "true" : "false", HostCmd_IsCollectEnabled() ? "false" : "true",
+                 (long)Acq_RoundAgeS());
+    ChunkWrite(o, line, (size_t)n);
+    if (problem != NULL) {
+        cJSON *item = cJSON_CreateString(problem);     // 借 cJSON 转义
+        char *s = (item != NULL) ? cJSON_PrintUnformatted(item) : NULL;
+
+        ChunkWrite(o, (s != NULL) ? s : "null", strlen((s != NULL) ? s : "null"));
+        cJSON_free(s);
+        cJSON_Delete(item);
+    } else {
+        ChunkWrite(o, "null", 4);
+    }
+    ChunkWrite(o, ",\"points\":[", 11);
+    for (uint16_t i = 0; c != NULL && i < c->count; i++) {
+        int st = Acq_GetPointText(i, text, sizeof(text), &age);
+        n = snprintf(line, sizeof(line), "%s[%d,\"%s\",%lu]", (i > 0) ? "," : "", st, text, (unsigned long)age);
+        ChunkWrite(o, line, (size_t)n);
+    }
+    ChunkWrite(o, "]}", 2);
+    return EndChunks(o);
+}
+
 static esp_err_t IndexHandler(httpd_req_t *req)
 {
     if (!CheckSource(req)) {
@@ -1026,6 +1073,7 @@ void WebConfig_Start(void)
         { .uri = "/api/devcfg/file",      .method = HTTP_GET,  .handler = DevCfgFileHandler },
         { .uri = "/api/devcfg/clear",     .method = HTTP_POST, .handler = DevCfgClearHandler },
         { .uri = "/api/devcfg/protocols", .method = HTTP_GET,  .handler = ProtocolsHandler },
+        { .uri = "/api/acq",              .method = HTTP_GET,  .handler = AcqHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;

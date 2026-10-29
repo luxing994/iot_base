@@ -123,6 +123,8 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
 .tbl th{color:var(--mut);font-weight:400;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px}
 .tbl td{padding:6px 8px;border-top:1px solid var(--line)}
 .tbl tr:first-child td{border-top:0}
+.tbl td.val{font-weight:600;font-variant-numeric:tabular-nums}
+.tbl td.val.old{color:var(--bad);font-weight:400}
 .errs{margin:10px 0 0;padding:8px 12px;border-radius:8px;background:#fdf0f0;color:var(--bad);font-size:13px;max-height:260px;overflow-y:auto}
 .errs div{padding:2px 0}
 .danger{border:1px solid #f3d4d4}
@@ -229,7 +231,7 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
   </div>
   <div class="card hide" id="acqPtsCard">
     <h2>数据点 <small id="acqPtsN"></small></h2>
-    <div class="tbl"><table><thead><tr><th>编号</th><th>名称</th><th>地址</th><th>类型</th><th>单位</th><th>上报</th></tr></thead><tbody id="acqPts"></tbody></table></div>
+    <div class="tbl"><table><thead><tr><th>编号</th><th>名称</th><th>当前值</th><th>地址</th><th>类型</th><th>上报</th></tr></thead><tbody id="acqPts"></tbody></table></div>
   </div>
   <div class="card fac-only hide">
     <h2>导入设备配置</h2>
@@ -403,6 +405,7 @@ function logout() {
   token = '';
   try { sessionStorage.removeItem('t'); } catch (e) {}
   clearInterval(stTimer);
+  stopAcq();
   stopLog();
   clearTimeout(dgTimer);
   evOpen = null;     // 换账号登录时按新角色决定是否展开
@@ -635,6 +638,7 @@ function save(body, what, path) {
 
 function restarting(saved) {
   clearInterval(stTimer);
+  stopAcq();
   token = '';
   try { sessionStorage.removeItem('t'); } catch (e) {}
   show('#saveBar', false);
@@ -932,8 +936,37 @@ $('#btnMonExp').onclick = function () {
 /* ---------------- 采集（设备配置，格式见 docs/devcfg.md） ---------------- */
 
 var MODE_TEXT = { cycle: '定时', change: '变化' };
+var acqTimer = null, acqPoints = [];
+
+function stopAcq() { clearInterval(acqTimer); acqTimer = null; }
+
+// 实时数据：每 2 秒刷新一次（只在采集页时）
+function loadAcqValues() {
+  if (tab !== 'acq' || !token) { return stopAcq(); }
+  api('/api/acq').then(function (a) {
+    var fail = 0, read = 0, st;
+    a.points.forEach(function (p, i) {
+      var td = $('#av' + i), u = acqPoints[i] ? acqPoints[i].unit : '';
+      if (!td) { return; }
+      if (p[0] !== 0) { read++; }
+      if (p[0] === -1) { fail++; }
+      td.className = 'val' + (p[0] === -1 ? ' old' : '');
+      td.textContent = p[1] ? p[1] + (u ? ' ' + u : '') : (p[0] === 0 ? '…' : '读取失败');
+      td.title = (p[0] === -1 && p[1]) ? '读取失败，这是 ' + p[2] + ' 秒前的值' : '';
+    });
+    if (a.problem) { st = dot('bad', esc(a.problem)); }
+    else if (!a.running) { st = dot('bad', '采集未启动'); }
+    else if (a.paused) { st = dot('warn', '上位机已暂停采集'); }
+    else if (a.roundAge < 0 && !read) { st = dot('', '正在读取…'); }
+    else if (a.points.length && fail === a.points.length) { st = dot('bad', '设备无应答，请检查接线、拨码开关和通信参数'); }
+    else if (fail) { st = dot('warn', fail + ' 个点读取失败'); }
+    else { st = dot('ok', '正常' + (a.roundAge >= 0 ? '，' + a.roundAge + ' 秒前更新' : '')); }
+    $('#acqState').innerHTML = st;
+  }).catch(function () {});
+}
 
 function loadAcq() {
+  stopAcq();
   api('/api/devcfg').then(function (c) {
     if (!c.loaded) {
       $('#acqDev').innerHTML = '<p class="hint">' + esc(c.problem) + '</p>';
@@ -948,14 +981,19 @@ function loadAcq() {
       ['协议', esc(d.protocolName)],
       ['通信', esc(d.link) + (d.iface !== 'eth' ? '<br><span class="hint">拨码开关须拨到 ' + esc(d.ifaceText) + '</span>' : '')],
       ['采集周期', d.pollMs + ' ms，' + (d.report === 'batch' ? '批量上报' : '逐点上报')],
+      ['采集状态', '<span id="acqState">…</span>'],
       ['配置版本', esc(m.rev) + (m.source ? ' <span class="hint">' + esc(m.source) + '</span>' : '')]
     ]);
     show('#acqPtsCard', d.needPoints);
     $('#acqPtsN').textContent = c.points.length + ' 个';
-    $('#acqPts').innerHTML = c.points.map(function (p) {
-      return '<tr><td>FR' + ('00' + p.fr).slice(-3) + '</td><td>' + esc(p.name) + '</td><td>' + esc(p.addr) + '</td><td>' + esc(p.type) +
-        '</td><td>' + esc(p.unit) + '</td><td>' + (MODE_TEXT[p.mode] || '') + '</td></tr>';
+    acqPoints = c.points;
+    $('#acqPts').innerHTML = c.points.map(function (p, i) {
+      return '<tr><td>FR' + ('00' + p.fr).slice(-3) + '</td><td>' + esc(p.name) + '</td><td class="val" id="av' + i + '">…</td><td>' +
+        esc(p.addr) + '</td><td>' + esc(p.type) + '</td><td>' + (MODE_TEXT[p.mode] || '') + '</td></tr>';
     }).join('');
+    loadAcqValues();
+    stopAcq();
+    acqTimer = setInterval(loadAcqValues, 2000);
   }).catch(function (e) { msg(e.message, true); });
 }
 
@@ -1023,6 +1061,7 @@ function setTab(t) {
   clearTimeout(dgTimer);
   clearInterval(stTimer);
   monStopPoll();
+  stopAcq();
   if (t === 'st' || t === 'sys') { loadStatus(); }
   if (t === 'st') { stTimer = setInterval(loadStatus, 5000); }
   if (t === 'dg') { loadDiag(); }
