@@ -21,6 +21,9 @@ bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio);
 /* 有设备配置但无法采集时的原因（如协议尚未支持），正常时返回 NULL */
 const char *Acq_ProblemText(void);
 
+/* 网口设备当前连不上（串口设备始终返回 false） */
+bool Acq_IsLinkDown(void);
+
 /* 采集任务已启动（上位机仍可暂停采集，见 HostCmd_IsCollectEnabled） */
 bool Acq_IsRunning(void);
 

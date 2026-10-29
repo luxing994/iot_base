@@ -39,6 +39,7 @@ idf_component_register(
         "protocol/modbus/master.c"
         "protocol/modbus/modbus_params.c"
         "protocol/modbus/lx_modbus_tcp_master.c"
+        "protocol/modbus/mb_rtu.c"
         # driver：板载外设
         "driver/sensor.c"
         "driver/max6675.c"

@@ -73,6 +73,19 @@ static const struct {
 
 /* ------------------------------------------------------------ 查询 */
 
+/* 已在真机上按设备配置采集验证过的协议 */
+static const char *const s_verified[] = { "hostlink" };
+
+bool ProtoLib_IsVerified(const ProtoInfo *p)
+{
+    for (size_t i = 0; p != NULL && i < COUNT(s_verified); i++) {
+        if (strcmp(p->id, s_verified[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 const ProtoInfo *ProtoLib_Find(const char *id)
 {
     if (id == NULL) {
@@ -166,6 +179,7 @@ cJSON *ProtoLib_ToJson(void)
             }
         }
         cJSON_AddBoolToObject(o, "needPoints", p->needPoints);
+        cJSON_AddBoolToObject(o, "verified", ProtoLib_IsVerified(p));
         if (p->ifaces & IFACE_SERIAL) {
             cJSON_AddNumberToObject(o, "baud", p->baud);
             cJSON_AddNumberToObject(o, "dataBits", p->dataBits);

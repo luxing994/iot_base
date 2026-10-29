@@ -391,6 +391,8 @@ static void ParseDevice(DevCfgImport *imp, const cJSON *o)
         d->proto = ProtoLib_Find(text);
         if (d->proto == NULL) {
             Err(imp, "本固件不支持协议 %s（协议库中的协议须先开发并升级固件）", text);
+        } else if (!ProtoLib_IsVerified(d->proto)) {
+            Warn(imp, "协议 %s 尚未在真机上按配置采集验证过，导入后请在采集页核对数据", d->proto->name);
         }
     }
     if (GetStr(imp, o, "iface", text, sizeof(text), true) && text[0] != '\0') {

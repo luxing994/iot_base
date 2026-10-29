@@ -1,0 +1,9 @@
+{"t":"meta","schema":1,"rev":"sim-mb-rtu-1","source":"Modbus Slave 模拟 RTU"}
+{"t":"device","name":"Modbus RTU 模拟","number":"SIM-MBRTU-001","category":"meter","protocol":"modbus_rtu","iface":"rs485","baud":9600,"dataBits":8,"parity":"N","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM"}
+{"t":"point","fr":1,"name":"HR0 无符号","area":"HR","addr":0,"type":"u16"}
+{"t":"point","fr":2,"name":"HR1 倍率0.1","area":"HR","addr":1,"type":"i16","scale":0.1,"dec":1}
+{"t":"point","fr":3,"name":"HR2-3 浮点","area":"HR","addr":2,"type":"f32","dec":2}
+{"t":"point","fr":4,"name":"HR4.0 位","area":"HR","addr":4,"bit":0,"type":"bit"}
+{"t":"point","fr":5,"name":"IR0 输入寄存器","area":"IR","addr":0,"type":"u16"}
+{"t":"point","fr":6,"name":"线圈0","area":"COIL","addr":0,"type":"bit"}
+{"t":"point","fr":7,"name":"离散输入0","area":"DI","addr":0,"type":"bit"}

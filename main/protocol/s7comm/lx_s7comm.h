@@ -14,6 +14,9 @@
 
 #define S7_TCP_PORT 102
 
+/* 连接参数：远端 TSAP = 0x01 + 机架号 * 32 + 槽号，在 S7_Handshake 之前设置 */
+void S7_SetRackSlot(uint8_t rack, uint8_t slot);
+
 /* 成功返回 0，失败返回 -1（调用方关闭 socket 后重连） */
 int S7_Handshake(int sock);
 

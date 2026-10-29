@@ -996,7 +996,7 @@ static esp_err_t AcqHandler(httpd_req_t *req)
 {
     const DevCfg *c = DevCfg_Get();
     const char *problem = Acq_ProblemText();
-    char line[96];
+    char line[128];
     char text[32];
     uint32_t age;
     ChunkOut *o;
@@ -1009,8 +1009,9 @@ static esp_err_t AcqHandler(httpd_req_t *req)
     if (o == NULL) {
         return httpd_resp_send_500(req);
     }
-    n = snprintf(line, sizeof(line), "{\"running\":%s,\"paused\":%s,\"roundAge\":%ld,\"problem\":",
+    n = snprintf(line, sizeof(line), "{\"running\":%s,\"paused\":%s,\"linkDown\":%s,\"roundAge\":%ld,\"problem\":",
                  Acq_IsRunning() ? "true" : "false", HostCmd_IsCollectEnabled() ? "false" : "true",
+                 Acq_IsLinkDown() ? "true" : "false",
                  (long)Acq_RoundAgeS());
     ChunkWrite(o, line, (size_t)n);
     if (problem != NULL) {

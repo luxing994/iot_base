@@ -44,10 +44,17 @@ static int S7_RecvTpkt(int sock, uint8_t *buf, size_t cap)
 
 /* ------------------------------------------------------------------ 建立连接 */
 
-// COTP 连接请求（CR），本地 / 远端 TSAP 均为 0x0101
+// COTP 连接请求（CR）：本地 TSAP 0x0101，远端 TSAP 0x01 + 机架槽号
+static uint8_t s_remoteTsap = 0x01;     // 机架 * 32 + 槽号，默认 0 机架 1 槽（S7-200 SMART 现场验证过）
+
+void S7_SetRackSlot(uint8_t rack, uint8_t slot)
+{
+    s_remoteTsap = (uint8_t)((rack << 5) | (slot & 0x1F));
+}
+
 static int S7_CotpConnect(int sock)
 {
-    static const uint8_t cr[] = {
+    uint8_t cr[] = {
         0x03, 0x00, 0x00, 0x16,                 // TPKT
         0x11, 0xE0, 0x00, 0x00, 0x04, 0x30, 0x00,   // COTP CR
         0xC1, 0x02, 0x01, 0x01,                 // 源 TSAP
@@ -57,6 +64,7 @@ static int S7_CotpConnect(int sock)
     uint8_t rsp[64];
     int len;
 
+    cr[18] = s_remoteTsap;
     if (Net_SendAll(sock, cr, sizeof(cr)) != 0) {
         return -1;
     }

@@ -432,7 +432,7 @@ function start() {
 /* ---------------- 状态 ---------------- */
 
 var PEER = { 'report channel': '数据上报', 'link channel': '上线 / 心跳', 'ota channel': 'OTA 控制',
-  'modbus tcp': 'Modbus TCP 设备', 'fx mc': 'FX PLC', 's7': 'S7 PLC' };
+  'modbus tcp': 'Modbus TCP 设备', 'fx mc': 'FX PLC', 's7': 'S7 PLC', 'net device': '采集设备' };
 
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function rows(list) {
@@ -957,6 +957,7 @@ function loadAcqValues() {
     if (a.problem) { st = dot('bad', esc(a.problem)); }
     else if (!a.running) { st = dot('bad', '采集未启动'); }
     else if (a.paused) { st = dot('warn', '上位机已暂停采集'); }
+    else if (a.linkDown) { st = dot('bad', '连接不上设备，请检查网线、设备 IP 和端口'); }
     else if (a.roundAge < 0 && !read) { st = dot('', '正在读取…'); }
     else if (a.points.length && fail === a.points.length) { st = dot('bad', '设备无应答，请检查接线、拨码开关和通信参数'); }
     else if (fail) { st = dot('warn', fail + ' 个点读取失败'); }

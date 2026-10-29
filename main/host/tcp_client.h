@@ -44,6 +44,17 @@ const char *TcpClient_ErrText(int err);
 /* 上位机端口为 0 时 app_main 不创建该连接任务，调用此函数登记为停用（状态显示 off） */
 void TcpClient_RegisterOff(const char *peer);
 
+/*
+ * 按设备配置采集的网口设备（acq.c）：连接状态、事件和日志限频与其他连接一致
+ *   TcpClient_DeviceConnect  等网络就绪后连接，handshake 不为 NULL 时连上后调用（返回 0 成功）；
+ *                            成功返回 socket，失败返回 -1（调用方隔 TcpClient_ReconnectMs() 再试）
+ */
+typedef struct ConnLog TcpDevLink;
+TcpDevLink *TcpClient_NewDeviceLink(void);
+int  TcpClient_DeviceConnect(TcpDevLink *link, const char *ip, uint16_t port, int (*handshake)(int sock));
+void TcpClient_DeviceClose(TcpDevLink *link, int sock);
+int  TcpClient_ReconnectMs(void);
+
 // OTA 控制通道 socket（tcp_client3_task 维护，断线时为 -1），OTA 任务用它回传进度
 extern int ota_tcp_sock;
 

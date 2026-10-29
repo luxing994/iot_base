@@ -28,6 +28,11 @@
 #include "ls_plc_load_protocol.h"
 #include "t_tester_protocol.h"
 #include "ainuo_tester_ascii_protocol.h"
+#include "lx_s7comm.h"
+#include "lx_modbus_tcp_master.h"
+#include "mb_pdu.h"
+#include "mb_rtu.h"
+#include "tcp_client.h"
 #include "acq.h"
 
 static const char *TAG = "ACQ";
@@ -49,6 +54,8 @@ typedef void (*TemplatePoll)(void);
 static RawReader s_read;            // 点表协议
 static TemplatePoll s_template;     // 内置模板（测试仪等）
 static char s_problem[96];
+static int s_sock = -1;             // 网口设备的连接（采集任务内使用）
+static volatile bool s_linkDown;    // 网口设备连不上
 
 /* 每个点最近一次的结果（网页显示） */
 static double *s_values;
@@ -149,7 +156,10 @@ static int ReadHostLink(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r
     return ret;
 }
 
-static int ReadPpi(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+/* 西门子 S7 变量：PPI（串口）和 S7comm（网口）读法相同，只是收发方式不同 */
+typedef int (*S7ReadFn)(const S7Var *var, PlcValue *out);
+
+static int ReadS7With(S7ReadFn read, const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
 {
     S7Var var = { .byte = p->addr, .bit = p->bit };
     PlcValue v;
@@ -163,20 +173,110 @@ static int ReadPpi(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
     }
     if (p->type == PT_BIT) {
         var.type = S7_BIT;
-        ret = PPI_Read(&var, &v);
+        ret = read(&var, &v);
         r->raw = (uint32_t)v.i & 1;
         r->isBit = true;
     } else if (Is32(p->type)) {
         var.type = S7_DINT;                     // 大端，按位取出再按类型解释
-        ret = PPI_Read(&var, &v);
+        ret = read(&var, &v);
         r->raw = (uint32_t)v.i;
         r->order = "ABCD";
     } else {
         var.type = S7_INT;
-        ret = PPI_Read(&var, &v);
+        ret = read(&var, &v);
         r->raw = (uint32_t)v.i & 0xFFFF;
     }
     return ret;
+}
+
+static int ReadPpi(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    return ReadS7With(PPI_Read, d, p, r);
+}
+
+static int S7NetRead(const S7Var *var, PlcValue *out)
+{
+    return S7_NetRead(s_sock, var, out);
+}
+
+static int ReadS7(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    return ReadS7With(S7NetRead, d, p, r);
+}
+
+/* 三菱 MC 协议（以太网）：二进制帧里 X / Y 的编号直接用数值（配置中按八进制写的 X17 即 15） */
+static int ReadFxMc(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    FxDevice dev = FX_DEV_D;
+    PlcValue v;
+    int ret;
+
+    switch (AreaName(d, p)[0]) {
+    case 'M': dev = FX_DEV_M; break;
+    case 'X': dev = FX_DEV_X; break;
+    case 'Y': dev = FX_DEV_Y; break;
+    default:  break;
+    }
+    if (dev != FX_DEV_D) {
+        ret = FX_NetRead(s_sock, dev, p->addr, FX_FMT_BIT, &v);
+        r->raw = (uint32_t)v.i & 1;
+        r->isBit = true;
+    } else if (Is32(p->type)) {
+        ret = FX_NetRead(s_sock, dev, p->addr, FX_FMT_I32, &v);    // 低字在前
+        r->raw = (uint32_t)v.i;
+        r->order = "CDAB";
+    } else {
+        ret = FX_NetRead(s_sock, dev, p->addr, FX_FMT_U16, &v);
+        r->raw = (uint32_t)v.i & 0xFFFF;
+    }
+    return ret;
+}
+
+/* Modbus：RTU 和 TCP 只是收发方式不同 */
+typedef int (*MbReadFn)(uint8_t fc, uint16_t address, uint16_t count, uint16_t *out);
+
+static int ReadModbusWith(MbReadFn read, const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    const char *area = AreaName(d, p);
+    uint8_t fc = MB_FC_READ_HOLDING;
+    uint16_t w[2] = { 0 };
+    int ret;
+
+    if (strcmp(area, "IR") == 0) {
+        fc = MB_FC_READ_INPUT;
+    } else if (strcmp(area, "COIL") == 0) {
+        fc = MB_FC_READ_COILS;
+    } else if (strcmp(area, "DI") == 0) {
+        fc = MB_FC_READ_DISCRETE;
+    }
+    if (MB_IsBitFc(fc)) {
+        ret = read(fc, (uint16_t)p->addr, 1, w);
+        r->raw = w[0] & 1;
+        r->isBit = true;
+    } else if (Is32(p->type)) {
+        ret = read(fc, (uint16_t)p->addr, 2, w);
+        r->raw = ((uint32_t)w[0] << 16) | w[1];     // 起始寄存器在高位
+        r->order = "ABCD";
+    } else {
+        ret = read(fc, (uint16_t)p->addr, 1, w);   // 寄存器取位由引擎处理
+        r->raw = w[0];
+    }
+    return ret;
+}
+
+static int ReadModbusRtu(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    return ReadModbusWith(MB_RtuRead, d, p, r);
+}
+
+static int MbTcpRead(uint8_t fc, uint16_t address, uint16_t count, uint16_t *out)
+{
+    return MODBUS_NetReadFc(s_sock, fc, address, count, out);
+}
+
+static int ReadModbusTcp(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    return ReadModbusWith(MbTcpRead, d, p, r);
 }
 
 /* ============================================================ 内置模板 */
@@ -308,12 +408,13 @@ static void ReportPoint(const DevCfg *c, uint16_t i, double v)
     IotReport_SendPoint(DevCfg_DevTypeId(), c->dev.devTypeName, p->fr, "%s", text);
 }
 
-/* 一轮：逐点读取并上报 */
-static void PollRound(const DevCfg *c)
+/* 一轮：逐点读取并上报。网口链路失效返回 false（调用方重连） */
+static bool PollRound(const DevCfg *c)
 {
     const bool batch = (c->dev.report == DEV_REPORT_BATCH);
     IotBatch *b = batch ? IotBatch_Create() : NULL;
     bool complete = true;
+    bool linkOk = true;
     int fails = 0;
 
     for (uint16_t i = 0; i < c->count; i++) {
@@ -341,6 +442,9 @@ static void PollRound(const DevCfg *c)
         s_states[i] = -1;
         if (ret == PLC_OK) {
             ESP_LOGW(TAG, "FR%03u %s: invalid data", (unsigned)p->fr, p->name);
+        } else if (ret == PLC_ERR_LINK) {
+            linkOk = false;
+            break;
         } else if (ret == PLC_ERR_RESPONSE && ++fails >= OFFLINE_FAILS && i + 1 < c->count) {
             // 设备离线由 serial_txn 统一告警（只在状态变化时记录），这里只是缩短本轮
             ESP_LOGD(TAG, "no response for %d points, skip the rest of this round", fails);
@@ -354,8 +458,10 @@ static void PollRound(const DevCfg *c)
         }
         IotBatch_Destroy(b);
     }
+    return linkOk;
 }
 
+/* 串口设备 */
 static void AcqTask(void *arg)
 {
     const DevCfg *c = DevCfg_Get();
@@ -375,40 +481,98 @@ static void AcqTask(void *arg)
     }
 }
 
+static void MarkAllFailed(const DevCfg *c)
+{
+    for (uint16_t i = 0; i < c->count; i++) {
+        s_states[i] = -1;
+    }
+}
+
+static int (*s_handshake)(int sock);    // 网口协议连上后的握手（如 S7），没有为 NULL
+
+/* 网口设备：连接 -> 按周期轮询，链路失效后断开重连（连接状态同时显示在状态页“连接”中） */
+static void AcqNetTask(void *arg)
+{
+    const DevCfg *c = DevCfg_Get();
+    TcpDevLink *link = TcpClient_NewDeviceLink();
+
+    (void)arg;
+    while (1) {
+        int sock = TcpClient_DeviceConnect(link, c->dev.ip, c->dev.port, s_handshake);
+
+        if (sock < 0) {
+            s_linkDown = true;
+            MarkAllFailed(c);
+            vTaskDelay(pdMS_TO_TICKS(TcpClient_ReconnectMs()));
+            continue;
+        }
+        s_linkDown = false;
+        s_sock = sock;
+        while (1) {
+            vTaskDelay(pdMS_TO_TICKS(c->dev.pollMs));
+            if (!HostCmd_IsCollectEnabled()) {
+                continue;
+            }
+            if (!PollRound(c)) {
+                break;
+            }
+            s_roundTime = esp_timer_get_time();
+        }
+        s_sock = -1;
+        s_linkDown = true;
+        MarkAllFailed(c);
+        TcpClient_DeviceClose(link, sock);
+        vTaskDelay(pdMS_TO_TICKS(TcpClient_ReconnectMs()));
+    }
+}
+
 /* ============================================================ 启动 */
+
+static void SetupFxLink(const DevCfgDevice *d)   { FX_SetStation(d->station); }
+static void SetupHostLink(const DevCfgDevice *d) { HL_SetUnit(d->station); }
+static void SetupPpi(const DevCfgDevice *d)      { PPI_SetStation(d->station); }
+static void SetupS7(const DevCfgDevice *d)       { S7_SetRackSlot(d->rack, d->slot); }
+static void SetupMbRtu(const DevCfgDevice *d)    { MB_RtuSetSlave(d->station); }
+static void SetupMbTcp(const DevCfgDevice *d)    { MODBUS_SetUnitId(d->station); }
 
 static const struct {
     const char *id;
     RawReader read;
     TemplatePoll poll;
-    void (*setStation)(uint8_t station);
+    void (*setup)(const DevCfgDevice *d);
+    int (*handshake)(int sock);
 } s_drivers[] = {
-    { "fx_prog",  ReadFxProg,   NULL,      NULL },
-    { "fx_link",  ReadFxLink,   NULL,      FX_SetStation },
-    { "hostlink", ReadHostLink, NULL,      HL_SetUnit },
-    { "ppi",      ReadPpi,      NULL,      PPI_SetStation },
-    { "dbs",      NULL,         PollDbs,   NULL },
-    { "t76",      NULL,         PollT76,   NULL },
-    { "ainuo",    NULL,         PollAinuo, NULL },
+    { "fx_prog",    ReadFxProg,    NULL,      NULL,          NULL },
+    { "fx_link",    ReadFxLink,    NULL,      SetupFxLink,   NULL },
+    { "fx_mc",      ReadFxMc,      NULL,      NULL,          NULL },
+    { "hostlink",   ReadHostLink,  NULL,      SetupHostLink, NULL },
+    { "ppi",        ReadPpi,       NULL,      SetupPpi,      NULL },
+    { "s7",         ReadS7,        NULL,      SetupS7,       S7_Handshake },
+    { "modbus_rtu", ReadModbusRtu, NULL,      SetupMbRtu,    NULL },
+    { "modbus_tcp", ReadModbusTcp, NULL,      SetupMbTcp,    NULL },
+    { "dbs",        NULL,          PollDbs,   NULL,          NULL },
+    { "t76",        NULL,          PollT76,   NULL,          NULL },
+    { "ainuo",      NULL,          PollAinuo, NULL,          NULL },
 };
 
 bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio)
 {
     const DevCfg *c = DevCfg_Get();
     const DevCfgDevice *d;
+    bool net;
     size_t i;
 
     if (c == NULL) {
         return false;
     }
     d = &c->dev;
+    net = (d->iface == IFACE_ETH);
     for (i = 0; i < sizeof(s_drivers) / sizeof(s_drivers[0]); i++) {
         if (strcmp(s_drivers[i].id, d->proto->id) == 0) {
             break;
         }
     }
-    if (i == sizeof(s_drivers) / sizeof(s_drivers[0]) || !(d->iface & IFACE_SERIAL)) {
-        // 网口协议、Modbus RTU 在后续版本中接入
+    if (i == sizeof(s_drivers) / sizeof(s_drivers[0]) || (net && s_drivers[i].read == NULL)) {
         snprintf(s_problem, sizeof(s_problem), "本固件暂不能按配置采集 %s，请升级固件", d->proto->name);
         ESP_LOGE(TAG, "%s", s_problem);
         EvLog_Add(EV_ERROR, "%s", s_problem);
@@ -429,8 +593,21 @@ bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio)
     }
     s_read = s_drivers[i].read;
     s_template = s_drivers[i].poll;
-    if (s_drivers[i].setStation != NULL) {
-        s_drivers[i].setStation(d->station);
+    s_handshake = s_drivers[i].handshake;
+    if (s_drivers[i].setup != NULL) {
+        s_drivers[i].setup(d);
+    }
+
+    if (net) {
+        if (xTaskCreate(AcqNetTask, "acq", 1024 * 6, NULL, pollPrio, NULL) != pdPASS) {
+            strlcpy(s_problem, "内存不足，无法启动采集任务", sizeof(s_problem));
+            ESP_LOGE(TAG, "%s", s_problem);
+            return true;
+        }
+        s_running = true;
+        ESP_LOGI(TAG, "%s: %s %s:%u, %u points every %u ms", d->name, d->proto->id, d->ip, (unsigned)d->port,
+                 (unsigned)c->count, (unsigned)d->pollMs);
+        return true;
     }
 
     // 拨码开关只有 232 / 485 两档：RS422 设备经外接转换器接在 232 档
@@ -453,6 +630,11 @@ bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio)
     ESP_LOGI(TAG, "%s: %s %s, station %u, %u points every %u ms", d->name, d->proto->id, UART_InterfaceText(),
              (unsigned)d->station, (unsigned)c->count, (unsigned)d->pollMs);
     return true;
+}
+
+bool Acq_IsLinkDown(void)
+{
+    return s_linkDown;
 }
 
 const char *Acq_ProblemText(void)

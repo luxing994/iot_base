@@ -56,7 +56,7 @@ char* GetStaIp(void)
 /* ---------------------------------------------------------------- 连接工具 */
 
 // 每个连接一份，用于日志限频和状态查询
-typedef struct {
+typedef struct ConnLog {
     const char *tag;
     const char *peer;       // 日志中的对端名称，如 "report channel"
     int fails;              // 连续失败次数（连上后清零）
@@ -142,6 +142,7 @@ const char *TcpClient_LinkName(const char *peer)
         { "modbus tcp",     "Modbus TCP 设备" },
         { "fx mc",          "FX PLC（网口）" },
         { "s7",             "S7 PLC（网口）" },
+        { "net device",     "采集设备（网口）" },
     };
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
@@ -458,7 +459,7 @@ typedef int (*PlcConnectFunc)(ConnLog *log);
 typedef int (*PlcPollFunc)(int sock);
 
 // 网口 PLC 地址都是 IPv4（与上位机使用 IPv4 还是 IPv6 无关）
-static __attribute__((unused)) int PlcTcpConnect(const char *ip, uint16_t port, ConnLog *log)
+static int PlcTcpConnect(const char *ip, uint16_t port, ConnLog *log)
 {
     struct sockaddr_in dest_addr = { 0 };
     int sock;
@@ -509,6 +510,38 @@ static __attribute__((unused)) void PlcNetClientLoop(const char *peer, PlcConnec
         TcpClose(sock, log);
         vTaskDelay(pdMS_TO_TICKS(CLIENT_RECONNECT_MS));
     }
+}
+
+/* ---------------------------------------------------------- 按设备配置采集的网口设备（acq.c） */
+
+TcpDevLink *TcpClient_NewDeviceLink(void)
+{
+    return NewLink("PLC", "net device");
+}
+
+int TcpClient_DeviceConnect(TcpDevLink *log, const char *ip, uint16_t port, int (*handshake)(int sock))
+{
+    int sock;
+
+    WaitNetwork();
+    sock = PlcTcpConnect(ip, port, log);
+    if (sock >= 0 && handshake != NULL && handshake(sock) != 0) {
+        // 握手失败不算“连上又断开”，避免每次重试都记两条事件
+        log->up = false;
+        close(sock);
+        return -1;
+    }
+    return sock;
+}
+
+void TcpClient_DeviceClose(TcpDevLink *log, int sock)
+{
+    TcpClose(sock, log);
+}
+
+int TcpClient_ReconnectMs(void)
+{
+    return CLIENT_RECONNECT_MS;
 }
 
 #if defined(CONFIG_PLC_MODBUS_CONNECT_NETWORK)

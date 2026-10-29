@@ -71,6 +71,9 @@ typedef struct {
 /* 按 ID 查找，找不到返回 NULL */
 const ProtoInfo *ProtoLib_Find(const char *id);
 
+/* 已在真机上按设备配置采集验证过（未验证的协议导入时给出警告，测通后加入 proto_lib.c 的列表） */
+bool ProtoLib_IsVerified(const ProtoInfo *p);
+
 /* 在协议中按名称查找存储区，返回下标，找不到返回 -1 */
 int ProtoLib_FindArea(const ProtoInfo *p, const char *name);
 

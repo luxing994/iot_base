@@ -21,6 +21,12 @@ typedef enum {
     MODBUS_FMT_FLOAT,   // 2 个寄存器，高字在前，IEEE754
 } ModbusFormat;
 
+/* 单元标识（设备配置中的站号），默认 1 */
+void MODBUS_SetUnitId(uint8_t unit);
+
+/* 按功能码读（01/02/03/04，见 mb_pdu.h）：寄存器每个一个字，线圈 / 离散输入每个 0 / 1 */
+int MODBUS_NetReadFc(int sock, uint8_t fc, uint16_t address, uint16_t count, uint16_t *out);
+
 /* 读一个数据点 */
 int MODBUS_NetRead(int sock, uint16_t address, ModbusFormat fmt, PlcValue *out);
 

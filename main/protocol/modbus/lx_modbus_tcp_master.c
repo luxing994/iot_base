@@ -3,6 +3,7 @@
 #include "lx_modbus_tcp_master.h"
 #include "proto_util.h"
 #include "net_io.h"
+#include "mb_pdu.h"
 
 static const char *TAG = "MODBUS_TCP";
 
@@ -14,6 +15,12 @@ static const char *TAG = "MODBUS_TCP";
 #define MODBUS_FC_WRITE_MULTI   0x10
 
 static uint16_t s_transId;
+static uint8_t s_unitId = MODBUS_TCP_UNIT_ID;
+
+void MODBUS_SetUnitId(uint8_t unit)
+{
+    s_unitId = unit;
+}
 
 /*
  * 发送一个请求 PDU 并接收应答 PDU（不含 MBAP 头）
@@ -36,7 +43,7 @@ static int MbTransact(int sock, const uint8_t *pdu, size_t plen, uint8_t *resp, 
     adu[3] = 0x00;
     adu[4] = (uint8_t)((plen + 1) >> 8);    // 后续长度：单元标识 + PDU
     adu[5] = (uint8_t)(plen + 1);
-    adu[6] = MODBUS_TCP_UNIT_ID;
+    adu[6] = s_unitId;
     memcpy(&adu[MBAP_LEN], pdu, plen);
 
     if (Net_SendAll(sock, adu, MBAP_LEN + plen) != 0 ||
@@ -158,4 +165,25 @@ int MODBUS_NetWriteMultiple(int sock, uint16_t address, uint16_t count, const ui
 
     n = MbTransact(sock, pdu, 6 + count * 2, resp, sizeof(resp));
     return (n < 0) ? n : PLC_OK;
+}
+
+int MODBUS_NetReadFc(int sock, uint8_t fc, uint16_t address, uint16_t count, uint16_t *out)
+{
+    uint8_t pdu[5];
+    uint8_t resp[2 + MB_MAX_READ_REGS * 2];
+    int n;
+
+    if (count == 0 || MB_ReadDataBytes(fc, count) > sizeof(resp) - 2) {
+        return PLC_ERR_RESPONSE;
+    }
+    MB_PutReadPdu(pdu, fc, address, count);
+    n = MbTransact(sock, pdu, sizeof(pdu), resp, sizeof(resp));
+    if (n < 0) {
+        return n;
+    }
+    if (MB_ParseReadPdu(fc, count, resp, (size_t)n, out) != 0) {
+        ESP_LOGE(TAG, "function 0x%02X: unexpected response length %d", fc, n);
+        return PLC_ERR_RESPONSE;
+    }
+    return PLC_OK;
 }
