@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数采网关现场实施手册</title>
+<!-- 离线页面：不加载任何网络资源，字体用系统自带的中文字体 -->
+<style>
+/* 版式：左侧固定目录 + 右侧按步骤展开的正文；每一步配一张图（流程、表格样张、接线、网页样张） */
+:root {
+  --paper: #f5f7f9;
+  --card: #ffffff;
+  --ink: #17212b;
+  --muted: #5b6876;
+  --line: #d9e0e7;
+  --soft: #eaeff4;
+  --accent: #1f5b8f;
+  --accent-soft: #e4eef7;
+  --ok: #1f8a4c;
+  --warn: #b7791f;
+  --bad: #c2413b;
+  /* 与调研表四个分组同色 */
+  --g-dev: #2f5597;
+  --g-com: #548235;
+  --g-req: #c55a11;
+  --g-imp: #7030a0;
+  --f-display: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
+  --f-body: "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --f-mono: Consolas, "Cascadia Mono", "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12181f; --card: #1a222c; --ink: #e3e8ee; --muted: #9aa7b4; --line: #2c3743; --soft: #222c37;
+    --accent: #7db3e3; --accent-soft: #1d2f42; --ok: #4cc283; --warn: #e0a84a; --bad: #ef7a73;
+    --g-dev: #4f78c4; --g-com: #6f9e4e; --g-req: #d9783a; --g-imp: #9358c4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12181f; --card: #1a222c; --ink: #e3e8ee; --muted: #9aa7b4; --line: #2c3743; --soft: #222c37;
+  --accent: #7db3e3; --accent-soft: #1d2f42; --ok: #4cc283; --warn: #e0a84a; --bad: #ef7a73;
+  --g-dev: #4f78c4; --g-com: #6f9e4e; --g-req: #d9783a; --g-imp: #9358c4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.75 var(--f-body); }
+a { color: var(--accent); }
+code, .mono { font-family: var(--f-mono); font-size: .88em; }
+code { background: var(--soft); padding: .05em .35em; border-radius: 4px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 0 64px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; padding-inline: 16px; } }
+
+/* 目录 */
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; padding-block: 40px 0; font-size: 13.5px; }
+nav.toc .t { font-weight: 700; color: var(--muted); letter-spacing: .08em; font-size: 12px; margin-bottom: 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.toc a { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { background: var(--accent-soft); outline: none; }
+nav.toc a span { color: var(--muted); font-family: var(--f-mono); width: 1.4em; flex: none; }
+@media (max-width: 900px) { nav.toc { position: static; padding-block: 8px 0; } nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+
+main { min-width: 0; }
+header.top { padding-block: 44px 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.eyebrow { font-size: 12.5px; letter-spacing: .12em; color: var(--accent); font-weight: 700; }
+h1 { font-family: var(--f-display); font-weight: 900; font-size: clamp(30px, 5vw, 44px); line-height: 1.2; margin: 6px 0 12px; text-wrap: balance; }
+.lead { font-size: 16.5px; color: var(--muted); max-width: 42em; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 16px; font-size: 13px; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 500; }
+
+section { padding-block: 36px 8px; border-bottom: 1px solid var(--line); }
+section:last-of-type { border-bottom: 0; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 25px; line-height: 1.35; margin: 0 0 6px; text-wrap: balance; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+h2 .no { font-family: var(--f-mono); font-size: 14px; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 6px; padding: 0 7px; line-height: 1.6; }
+h3 { font-size: 17px; margin: 28px 0 6px; text-wrap: balance; }
+p, li { max-width: 46em; }
+.who { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 1px 10px; border-radius: 99px; background: var(--soft); color: var(--ink); white-space: nowrap; }
+.chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* 提示框 */
+.note { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--card); padding: 10px 16px; border-radius: 6px; margin: 16px 0; max-width: 46em; }
+.note.warn { border-left-color: var(--warn); }
+.note.bad { border-left-color: var(--bad); }
+.note b:first-child { margin-right: 6px; }
+
+/* 图 */
+figure { margin: 20px 0 24px; }
+figure .fig { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; overflow-x: auto; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+figcaption b { color: var(--ink); font-weight: 500; margin-right: 6px; }
+svg { display: block; max-width: 100%; height: auto; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .m { fill: var(--muted); }
+svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+svg .box2 { fill: var(--soft); stroke: var(--line); stroke-width: 1.2; }
+svg .acc { fill: var(--accent); }
+svg .accs { stroke: var(--accent); fill: none; stroke-width: 2; }
+svg .ln { stroke: var(--muted); fill: none; stroke-width: 1.6; }
+svg .w { fill: #fff; }
+svg .mono { font-family: var(--f-mono); }
+
+/* 表 */
+.tbl { overflow-x: auto; margin: 14px 0 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--soft); font-weight: 500; font-size: 13px; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.k { white-space: nowrap; font-weight: 500; }
+
+/* 调研表样张 */
+.xl { border-collapse: collapse; font-size: 12.5px; min-width: 860px; }
+.xl td, .xl th { border: 1px solid var(--line); padding: 5px 8px; white-space: nowrap; }
+.xl .grp th { color: #fff; text-align: center; font-weight: 700; font-size: 12px; }
+.xl .hd th { color: var(--ink); text-align: center; font-weight: 700; }
+.xl .eg td { color: var(--muted); font-style: italic; background: var(--soft); }
+.gdev { background: var(--g-dev); } .gcom { background: var(--g-com); } .greq { background: var(--g-req); } .gimp { background: var(--g-imp); }
+.hdev { background: #dde5f2; background: color-mix(in srgb, var(--g-dev) 18%, var(--card)); }
+.hcom { background: #e2ecdb; background: color-mix(in srgb, var(--g-com) 18%, var(--card)); }
+.hreq { background: #f6e1d3; background: color-mix(in srgb, var(--g-req) 18%, var(--card)); }
+.himp { background: #e9dcf2; background: color-mix(in srgb, var(--g-imp) 18%, var(--card)); }
+.rn { color: var(--muted); text-align: center; font-family: var(--f-mono); background: var(--soft); }
+
+/* 网页样张 */
+.ui { max-width: 560px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--paper); font-size: 13px; }
+.ui .bar { background: #14324f; color: #fff; padding: 8px 14px; display: flex; justify-content: space-between; font-size: 12.5px; }
+.ui .tabs { display: flex; gap: 0; background: var(--card); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.ui .tabs span { padding: 7px 12px; color: var(--muted); white-space: nowrap; border-bottom: 2px solid transparent; }
+.ui .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.ui .pane { padding: 12px; display: grid; gap: 10px; }
+.ui .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; position: relative; }
+.ui .card h4 { margin: 0 0 8px; font-size: 13.5px; }
+.ui .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid var(--soft); }
+.ui .row:first-of-type { border-top: 0; }
+.ui .row span:first-child { color: var(--muted); }
+.ui .btn { display: inline-block; padding: 4px 12px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 12.5px; }
+.ui .btn.sec { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+.ui .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.ui .file { border: 1px dashed var(--line); border-radius: 6px; padding: 6px 10px; color: var(--muted); }
+.ui .sel { border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; background: var(--card); display: flex; justify-content: space-between; }
+.ui .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--ok); }
+.ui table { font-size: 12.5px; }
+.ui th, .ui td { padding: 4px 8px; }
+.ui .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pin { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--g-req); color: #fff; font: 700 12px/22px var(--f-mono); text-align: center; box-shadow: 0 0 0 3px var(--paper); }
+.pin.in { position: static; display: inline-block; margin-right: 6px; vertical-align: 1px; box-shadow: none; }
+.uiwrap { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 1000px) { .uiwrap { grid-template-columns: minmax(0, 1fr); } }
+ol.steps { padding-left: 0; list-style: none; display: grid; gap: 10px; margin: 0; }
+ol.steps li { display: flex; gap: 8px; }
+
+/* 核对清单 */
+.check { list-style: none; padding: 0; display: grid; gap: 6px; }
+.check li { position: relative; padding-left: 24px; }
+.check li::before { content: ""; position: absolute; left: 0; top: .42em; width: 14px; height: 14px; border: 1.5px solid var(--muted); border-radius: 3px; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+
+@media print {
+  nav.toc { display: none; }
+  .wrap { display: block; max-width: none; padding-inline: 0; }
+  body { background: #fff; font-size: 12pt; }
+  section { break-inside: auto; }
+  figure, .tbl, .note, .ui { break-inside: avoid; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav class="toc" aria-label="目录">
+  <div class="t">目录</div>
+  <ol>
+    <li><a href="#flow"><span>0</span>实施流程概述</a></li>
+    <li><a href="#prep"><span>—</span>实施准备</a></li>
+    <li><a href="#s1"><span>1</span>设备调研</a></li>
+    <li><a href="#s2"><span>2</span>采集点位整理</a></li>
+    <li><a href="#s3"><span>3</span>实施配置</a></li>
+    <li><a href="#s4"><span>4</span>安装与接线</a></li>
+    <li><a href="#s5"><span>5</span>配置导入</a></li>
+    <li><a href="#s6"><span>6</span>现场验收</a></li>
+    <li><a href="#faq"><span>?</span>故障排查</a></li>
+    <li><a href="#swap"><span>↻</span>网关更换与配置变更</a></li>
+    <li><a href="#appx"><span>A</span>附录</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">数采网关 · 标准化实施</div>
+  <h1>现场实施手册</h1>
+  <p class="lead">本手册规定数采网关从现场调研、采集点位整理、安装接线到配置导入与验收的标准作业流程，适用于实施人员及参与调研的现场人员。每台网关对应一台被采集设备；网关出厂时统一烧录固件，现场接入的设备及采集内容均由《设备数采现场调研表》确定，无需修改程序。</p>
+  <div class="meta">
+    <span>适用固件：<b>iot_base（dev-beta，采集页含“下载调研表模板”）</b></span>
+    <span>配套文件：<b>设备数采现场调研表.xlsx</b></span>
+    <span>版本：<b>2026-10-29</b></span>
+  </div>
+</header>
+
+<!-- ================================================================ 0 -->
+<section id="flow">
+  <h2><span class="no">0</span>实施流程概述</h2>
+  <p>每个工厂使用<b>一份</b>调研表。第 1~3 步在调研表中完成；第 4~6 步在现场按每台网关逐一执行。</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 1000 250" role="img" aria-label="实施流程六个步骤：设备调研、采集点位整理、实施配置、安装与接线、配置导入、现场验收">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker>
+        </defs>
+        <rect x="8" y="16" width="476" height="218" rx="12" class="box2"/>
+        <text x="24" y="42" font-size="13" font-weight="700" class="m">调研表阶段（每个工厂一份）</text>
+        <rect x="516" y="16" width="476" height="218" rx="12" class="box2"/>
+        <text x="532" y="42" font-size="13" font-weight="700" class="m">现场阶段（每台网关一次）</text>
+        <g font-size="15">
+          <g transform="translate(24,64)">
+            <rect width="140" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" style="fill:var(--g-dev)"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">1</text>
+            <text x="46" y="31" font-weight="700">设备调研</text>
+            <text x="16" y="60" font-size="12.5" class="m">每台设备一行</text>
+            <text x="16" y="80" font-size="12.5" class="m">基本信息与需求</text>
+          </g>
+          <g transform="translate(180,64)">
+            <rect width="140" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" style="fill:var(--g-imp)"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">2</text>
+            <text x="46" y="31" font-weight="700">点位整理</text>
+            <text x="16" y="60" font-size="12.5" class="m">依据厂商点位表</text>
+            <text x="16" y="80" font-size="12.5" class="m">筛选并录入点位</text>
+          </g>
+          <g transform="translate(336,64)">
+            <rect width="132" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" style="fill:var(--g-imp)"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">3</text>
+            <text x="46" y="31" font-weight="700">实施配置</text>
+            <text x="16" y="60" font-size="12.5" class="m">网关编号、协议</text>
+            <text x="16" y="80" font-size="12.5" class="m">通讯参数</text>
+          </g>
+          <g transform="translate(532,64)">
+            <rect width="140" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" class="acc"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">4</text>
+            <text x="46" y="31" font-weight="700">安装接线</text>
+            <text x="16" y="60" font-size="12.5" class="m">拨码开关设置</text>
+            <text x="16" y="80" font-size="12.5" class="m">通讯线、网线</text>
+          </g>
+          <g transform="translate(688,64)">
+            <rect width="140" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" class="acc"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">5</text>
+            <text x="46" y="31" font-weight="700">配置导入</text>
+            <text x="16" y="60" font-size="12.5" class="m">选择调研表</text>
+            <text x="16" y="80" font-size="12.5" class="m">校验后导入</text>
+          </g>
+          <g transform="translate(844,64)">
+            <rect width="132" height="104" rx="10" class="box"/>
+            <circle cx="24" cy="26" r="14" style="fill:var(--ok)"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">6</text>
+            <text x="46" y="31" font-weight="700">现场验收</text>
+            <text x="16" y="60" font-size="12.5" class="m">数据核对</text>
+            <text x="16" y="80" font-size="12.5" class="m">状态更新</text>
+          </g>
+        </g>
+        <path d="M164,116 H178" class="accs" marker-end="url(#ar)"/>
+        <path d="M320,116 H334" class="accs" marker-end="url(#ar)"/>
+        <path d="M468,116 H530" class="accs" marker-end="url(#ar)"/>
+        <path d="M672,116 H686" class="accs" marker-end="url(#ar)"/>
+        <path d="M828,116 H842" class="accs" marker-end="url(#ar)"/>
+        <g font-size="12">
+          <text x="24" y="200" class="m">责任人</text>
+          <rect x="24" y="208" width="140" height="6" rx="3" style="fill:var(--g-dev)" opacity=".55"/>
+          <text x="24" y="228" font-size="12">现场人员</text>
+          <rect x="180" y="208" width="288" height="6" rx="3" style="fill:var(--g-imp)" opacity=".55"/>
+          <text x="180" y="228" font-size="12">实施人员（设备厂商提供 PLC 点位表）</text>
+          <rect x="532" y="208" width="444" height="6" rx="3" class="acc" opacity=".55"/>
+          <text x="532" y="228" font-size="12">实施人员（配置导入需使用厂家账号）</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>图 0</b>实施流程。PLC 点位表应在第 1 步调研时向设备厂商索取；取得点位表后，第 2、3 步由实施人员在调研表中完成。</figcaption>
+  </figure>
+
+  <div class="tbl"><table>
+    <thead><tr><th>角色</th><th>职责</th><th>能力要求</th></tr></thead>
+    <tbody>
+      <tr><td class="k">现场人员</td><td>第 1 步：填写设备清单，拍摄铭牌及电柜照片，向设备厂商索取 PLC 点位表</td><td>熟悉现场设备，能识读设备铭牌</td></tr>
+      <tr><td class="k">设备厂商</td><td>提供设备的 PLC 点位表（地址表），通常为整台设备的全部点位</td><td>—</td></tr>
+      <tr><td class="k">实施人员</td><td>第 2 步：筛选并录入采集点位；第 3 步：填写实施配置；第 4~6 步：现场安装、配置导入与验收</td><td>具备接线能力，熟悉浏览器操作；持有厂家账号</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ================================================================ 准备 -->
+<section id="prep">
+  <h2><span class="no">—</span>实施准备</h2>
+  <div class="two">
+    <div>
+      <h3>资料</h3>
+      <ul class="check">
+        <li>调研表模板：在任一网关配置页“采集”中点击“下载调研表模板”获取，或使用研发提供的 <code>设备数采现场调研表-模板.xlsx</code></li>
+        <li>厂家账号：用户名 <code>factory</code>，密码向研发负责人申请；密码不得写入调研表</li>
+        <li>上位机地址及端口：向上位机负责人确认</li>
+      </ul>
+    </div>
+    <div>
+      <h3>工具</h3>
+      <ul class="check">
+        <li>笔记本电脑，安装新版 Chrome 或 Edge 浏览器</li>
+        <li>手机或相机，用于拍摄铭牌及电柜</li>
+        <li>网关及电源；按设备通讯接口准备 RS485 双绞线、RS232 线缆或网线</li>
+        <li>一字螺丝刀、扎带</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ 1 -->
+<section id="s1">
+  <h2><span class="no">1</span>设备调研</h2>
+  <div class="who"><span class="chip"><i style="background:var(--g-dev)"></i>责任人：现场人员</span></div>
+  <p>在调研表的“<b>设备清单</b>”工作表中，<b>每台设备填写一行</b>。现场人员填写左侧<span style="color:var(--g-dev);font-weight:700">蓝色</span>、<span style="color:var(--g-com);font-weight:700">绿色</span>、<span style="color:var(--g-req);font-weight:700">橙色</span>三个区域；右侧<span style="color:var(--g-imp);font-weight:700">紫色</span>“实施配置”区域由实施人员填写。</p>
+
+  <figure>
+    <div class="fig">
+      <table class="xl" aria-label="设备清单样例">
+        <tr class="grp"><th class="rn"></th><th class="gdev" colspan="5">设备信息（现场人员填写）</th><th class="gcom" colspan="3">通讯情况（无法确认时可留空）</th><th class="greq" colspan="2">采集需求</th><th class="gimp" colspan="3">实施配置（实施人员填写）</th></tr>
+        <tr class="hd"><th class="rn">2</th><th class="hdev">车间</th><th class="hdev">设备名称 *</th><th class="hdev">资产编号 *</th><th class="hdev">设备类别 *</th><th class="hdev">设备厂家…</th><th class="hcom">控制器品牌</th><th class="hcom">控制器型号</th><th class="hcom">预留通讯口</th><th class="hreq">是否采集</th><th class="hreq">需要采集的数据</th><th class="himp">网关编号</th><th class="himp">通信协议</th><th class="himp">…</th></tr>
+        <tr class="eg"><td class="rn">4</td><td>换热器车间</td><td>1# 高速冲床</td><td>AMAJQ0221</td><td>PLC 控制设备</td><td>宁波精达</td><td>三菱</td><td>FX3U</td><td>RS485</td><td>是</td><td>冲压次数、运行状态</td><td>JXGS001</td><td>三菱 FX 计算机链接</td><td></td></tr>
+        <tr><td class="rn">5</td><td>铜管车间</td><td>数控弯管机</td><td>AMAJQ0197</td><td>PLC 控制设备</td><td>广东科力高</td><td>未知</td><td></td><td>未知</td><td>是</td><td>制管数量</td><td></td><td></td><td></td></tr>
+        <tr><td class="rn">6</td><td>钣金车间</td><td>激光切割机</td><td>AMAJQ0233</td><td>数控机床 / 工控机设备</td><td>宏石激光</td><td>工控机</td><td></td><td>网口</td><td>待定</td><td>加工数量</td><td></td><td></td><td></td></tr>
+      </table>
+    </div>
+    <figcaption><b>图 1</b>设备清单样例。第 3 行为“填写要求”，第 4 行为“示例”，二者均不参与导入；数据自第 5 行起填写。</figcaption>
+  </figure>
+
+  <h3>填写说明</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>列</th><th>填写要求</th></tr></thead>
+    <tbody>
+      <tr><td class="k">设备名称 *</td><td>填写现场通用名称，如“1# 高速冲床”。该名称仅用于配置网页及上位机界面显示。</td></tr>
+      <tr><td class="k">资产编号 *</td><td>填写设备铭牌编号或固定资产编号，<b>全厂唯一</b>，仅限字母、数字及 <code>- _ .</code>。上位机以此编号区分设备，更换网关时保持不变。</td></tr>
+      <tr><td class="k">设备类别 *</td><td>从下拉列表选择：PLC 控制设备、数控机床 / 工控机设备、注塑机、仪表 / 测试仪、自研控制板设备、无控制器设备。</td></tr>
+      <tr><td class="k">厂家、型号、联系人</td><td>依据设备铭牌及采购资料填写。“厂家能否提供通讯资料”选择“可提供 / 不可提供 / 待确认”；能否取得 PLC 点位表是判断该设备能否采集的前提。</td></tr>
+      <tr><td class="k">控制器品牌、型号</td><td>以电柜内 PLC 或触摸屏的铭牌为准（如 三菱 FX3U、欧姆龙 CP1H、西门子 S7-200）。无法确认时选择“未知”，并附照片供实施人员判断。</td></tr>
+      <tr><td class="k">预留通讯口</td><td>控制器上可用于数据采集的通讯接口，识别方法见图 2。无法确认时选择“未知”。</td></tr>
+      <tr><td class="k">现场网络</td><td>设备安装位置的网络条件：有线网络 / 无线网络 / 无网络。</td></tr>
+      <tr><td class="k">照片 / 资料</td><td>填写照片文件名，如 <code>AMAJQ0221-1.jpg</code>。每台设备应至少拍摄设备铭牌、电柜内控制器、通讯接口特写各一张。设备厂商提供的 PLC 点位表文件名一并记录于此。</td></tr>
+      <tr><td class="k">是否采集</td><td>选择“是 / 否 / 待定”。选择“否”的设备在导入时不予列出。</td></tr>
+      <tr><td class="k">需要采集的数据</td><td>按业务需求描述，如“冲压次数、运行状态、报警”，无需填写协议或地址。</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>通讯接口识别</h3>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 960 230" role="img" aria-label="三种通讯接口：RS485 接线端子、RS232 九针接口、网口">
+        <g transform="translate(20,20)">
+          <rect width="290" height="190" rx="12" class="box2"/>
+          <text x="18" y="32" font-weight="700" font-size="16">RS485</text>
+          <text x="18" y="54" font-size="12.5" class="m">2~3 个螺钉端子，通常标注 A / B 或 D+ / D-</text>
+          <rect x="60" y="78" width="170" height="64" rx="6" class="box"/>
+          <g>
+            <circle cx="95" cy="110" r="16" class="box2"/><path d="M85,110 H105" class="ln"/>
+            <circle cx="145" cy="110" r="16" class="box2"/><path d="M135,110 H155" class="ln"/>
+            <circle cx="195" cy="110" r="16" class="box2"/><path d="M185,110 H205" class="ln"/>
+          </g>
+          <text x="95" y="164" text-anchor="middle" class="mono" font-size="13">A / D+</text>
+          <text x="145" y="164" text-anchor="middle" class="mono" font-size="13">B / D-</text>
+          <text x="195" y="164" text-anchor="middle" class="mono" font-size="13">GND</text>
+        </g>
+        <g transform="translate(335,20)">
+          <rect width="290" height="190" rx="12" class="box2"/>
+          <text x="18" y="32" font-weight="700" font-size="16">RS232</text>
+          <text x="18" y="54" font-size="12.5" class="m">梯形 9 针接口（DB9）或圆形接口</text>
+          <path d="M70,82 H220 L204,140 H86 Z" class="box"/>
+          <g class="acc">
+            <circle cx="95" cy="100" r="4.5"/><circle cx="120" cy="100" r="4.5"/><circle cx="145" cy="100" r="4.5"/><circle cx="170" cy="100" r="4.5"/><circle cx="195" cy="100" r="4.5"/>
+            <circle cx="107" cy="122" r="4.5"/><circle cx="132" cy="122" r="4.5"/><circle cx="157" cy="122" r="4.5"/><circle cx="182" cy="122" r="4.5"/>
+          </g>
+          <text x="145" y="168" text-anchor="middle" font-size="12.5" class="m">注：三菱 FX 编程口为圆形 8 针，属 RS422</text>
+        </g>
+        <g transform="translate(650,20)">
+          <rect width="290" height="190" rx="12" class="box2"/>
+          <text x="18" y="32" font-weight="700" font-size="16">网口</text>
+          <text x="18" y="54" font-size="12.5" class="m">RJ45 以太网接口</text>
+          <path d="M95,78 H195 V138 H170 V150 H120 V138 H95 Z" class="box"/>
+          <g class="acc">
+            <rect x="108" y="86" width="6" height="18" rx="1"/><rect x="118" y="86" width="6" height="18" rx="1"/><rect x="128" y="86" width="6" height="18" rx="1"/><rect x="138" y="86" width="6" height="18" rx="1"/>
+            <rect x="148" y="86" width="6" height="18" rx="1"/><rect x="158" y="86" width="6" height="18" rx="1"/><rect x="168" y="86" width="6" height="18" rx="1"/><rect x="178" y="86" width="6" height="18" rx="1"/>
+          </g>
+          <text x="145" y="176" text-anchor="middle" font-size="12.5" class="m">常见于工控机、数控系统及新型 PLC</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>图 2</b>常见通讯接口。PLC 侧面或底部扩展板（如三菱 485 扩展板）上的接口按其类型填写。</figcaption>
+  </figure>
+
+  <div class="note"><b>注</b>信息无法确认时，应选择“未知”或留空，不得估填。实施人员将依据照片及厂商资料补充。</div>
+</section>
+
+<!-- ================================================================ 2 -->
+<section id="s2">
+  <h2><span class="no">2</span>采集点位整理</h2>
+  <div class="who"><span class="chip"><i style="background:var(--g-com)"></i>资料来源：设备厂商 PLC 点位表</span><span class="chip"><i style="background:var(--g-imp)"></i>责任人：实施人员</span></div>
+  <p>设备厂商通常提供整台设备的 <b>PLC 点位表</b>（又称地址表、变量表、通讯表），包含数百至上千个点位，格式包括 Excel、PDF、截图或 PLC 程序导出的注释等。实施人员依据设备清单中“<b>需要采集的数据</b>”，从点位表中<b>筛选对应点位</b>，逐行录入调研表的“<b>采集点位</b>”工作表。</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 960 200" role="img" aria-label="依据采集需求，从厂商 PLC 点位表中筛选点位并录入采集点位">
+        <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker></defs>
+        <g font-size="13">
+          <g transform="translate(10,24)">
+            <rect width="250" height="150" rx="10" class="box"/>
+            <rect width="250" height="32" rx="10" style="fill:var(--g-req)" opacity=".18"/>
+            <text x="14" y="21" font-weight="700">采集需求（设备清单）</text>
+            <text x="14" y="62">冲压次数</text>
+            <text x="14" y="88">运行状态</text>
+            <text x="14" y="114">报警</text>
+            <text x="236" y="142" text-anchor="end" font-size="12" class="m">现场人员填写</text>
+          </g>
+          <g transform="translate(330,10)">
+            <rect width="290" height="178" rx="10" class="box2"/>
+            <text x="14" y="26" font-weight="700">厂商 PLC 点位表</text>
+            <g class="mono" font-size="12">
+              <text x="14" y="52" class="m">D100　当前速度</text>
+              <rect x="8" y="60" width="274" height="20" rx="4" style="fill:var(--g-imp)" opacity=".18"/>
+              <text x="14" y="75">D200　冲压计数（双字）</text>
+              <text x="14" y="98" class="m">D300　模高设定</text>
+              <rect x="8" y="106" width="274" height="20" rx="4" style="fill:var(--g-imp)" opacity=".18"/>
+              <text x="14" y="121">M8000 运行中</text>
+              <rect x="8" y="129" width="274" height="20" rx="4" style="fill:var(--g-imp)" opacity=".18"/>
+              <text x="14" y="144">M100　故障总报警</text>
+              <text x="14" y="168" class="m">……（共 600 余个点位）</text>
+            </g>
+          </g>
+          <g transform="translate(690,24)">
+            <rect width="260" height="150" rx="10" class="box"/>
+            <rect width="260" height="32" rx="10" style="fill:var(--g-imp)" opacity=".18"/>
+            <text x="14" y="21" font-weight="700">采集点位（调研表）</text>
+            <text x="14" y="62">1　冲压次数</text><text x="150" y="62" class="mono">D200</text>
+            <text x="14" y="88">2　运行</text><text x="150" y="88" class="mono">M8000</text>
+            <text x="14" y="114">3　报警</text><text x="150" y="114" class="mono">M100</text>
+            <text x="246" y="142" text-anchor="end" font-size="12" class="m">实施人员录入</text>
+          </g>
+        </g>
+        <path d="M262,99 H326" class="accs" marker-end="url(#ar3)"/>
+        <path d="M622,99 H686" class="accs" marker-end="url(#ar3)"/>
+      </svg>
+    </div>
+    <figcaption><b>图 3</b>点位整理过程：依据采集需求，从厂商点位表中筛选对应点位，录入调研表。</figcaption>
+  </figure>
+
+  <h3>点位表索取要求</h3>
+  <p>应在第 1 步调研时向设备厂商索取该设备的 PLC 点位表，并要求注明各地址的含义及数据类型（字、双字、浮点）。点位表文件名记录于设备清单“照片 / 资料”列，与照片一并归档。</p>
+
+  <h3>点位查找方法</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>采集需求</th><th>点位表检索关键词</th><th>常见地址与类型</th></tr></thead>
+    <tbody>
+      <tr><td class="k">产量、次数</td><td>产量、计数、累计、总数、件数、次数、count、total</td><td>D / DM / V 区，多为双字整数</td></tr>
+      <tr><td class="k">运行状态</td><td>运行、自动、启动、运转、run、auto</td><td>M / X / Y / CIO 位，开关量</td></tr>
+      <tr><td class="k">报警</td><td>报警、故障、异常、急停、alarm、error、fault</td><td>M 位，开关量；或为报警代码（整数）</td></tr>
+      <tr><td class="k">温度、压力等工艺参数</td><td>温度、压力、速度、转速、电流</td><td>D / DM 区，整数或浮点数；须确认倍率（如 ×0.1）</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><b>出处记录</b>每个点位应在“厂商点表出处”列注明点位表中的原名称或页码，如“冲压计数 D200（第 3 页）”，以便数据核对时追溯。无法确定的点位应予以标注，向厂商确认，并在验收时与设备显示值比对。</div>
+
+  <figure>
+    <div class="fig">
+      <table class="xl" aria-label="采集点位样例" style="min-width:860px">
+        <tr class="grp"><th class="rn"></th><th class="gimp" colspan="10">采集点位（实施人员填写）</th></tr>
+        <tr class="hd"><th class="rn">2</th><th class="himp">点表名称 *</th><th class="himp">编号 *</th><th class="himp">数据名称 *</th><th class="himp">地址 *</th><th class="himp">数据类型 *</th><th class="himp">单位</th><th class="himp">倍率</th><th class="himp">数据分类</th><th class="himp">上报方式</th><th class="himp">厂商点表出处</th></tr>
+        <tr><td class="rn">5</td><td>精达GC冲床</td><td>1</td><td>冲压次数</td><td class="mono">D200</td><td>双字整数</td><td></td><td></td><td>产量计数</td><td>变化上报</td><td>冲压计数（第 3 页）</td></tr>
+        <tr><td class="rn">6</td><td>精达GC冲床</td><td>2</td><td>运行</td><td class="mono">M8000</td><td>开关量 0/1</td><td></td><td></td><td>运行状态</td><td>变化上报</td><td>运行中（第 5 页）</td></tr>
+        <tr><td class="rn">7</td><td>AMAJQ0230</td><td>1</td><td>检测压力</td><td class="mono">DM8820</td><td>浮点数</td><td>MPa</td><td></td><td>工艺参数</td><td></td><td>A 系统压力</td></tr>
+        <tr><td class="rn">8</td><td>AMAJQ0230</td><td>2</td><td>主轴转速</td><td class="mono">DM100</td><td>整数</td><td>rpm</td><td>0.1</td><td>工艺参数</td><td></td><td>主轴速度 ×0.1</td></tr>
+      </table>
+    </div>
+    <figcaption><b>图 4</b>采集点位样例。“编号”为上报编号（1 对应 FR001），同一设备内不得重复。</figcaption>
+  </figure>
+
+  <h3>同型号设备共用点位</h3>
+  <p>同一厂家、同一型号的设备，点位表通常相同。此类设备的点位只录入一份，并指定一个点表名称；在设备清单中为这些设备填写<b>相同的“点表名称”</b>。未填写点表名称的设备，按资产编号对应点位。</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 900 210" role="img" aria-label="三台同型号冲床在设备清单中填写相同点表名称，共用一份采集点位">
+        <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker></defs>
+        <text x="20" y="24" font-size="13" font-weight="700" class="m">设备清单</text>
+        <g font-size="13">
+          <g transform="translate(20,36)"><rect width="330" height="40" rx="6" class="box"/><text x="14" y="25">高速冲床 · AMAJQ0221</text><rect x="218" y="8" width="102" height="24" rx="4" style="fill:var(--g-imp)" opacity=".16"/><text x="228" y="25" font-weight="700">精达GC冲床</text></g>
+          <g transform="translate(20,86)"><rect width="330" height="40" rx="6" class="box"/><text x="14" y="25">高速冲床 · AMAJQ0243</text><rect x="218" y="8" width="102" height="24" rx="4" style="fill:var(--g-imp)" opacity=".16"/><text x="228" y="25" font-weight="700">精达GC冲床</text></g>
+          <g transform="translate(20,136)"><rect width="330" height="40" rx="6" class="box"/><text x="14" y="25">高速冲床 · AMAJQ0244</text><rect x="218" y="8" width="102" height="24" rx="4" style="fill:var(--g-imp)" opacity=".16"/><text x="228" y="25" font-weight="700">精达GC冲床</text></g>
+        </g>
+        <path d="M352,56 C430,56 440,105 520,105" class="accs" marker-end="url(#ar2)"/>
+        <path d="M352,106 H518" class="accs" marker-end="url(#ar2)"/>
+        <path d="M352,156 C430,156 440,107 520,107" class="accs" marker-end="url(#ar2)"/>
+        <text x="540" y="24" font-size="13" font-weight="700" class="m">采集点位（录入一份）</text>
+        <g transform="translate(540,52)" font-size="13">
+          <rect width="340" height="110" rx="8" class="box"/>
+          <rect width="340" height="30" rx="8" style="fill:var(--g-imp)" opacity=".16"/>
+          <text x="14" y="20" font-weight="700">精达GC冲床</text>
+          <text x="14" y="56">1  冲压次数</text><text x="200" y="56" class="mono">D200</text>
+          <text x="14" y="88">2  运行</text><text x="200" y="88" class="mono">M8000</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>图 5</b>三台同型号冲床共用一份点位。新增同型号设备时，仅需在设备清单中增加一行。</figcaption>
+  </figure>
+
+  <h3>地址书写规则</h3>
+  <p>按厂商资料的写法填写“区名 + 编号”，不区分大小写。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>控制器</th><th>写法示例</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td class="k">三菱 FX</td><td class="mono">D200　M10　X17　Y7</td><td>X、Y 为八进制编号（不含数字 8、9），按资料原样填写</td></tr>
+      <tr><td class="k">欧姆龙</td><td class="mono">DM8101　CIO100.00</td><td>小数点后为位号 00~15</td></tr>
+      <tr><td class="k">西门子 S7-200</td><td class="mono">V100　VW100　VD100　V10.3　I0.1　Q0.0　M2.5</td><td>VW、VD 均按 V 区处理；小数点后为位号 0~7</td></tr>
+      <tr><td class="k">Modbus 设备</td><td class="mono">40001　30001　00001　10001</td><td>首位 4 为保持寄存器、3 为输入寄存器、0 为线圈、1 为离散输入；取寄存器中的某一位写作 <code>40001.3</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>数据类型选择</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>数据类型</th><th>适用条件</th><th>示例</th></tr></thead>
+    <tbody>
+      <tr><td class="k">开关量 0/1</td><td>仅有两种状态；地址为 M、X、Y、CIO、I、Q 或带“.位号”</td><td>运行 / 停止、报警</td></tr>
+      <tr><td class="k">整数</td><td>占一个字（D / DM / V），可能为负数</td><td>温度 -20</td></tr>
+      <tr><td class="k">无符号整数</td><td>占一个字，非负，最大 65535</td><td>模式选择、状态码</td></tr>
+      <tr><td class="k">双字整数</td><td>占两个字（如 D200、D201），数值可能超过 65535</td><td>累计产量、冲压次数</td></tr>
+      <tr><td class="k">浮点数</td><td>带小数，占两个字；厂商资料标注为 REAL / FLOAT</td><td>压力 0.62</td></tr>
+      <tr><td class="k">BCD 码</td><td>厂商资料标注为 BCD；设定值 1234 以十六进制 1234 存储</td><td>检测时间</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="two">
+    <div class="note"><b>倍率与小数位</b>寄存器值为 1234、实际值为 123.4 rpm 时，倍率填写 <code>0.1</code>，小数位填写 <code>1</code>。上报值 = 读数 × 倍率。</div>
+    <div class="note"><b>上报方式</b>“周期上报”在每个采集周期均上报，适用于压力、温度等参数；“变化上报”仅在数值变化时上报，适用于计数、状态类数据，可显著减少报文量。</div>
+  </div>
+  <div class="note warn"><b>字符限制</b>“单位”将写入上报报文，仅限英文字母、数字及英文符号，如 <code>MPa</code>、<code>C</code>、<code>rpm</code>；不得使用“℃”“转/分”等中文或特殊符号。</div>
+
+  <h3>录入完成后自查</h3>
+  <ul class="check">
+    <li>“需要采集的数据”中的每一项均有对应点位，或已注明无法找到</li>
+    <li>每个点位均填写编号、名称、地址、数据类型；同一设备内编号不重复</li>
+    <li>单位仅使用英文字符</li>
+    <li>同型号设备只录入一份点位，且已在设备清单中填写相同的“点表名称”</li>
+  </ul>
+</section>
+
+<!-- ================================================================ 3 -->
+<section id="s3">
+  <h2><span class="no">3</span>实施配置</h2>
+  <div class="who"><span class="chip"><i style="background:var(--g-imp)"></i>责任人：实施人员</span></div>
+  <p>在“设备清单”右侧<span style="color:var(--g-imp);font-weight:700">紫色</span>“实施配置”区域填写以下内容。未填写的参数由网关按协议默认值处理。</p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>列</th><th>填写要求</th></tr></thead>
+    <tbody>
+      <tr><td class="k">网关编号</td><td>计划安装于该设备的网关编号，见网关标签（如 <code>JXGS001</code>）。导入时将据此自动选中该设备。</td></tr>
+      <tr><td class="k">点表名称</td><td>同型号设备填写相同名称（见第 2 步）；为空时按资产编号对应点位。</td></tr>
+      <tr><td class="k">通信协议</td><td>按“控制器品牌 + 预留通讯口”<b>自动生成</b>，规则见下表。品牌不在规则内或通讯口为“未知”时，从下拉列表中手动选择。</td></tr>
+      <tr><td class="k">通讯参数</td><td>串口设备填写，格式为“波特率 数据位校验位停止位”，如 <code>9600 7E1</code>，须与 PLC 设置一致。参数不明确时向设备厂商确认，或留空采用协议默认值。</td></tr>
+      <tr><td class="k">站号</td><td>PLC 站号或从站地址；为空时采用协议默认值（见附录）。</td></tr>
+      <tr><td class="k">设备 IP、设备端口</td><td>网口设备必须填写设备 IP；端口为空时采用协议默认值。</td></tr>
+      <tr><td class="k">网关 IP</td><td>网关使用固定 IP 时填写；为空时自动获取。</td></tr>
+      <tr><td class="k">采集周期 ms</td><td>两轮采集之间的间隔，默认 1000（1 秒）。</td></tr>
+      <tr><td class="k">上报方式</td><td>逐点（默认）：每个点位单独上报；批量：每轮采集结果合并为一条报文。按上位机要求选择。</td></tr>
+      <tr><td class="k">设备类型 ID、订单名称</td><td>按上位机约定填写英文字符，如 <code>LM</code>。</td></tr>
+      <tr><td class="k">实施状态</td><td>待调研、待厂商资料、待实施、已上线、不实施，用于跟踪实施进度。</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>通信协议生成规则</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>控制器品牌</th><th>RS485</th><th>RS232</th><th>RS422</th><th>网口</th></tr></thead>
+    <tbody>
+      <tr><td class="k">三菱</td><td>FX 计算机链接</td><td>FX 计算机链接</td><td>FX 编程口</td><td>MC 协议</td></tr>
+      <tr><td class="k">欧姆龙</td><td>HostLink</td><td>HostLink</td><td>—</td><td>—</td></tr>
+      <tr><td class="k">西门子</td><td>PPI（S7-200）</td><td>—</td><td>—</td><td>S7comm</td></tr>
+      <tr><td class="k">台达、汇川、信捷、施耐德</td><td>Modbus RTU</td><td>Modbus RTU</td><td>—</td><td>Modbus TCP</td></tr>
+      <tr><td class="k">艾诺</td><td>艾诺安规测试仪</td><td>艾诺安规测试仪</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p>表中标“—”的组合，以及未列出的品牌（工控机、数控系统、自研电路板等），须由研发确认采集可行性及所用协议。</p>
+
+  <h3>上位机与网络</h3>
+  <p>“<b>上位机与网络</b>”工作表全厂通用，填写一次即可：上位机地址及各端口；网关使用固定 IP 时，另填子网掩码与默认网关。留空的项目保持网关原有设置。</p>
+
+  <div class="note bad"><b>保存要求</b>填写完成后须在 Excel（或 WPS）中保存。“通信协议”由公式生成，未经保存的文件导入时该项为空。</div>
+</section>
+
+<!-- ================================================================ 4 -->
+<section id="s4">
+  <h2><span class="no">4</span>安装与接线</h2>
+  <div class="who"><span class="chip"><i style="background:var(--accent)"></i>责任人：实施人员</span></div>
+  <p>每台网关连接一台设备。接线须在断电状态下进行，完成后再上电。串口设备接线前，须将网关上的 <b>232 / 485 拨码开关</b>设置为与“预留通讯口”一致的位置。</p>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 960 300" role="img" aria-label="接线示意：RS485 同名端子相连；RS232 收发交叉连接，GND 相连；网关 232/485 拨码开关">
+        <g transform="translate(20,30)">
+          <rect width="240" height="240" rx="14" class="box"/>
+          <text x="20" y="34" font-weight="700" font-size="16">数采网关</text>
+          <text x="20" y="56" font-size="12" class="m">网关编号见机身标签</text>
+          <rect x="20" y="78" width="200" height="56" rx="8" class="box2"/>
+          <text x="32" y="98" font-size="12.5" font-weight="700">232 / 485 拨码开关</text>
+          <rect x="34" y="108" width="80" height="18" rx="9" class="box"/>
+          <circle cx="104" cy="117" r="7" class="acc"/>
+          <text x="124" y="122" font-size="12" class="mono">→ 485</text>
+          <text x="20" y="166" font-size="12.5" class="mono">485：A　B</text>
+          <text x="20" y="190" font-size="12.5" class="mono">232：TX　RX　GND</text>
+          <text x="20" y="214" font-size="12.5" class="mono">网口</text>
+        </g>
+        <g transform="translate(330,20)">
+          <text x="0" y="16" font-weight="700" font-size="14">RS485：同名端子相连</text>
+          <rect x="0" y="28" width="120" height="70" rx="8" class="box2"/>
+          <text x="14" y="56" class="mono" font-size="13">网关 A</text><text x="14" y="82" class="mono" font-size="13">网关 B</text>
+          <rect x="240" y="28" width="120" height="70" rx="8" class="box2"/>
+          <text x="254" y="56" class="mono" font-size="13">设备 A/D+</text><text x="254" y="82" class="mono" font-size="13">设备 B/D-</text>
+          <path d="M120,52 H240" class="accs"/><path d="M120,78 H240" class="accs" stroke-dasharray="6 4"/>
+          <text x="180" y="116" text-anchor="middle" font-size="12" class="m">使用双绞线；通讯异常时可调换 A、B</text>
+        </g>
+        <g transform="translate(330,150)">
+          <text x="0" y="16" font-weight="700" font-size="14">RS232：收发交叉，GND 必须连接</text>
+          <rect x="0" y="28" width="120" height="96" rx="8" class="box2"/>
+          <text x="14" y="54" class="mono" font-size="13">网关 TX</text><text x="14" y="80" class="mono" font-size="13">网关 RX</text><text x="14" y="106" class="mono" font-size="13">网关 GND</text>
+          <rect x="240" y="28" width="120" height="96" rx="8" class="box2"/>
+          <text x="254" y="54" class="mono" font-size="13">设备 RX</text><text x="254" y="80" class="mono" font-size="13">设备 TX</text><text x="254" y="106" class="mono" font-size="13">设备 GND</text>
+          <path d="M120,50 H240" class="accs"/><path d="M120,76 H240" class="accs" stroke-dasharray="6 4"/><path d="M120,102 H240" class="ln" stroke-width="2"/>
+        </g>
+        <g transform="translate(740,40)" font-size="12.5">
+          <rect width="200" height="230" rx="10" class="box2"/>
+          <text x="14" y="28" font-weight="700" font-size="13.5">接线检查项</text>
+          <text x="14" y="58">· 拨码开关位置正确</text>
+          <text x="14" y="84">· 端子紧固，无裸露线头</text>
+          <text x="14" y="110">· RS232 已连接 GND</text>
+          <text x="14" y="136">· 线缆远离变频器及动力线</text>
+          <text x="14" y="162">· 网口设备：网络连通，</text>
+          <text x="26" y="182">网关与设备处于同一网段</text>
+          <text x="14" y="208" class="m">端子名称以网关外壳丝印为准</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>图 6</b>接线示意。RS485 为同名端子相连，RS232 为收发交叉连接。常见接线问题依次为：拨码开关位置错误、RS485 的 A/B 接反、RS232 未连接 GND。</figcaption>
+  </figure>
+
+  <div class="note"><b>网络连接</b>网关可通过以太网或 Wi-Fi 连接上位机。使用 Wi-Fi 时，在配置导入后于配置页“设置”中选择网络并输入密码；Wi-Fi 密码不得写入调研表。</div>
+</section>
+
+<!-- ================================================================ 5 -->
+<section id="s5">
+  <h2><span class="no">5</span>配置导入</h2>
+  <div class="who"><span class="chip"><i style="background:var(--accent)"></i>责任人：实施人员（使用厂家账号）</span></div>
+
+  <h3>5.1 访问网关配置页</h3>
+  <div class="two">
+    <div class="note"><b>方式一：网关配置热点（推荐）</b><br>电脑连接 Wi-Fi <code>IoTGW-xxxx</code>（xxxx 为 4 位字母数字，密码见网关标签），在浏览器中访问 <code>http://192.168.4.1</code>。<br><span style="color:var(--muted)">新网关上电后自动开启热点；已配置的网关可在 <b>5 秒内连续按 3 次复位键</b>（或快速断电上电 3 次）开启热点。热点在 10 分钟内无设备连接时自动关闭。</span></div>
+    <div class="note"><b>方式二：局域网访问</b><br>在浏览器中访问 <code>http://网关编号.local</code>（如 <code>http://jxgs001.local</code>，编号为小写），或 <code>http://网关 IP</code>。<br><span style="color:var(--muted)">电脑启用代理软件时，须将 *.local 设置为直连。</span></div>
+  </div>
+  <p>以用户名 <code>factory</code> 及厂家账号密码登录。配置导入仅限厂家账号操作；客户账号 <code>admin</code> 仅可查看。</p>
+
+  <h3>5.2 导入步骤</h3>
+  <div class="uiwrap">
+    <figure style="margin:0">
+      <div class="ui" aria-label="采集页导入设备配置界面">
+        <div class="bar"><span>数采网关</span><span>JXGS002 · 厂家</span></div>
+        <div class="tabs"><span>状态</span><span>诊断</span><span class="on">采集</span><span>报文</span><span>设置</span><span>系统</span><span>出厂</span></div>
+        <div class="pane">
+          <div class="card"><span class="pin" style="left:-10px;top:-10px">1</span>
+            <h4>采集设备</h4>
+            <div class="row"><span>名称</span><span>未导入设备配置</span></div>
+          </div>
+          <div class="card">
+            <h4>导入设备配置</h4>
+            <div class="file" style="position:relative">设备数采现场调研表.xlsx<span class="pin" style="right:-10px;top:-12px">2</span></div>
+            <div style="margin-top:8px;color:var(--muted);font-size:12px">本网关采集的设备</div>
+            <div class="sel" style="position:relative">换热器车间 · 高速冲床 · AMAJQ0243 <span>▾</span><span class="pin" style="right:-10px;top:-12px">3</span></div>
+            <div class="btns">
+              <span class="btn sec" style="position:relative">校验<span class="pin" style="right:-14px;top:-14px">4</span></span>
+              <span class="btn" style="position:relative;margin-left:12px">导入并重启<span class="pin" style="right:-14px;top:-14px">5</span></span>
+              <span style="flex:1"></span>
+              <span class="btn sec">下载调研表模板</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>图 7</b>配置页“采集”标签页（厂家账号）。</figcaption>
+    </figure>
+    <ol class="steps">
+      <li><span class="pin in">1</span><span>点击顶部“<b>采集</b>”标签。</span></li>
+      <li><span class="pin in">2</span><span>在“导入设备配置”中选择本厂调研表文件（.xlsx）。</span></li>
+      <li><span class="pin in">3</span><span>页面显示“<b>本网关采集的设备</b>”列表。表中网关编号与本机一致的设备将<b>自动选中</b>；否则按“车间 · 设备名称 · 资产编号”手动选择。</span></li>
+      <li><span class="pin in">4</span><span>点击“<b>校验</b>”。网关检查协议、地址、数据类型等内容，并指出错误所在的工作表及行号（见 5.3）。修改调研表并保存后，重新选择文件并校验。</span></li>
+      <li><span class="pin in">5</span><span>校验通过后点击“<b>导入并重启</b>”，在确认框中核对设备、协议及点位数量后确认。网关重启后按新配置采集，页面自动返回登录页。</span></li>
+    </ol>
+  </div>
+
+  <h3>5.3 校验结果说明</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>提示示例</th><th>含义</th><th>处理方法</th></tr></thead>
+    <tbody>
+      <tr><td class="k">采集点位第 12 行：地址“D2OO”无法识别</td><td>地址格式错误（示例中数字 0 误写为字母 O）</td><td>按第 2 步地址书写规则修改</td></tr>
+      <tr><td class="k">第 9 行（采集点位!12）：DM 区地址超出范围</td><td>地址超出该存储区的允许范围</td><td>与厂商点位表核对地址</td></tr>
+      <tr><td class="k">设备清单第 5 行：“通信协议”未填写</td><td>协议未自动生成，或文件未保存</td><td>手动选择协议并保存，重新选择文件</td></tr>
+      <tr><td class="k">“预留通讯口”应为 RS485 / RS232 / RS422 / 网口</td><td>通讯口为“未知”或填写有误</td><td>确认通讯接口后修改调研表</td></tr>
+      <tr><td class="k">unit 会写入上报报文，只能使用英文…</td><td>单位、订单名称等字段含中文</td><td>改为英文字符</td></tr>
+      <tr><td class="k">注意：表中的网关编号与本机不一致</td><td>提示信息，非错误</td><td>更换网关时可继续导入；其他情况应检查是否选错设备</td></tr>
+      <tr><td class="k">注意：协议 xxx 尚未在真机上验证过</td><td>提示信息，非错误</td><td>可继续导入，验收时须重点核对数据</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ================================================================ 6 -->
+<section id="s6">
+  <h2><span class="no">6</span>现场验收</h2>
+  <div class="who"><span class="chip"><i style="background:var(--ok)"></i>责任人：实施人员</span></div>
+  <div class="uiwrap">
+    <figure style="margin:0">
+      <div class="ui" aria-label="采集页实时数据界面">
+        <div class="bar"><span>数采网关</span><span>JXGS002 · 厂家</span></div>
+        <div class="tabs"><span>状态</span><span>诊断</span><span class="on">采集</span><span>报文</span><span>设置</span><span>系统</span></div>
+        <div class="pane">
+          <div class="card">
+            <h4>采集设备</h4>
+            <div class="row"><span>名称</span><span>高速冲床</span></div>
+            <div class="row"><span>协议</span><span>三菱 FX 计算机链接</span></div>
+            <div class="row"><span>通信</span><span>RS485 9600 7E1，站号 0</span></div>
+            <div class="row" style="position:relative"><span>采集状态</span><span><i class="dot"></i>正常，1 秒前更新</span><span class="pin" style="right:-10px;top:-8px">A</span></div>
+          </div>
+          <div class="card" style="position:relative"><span class="pin" style="right:-10px;top:-10px">B</span>
+            <h4>数据点 <small style="color:var(--muted);font-weight:400">2 个</small></h4>
+            <table>
+              <tr><th>编号</th><th>名称</th><th>当前值</th><th>地址</th></tr>
+              <tr><td>FR001</td><td>冲压次数</td><td class="v">182045</td><td class="mono">D200</td></tr>
+              <tr><td>FR002</td><td>运行</td><td class="v">1</td><td class="mono">M8000</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>图 8</b>导入后的“采集”页，数据每 2 秒刷新。</figcaption>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">验收项目</h3>
+      <ul class="check">
+        <li><span class="pin in">A</span>“采集状态”显示<b style="color:var(--ok)">正常</b></li>
+        <li><span class="pin in">B</span>各点位均有当前值，且与<b>设备显示值</b>一致；计数类数据应在设备动作后同步变化</li>
+        <li>开关量随设备启停在 0 与 1 之间变化</li>
+        <li>“状态”页中上位机通道显示已连接</li>
+        <li>上位机可查询到该设备（资产编号）的数据</li>
+        <li>调研表中该设备的“实施状态”已更新为<b>已上线</b></li>
+        <li>已通过“导出 Excel”备份本网关配置，并与照片一并归档</li>
+      </ul>
+      <div class="note" style="margin-top:16px"><b>报文核查</b>“报文”页可开启报文监视，查看网关与上位机、设备之间的原始报文；出现异常时可导出记录提交研发。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ FAQ -->
+<section id="faq">
+  <h2><span class="no">?</span>故障排查</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>采集页提示</th><th>常见原因</th><th>排查顺序</th></tr></thead>
+    <tbody>
+      <tr><td class="k" style="color:var(--bad)">设备无应答</td><td>拨码开关位置错误、接线错误、通讯参数不一致</td><td>① 检查拨码开关 232 / 485 位置；② RS485 调换 A、B，RS232 检查收发交叉及 GND；③ 核对通讯参数、站号与 PLC 设置；④ 确认设备已上电且通讯口已启用</td></tr>
+      <tr><td class="k" style="color:var(--warn)">N 个点读取失败</td><td>相应点位的地址或数据类型错误</td><td>与厂商点位表核对地址；确认双字、浮点数据未误选为整数</td></tr>
+      <tr><td class="k" style="color:var(--warn)">应答偶有错码（诊断页）</td><td>线路干扰：线缆过长、未接地、靠近动力线</td><td>连接 GND，改用屏蔽双绞线，远离变频器；条件允许时降低波特率。错码已由校验机制拦截，不会上报错误数据</td></tr>
+      <tr><td class="k" style="color:var(--bad)">连接不上设备</td><td>网口设备 IP、端口错误，或不在同一网段</td><td>用电脑 ping 设备 IP；确认设备端口及对应协议已开启</td></tr>
+      <tr><td class="k">数据异常</td><td>数据类型、倍率或字序设置错误</td><td>数值相差 10 倍或 100 倍时调整倍率；数值明显异常时尝试“双字整数 / 浮点数”，或调整字序（如 CDAB）</td></tr>
+      <tr><td class="k">上位机已暂停采集</td><td>上位机下发了暂停命令</td><td>联系上位机负责人</td></tr>
+      <tr><td class="k">配置页无法打开</td><td>热点已关闭，或电脑代理设置影响访问</td><td>连续按 3 次复位键重新开启热点；关闭代理或将 *.local 设置为直连</td></tr>
+    </tbody>
+  </table></div>
+  <p>问题无法解决时，在“诊断”页点击“导出诊断信息”，连同调研表及照片提交研发。</p>
+</section>
+
+<!-- ================================================================ 换网关 -->
+<section id="swap">
+  <h2><span class="no">↻</span>网关更换与配置变更</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>场景</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr><td class="k">网关故障更换</td><td>在新网关上导入同一份调研表并选择同一设备。导入时提示“网关编号不一致”，确认后继续。资产编号不变，上位机数据保持连续；同时将调研表中的网关编号更新为新编号。</td></tr>
+      <tr><td class="k">增加采集项</td><td>在采集点位中增加行，编号顺延，不得修改已有编号；完成后重新导入。</td></tr>
+      <tr><td class="k">新增同型号设备</td><td>在设备清单中增加一行并填写相同的点表名称，安装网关后导入。</td></tr>
+      <tr><td class="k">网关改接其他设备</td><td>导入新设备的配置；停止采集时在“采集”页点击“删除配置”。</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ================================================================ 附录 -->
+<section id="appx">
+  <h2><span class="no">A</span>附录：协议默认参数</h2>
+  <p>调研表“填写说明”工作表中附有同一内容，按当前网关固件实际支持的协议生成。</p>
+  <div class="tbl"><table>
+    <thead><tr><th>协议</th><th>通讯口</th><th>默认参数</th><th>地址区</th></tr></thead>
+    <tbody>
+      <tr><td class="k">三菱 FX 编程口</td><td>RS232 / RS422</td><td class="mono">9600 7E1</td><td>D（仅限整数）</td></tr>
+      <tr><td class="k">三菱 FX 计算机链接</td><td>RS485 / RS232</td><td class="mono">9600 7E1，站号 0</td><td>D、M、X、Y</td></tr>
+      <tr><td class="k">三菱 MC 协议</td><td>网口</td><td class="mono">端口 5000</td><td>D、M、X、Y</td></tr>
+      <tr><td class="k">欧姆龙 HostLink</td><td>RS232 / RS485</td><td class="mono">115200 8N1，单元号 0</td><td>DM、CIO</td></tr>
+      <tr><td class="k">西门子 PPI（S7-200）</td><td>RS485</td><td class="mono">9600 8E1，站号 2</td><td>V、I、Q、M</td></tr>
+      <tr><td class="k">西门子 S7comm</td><td>网口</td><td class="mono">端口 102，机架 0 槽 1</td><td>V、I、Q、M</td></tr>
+      <tr><td class="k">Modbus RTU</td><td>RS485 / RS232</td><td class="mono">9600 8N1，站号 1</td><td>4xxxx、3xxxx、0xxxx、1xxxx</td></tr>
+      <tr><td class="k">Modbus TCP</td><td>网口</td><td class="mono">端口 502，单元号 1</td><td>同上</td></tr>
+      <tr><td class="k">DBS 真空计 / 76T、艾诺安规测试仪</td><td>RS232 / RS485</td><td class="mono">9600 / 19200 8N1</td><td>内置模板，无需填写点位</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><b>未实测协议</b>目前仅欧姆龙 HostLink 已在真机上按调研表方式完成验证。其他协议可正常使用，导入时将给出提示；验收时须重点核对数据，验证通过后告知研发。</div>
+</section>
+</main>
+</div>
+</body>
+</html>
