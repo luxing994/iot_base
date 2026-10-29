@@ -1,4 +1,4 @@
-{"t":"meta","schema":1,"rev":"test-hl-1","source":"HostLink 真机 RS232 测试（点位取自生能冷媒灌注机旧点表）"}
+{"t":"meta","schema":1,"rev":"test-hl-1","source":"HostLink 真机 RS232 测试"}
 {"t":"device","name":"HostLink 真机","number":"TEST-HL-001","category":"plc","brand":"欧姆龙","model":"CP","protocol":"hostlink","iface":"rs232","baud":115200,"dataBits":8,"parity":"N","stopBits":1,"station":0,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"HLPLC"}
 {"t":"point","fr":1,"name":"A模式选择","area":"DM","addr":8101,"type":"u16"}
 {"t":"point","fr":2,"name":"A检测时间","area":"DM","addr":8824,"type":"bcd16"}
