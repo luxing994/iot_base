@@ -65,6 +65,8 @@ void IotBatch_Destroy(IotBatch *batch);
 void IotBatch_Reset(IotBatch *batch);
 int  IotBatch_Count(const IotBatch *batch);
 int  IotBatch_Add(IotBatch *batch, const char *unit, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+/* 指定编号（设备配置的 fr 不一定从 1 连续） */
+int  IotBatch_AddFr(IotBatch *batch, int frnum, const char *unit, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
 int  IotBatch_Send(const IotBatch *batch, const char *devTypeId);
 
 /*

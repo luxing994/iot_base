@@ -44,7 +44,9 @@ typedef int (*SerialParseFn)(void *ctx);
 void SerialTxn_Init(void);
 void SerialTxn_Begin(void);
 void SerialTxn_Send(const void *data, size_t len);
-int  SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms);   // 成功返回 0
+/* 成功返回 0，超时返回 -1，有应答但内容有误（错误码、校验和不对等）返回 SERIAL_TXN_BAD */
+#define SERIAL_TXN_BAD      (-2)
+int  SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms);
 void SerialTxn_End(void);
 
 /* 统计（诊断用）：txns 为 0 表示本固件没有串口设备或还没开始轮询 */
@@ -60,7 +62,7 @@ typedef struct {
 
 void SerialTxn_GetStats(SerialTxnStats *out);
 
-/* Begin + Send + Wait + End，成功返回 0 */
+/* Begin + Send + Wait + End，返回值同 SerialTxn_Wait */
 int  SerialTxn_Request(const void *req, size_t len, SerialParseFn parse, void *ctx, int timeout_ms);
 
 /*

@@ -330,7 +330,7 @@ static void PollRound(const DevCfg *c)
             if (b != NULL) {
                 char text[32];
                 FormatValue(p, v, text, sizeof(text));
-                IotBatch_Add(b, p->unit[0] != '\0' ? p->unit : "00", "%s", text);
+                IotBatch_AddFr(b, p->fr, p->unit[0] != '\0' ? p->unit : "00", "%s", text);
             } else {
                 ReportPoint(c, i, v);
             }

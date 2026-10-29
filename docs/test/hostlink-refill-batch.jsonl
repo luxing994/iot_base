@@ -1,0 +1,29 @@
+{"t":"meta","schema":1,"rev":"test-hl-batch-1","source":"冷媒灌注机 27 点批量对比"}
+{"t":"device","name":"冷媒灌注机 HostLink","number":"TEST-HL-002","category":"plc","brand":"欧姆龙","model":"CP","protocol":"hostlink","iface":"rs232","baud":115200,"dataBits":8,"parity":"N","stopBits":1,"station":0,"pollMs":1000,"report":"batch","devTypeId":"LM","devTypeName":"HLPLC"}
+{"t":"point","fr":1,"name":"A模式选择","area":"DM","addr":8101,"type":"u16"}
+{"t":"point","fr":2,"name":"B模式选择","area":"DM","addr":8501,"type":"u16"}
+{"t":"point","fr":3,"name":"A检测时间","area":"DM","addr":8824,"type":"bcd16","unit":"S"}
+{"t":"point","fr":4,"name":"B检测时间","area":"DM","addr":8844,"type":"bcd16","unit":"S"}
+{"t":"point","fr":5,"name":"A抽空上限","area":"DM","addr":8820,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":6,"name":"B抽空上限","area":"DM","addr":8840,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":7,"name":"A抽空下限","area":"DM","addr":8822,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":8,"name":"B抽空下限","area":"DM","addr":8842,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":9,"name":"A充注压力","area":"DM","addr":19704,"type":"f32","unit":"MPA","dec":2}
+{"t":"point","fr":10,"name":"B充注压力","area":"DM","addr":19724,"type":"f32","unit":"MPA","dec":2}
+{"t":"point","fr":11,"name":"A真空度","area":"DM","addr":19746,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":12,"name":"B真空度","area":"DM","addr":19766,"type":"f32","unit":"PA","dec":2}
+{"t":"point","fr":13,"name":"A设定量","area":"DM","addr":8828,"type":"f32","unit":"G","dec":2}
+{"t":"point","fr":14,"name":"B设定量","area":"DM","addr":8848,"type":"f32","unit":"G","dec":2}
+{"t":"point","fr":15,"name":"A百分比","area":"DM","addr":8182,"type":"f32","dec":2}
+{"t":"point","fr":16,"name":"B百分比","area":"DM","addr":8582,"type":"f32","dec":2}
+{"t":"point","fr":17,"name":"A充注速度","area":"DM","addr":8194,"type":"f32","unit":"GS","dec":2}
+{"t":"point","fr":18,"name":"B充注速度","area":"DM","addr":8594,"type":"f32","unit":"GS","dec":2}
+{"t":"point","fr":19,"name":"A充注量","area":"DM","addr":8180,"type":"f32","unit":"G","dec":2}
+{"t":"point","fr":20,"name":"B充注量","area":"DM","addr":8580,"type":"f32","unit":"G","dec":2}
+{"t":"point","fr":21,"name":"A工作状态","area":"DM","addr":8102,"type":"u16"}
+{"t":"point","fr":22,"name":"B工作状态","area":"DM","addr":8502,"type":"u16"}
+{"t":"point","fr":23,"name":"A充注时间","area":"DM","addr":8104,"type":"f32","unit":"S","dec":2}
+{"t":"point","fr":24,"name":"B充注时间","area":"DM","addr":8504,"type":"f32","unit":"S","dec":2}
+{"t":"point","fr":25,"name":"结果判定","area":"DM","addr":8940,"type":"u16"}
+{"t":"point","fr":26,"name":"A充注设定值","area":"DM","addr":8150,"type":"f32","dec":2}
+{"t":"point","fr":27,"name":"B充注设定值","area":"DM","addr":8550,"type":"f32","dec":2}

@@ -247,9 +247,15 @@ static void CheckSerial(Checks *c)
     } else if (s.errors > 10 && s.errors > s.ok) {
         Add(c, "warn", "串口设备", "设备有应答但内容有误：确认站号和读取的寄存器地址正确。",
             "应答异常较多（成功 %u，异常 %u）", (unsigned)s.ok, (unsigned)s.errors);
+    } else if (s.errors > 10 && s.errors * 100 > s.txns) {
+        // 错码超过 1%：多为线路干扰（错码已被校验拦下并重读，不会上报错误数据）
+        Add(c, "warn", "串口设备", rs485 ? "线路有干扰：检查 A、B 线是否用双绞屏蔽线、是否接牢，线长时在末端加 120Ω 终端电阻。"
+                                         : "线路有干扰：GND 接牢，线尽量短并用屏蔽线；可将设备和网关的波特率一起调低，或改用带校验位的格式（如 7E2）。",
+            "应答偶有错码（%s，成功 %u 次，错码 %u 次，超时 %u 次）", params,
+            (unsigned)s.ok, (unsigned)s.errors, (unsigned)s.timeouts);
     } else {
-        Add(c, "ok", "串口设备", NULL, "通信正常（%s，成功 %u 次，超时 %u 次）", params,
-            (unsigned)s.ok, (unsigned)s.timeouts);
+        Add(c, "ok", "串口设备", NULL, "通信正常（%s，成功 %u 次，错码 %u 次，超时 %u 次）", params,
+            (unsigned)s.ok, (unsigned)s.errors, (unsigned)s.timeouts);
     }
 }
 

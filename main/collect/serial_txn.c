@@ -134,7 +134,7 @@ int SerialTxn_Wait(SerialParseFn parse, void *ctx, int timeout_ms)
                 UART_FlushBuffer();
                 s_errorCount++;
                 OnResponse();       // 应答内容有误（错误码等），但设备在线
-                return -1;
+                return SERIAL_TXN_BAD;
             }
             UART_RollbackBuffer();
         }

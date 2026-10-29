@@ -67,7 +67,8 @@ static int HlParse(void *arg)
     HlCtx *ctx = arg;
     uint8_t h[HL_RESP_HEAD_LEN];
     uint8_t hex[4];
-    uint32_t cmd, end;
+    uint32_t cmd, end, got;
+    uint8_t fcs;
 
     if (SerialRx_SeekAny(HL_HEAD, HL_HEAD) < 0 || SerialRx_Read(h, sizeof(h)) != 0) {
         return SERIAL_PARSE_MORE;
@@ -86,13 +87,27 @@ static int HlParse(void *arg)
         return SERIAL_PARSE_ERROR;
     }
 
+    /*
+     * FCS：'@' 到数据末尾逐字节异或。8N1 没有奇偶校验，线路干扰造成的错位只能靠它发现，
+     * 否则错的数据会照常上报（如浮点高位 '0' 错成 '8'，0.00 就成了 -0.00）
+     */
+    fcs = (uint8_t)(HL_HEAD ^ Proto_Xor8(h, sizeof(h)));
     for (int i = 0; i < ctx->words; i++) {
         if (SerialRx_Read(hex, sizeof(hex)) != 0) {
             return SERIAL_PARSE_MORE;
         }
+        fcs ^= Proto_Xor8(hex, sizeof(hex));
         if (Proto_GetHex(hex, 4, &ctx->w[i]) != 0) {
+            ESP_LOGE(TAG, "bad data: %.4s", (const char *)hex);
             return SERIAL_PARSE_ERROR;
         }
+    }
+    if (SerialRx_Read(hex, 2) != 0) {
+        return SERIAL_PARSE_MORE;
+    }
+    if (Proto_GetHex(hex, 2, &got) != 0 || got != fcs) {
+        ESP_LOGE(TAG, "FCS mismatch: got %.2s, want %02X", (const char *)hex, (unsigned)fcs);
+        return SERIAL_PARSE_ERROR;
     }
     return SERIAL_PARSE_OK;
 }
@@ -104,10 +119,18 @@ static int HlReadWords(uint8_t area, uint16_t address, HlCtx *ctx)
 
     ctx->fins = FINS_MEMORY_READ;
     n = HlBuild(f, FINS_MEMORY_READ, area, address, (uint16_t)ctx->words, NULL, 0);
-    if (SerialTxn_Request(f, n, HlParse, ctx, SERIAL_TXN_TIMEOUT_MS) != 0) {
-        return PLC_ERR_RESPONSE;
+    for (int tries = 0; tries < 2; tries++) {
+        int ret = SerialTxn_Request(f, n, HlParse, ctx, SERIAL_TXN_TIMEOUT_MS);
+
+        if (ret == 0) {
+            return PLC_OK;
+        }
+        if (ret != SERIAL_TXN_BAD) {
+            break;      // 无应答不重试，免得设备离线时一轮拖得太长
+        }
+        // 应答被干扰（校验和不对等）：读操作没有副作用，重读一次
     }
-    return PLC_OK;
+    return PLC_ERR_RESPONSE;
 }
 
 int HL_ReadDM(uint16_t address, HlFormat fmt, PlcValue *out)

@@ -9,7 +9,7 @@
 #include "host_cmd.h"
 
 #define VALUE_MSG_SIZE      768
-#define BATCH_MSG_EXTRA     512     // 批量报文中除三个参数串以外的固定字段长度
+#define BATCH_MSG_EXTRA     640     // 批量报文中除三个参数串以外的固定字段长度
 #define VALUE_STR_SIZE      48
 #define BATCH_IDS_SIZE      (IOT_BATCH_MAX_POINTS * 8)
 #define BATCH_VALUES_SIZE   (IOT_BATCH_MAX_POINTS * 24)
@@ -149,23 +149,20 @@ static int AppendItem(char *dst, size_t size, int first, const char *item)
     return (n < 0 || (size_t)n >= size - used) ? -1 : 0;
 }
 
-int IotBatch_Add(IotBatch *batch, const char *unit, const char *fmt, ...)
+static int AddV(IotBatch *batch, int frnum, const char *unit, const char *fmt, va_list ap)
 {
     char id[16];          // "FR" + 最长 11 位整数 + 结尾 0
     char value[VALUE_STR_SIZE];
-    va_list ap;
     int first;
 
     if (batch == NULL || batch->count >= IOT_BATCH_MAX_POINTS) {
         return -1;
     }
 
-    va_start(ap, fmt);
     vsnprintf(value, sizeof(value), fmt, ap);
-    va_end(ap);
 
     first = (batch->count == 0);
-    snprintf(id, sizeof(id), "FR%03d", batch->count + 1);
+    snprintf(id, sizeof(id), "FR%03d", frnum);
     if (AppendItem(batch->ids, sizeof(batch->ids), first, id) != 0 ||
         AppendItem(batch->values, sizeof(batch->values), first, value) != 0 ||
         AppendItem(batch->units, sizeof(batch->units), first, (unit != NULL) ? unit : "00") != 0) {
@@ -177,8 +174,32 @@ int IotBatch_Add(IotBatch *batch, const char *unit, const char *fmt, ...)
     return 0;
 }
 
+int IotBatch_Add(IotBatch *batch, const char *unit, const char *fmt, ...)
+{
+    va_list ap;
+    int ret;
+
+    va_start(ap, fmt);
+    ret = AddV(batch, (batch != NULL) ? batch->count + 1 : 0, unit, fmt, ap);
+    va_end(ap);
+    return ret;
+}
+
+int IotBatch_AddFr(IotBatch *batch, int frnum, const char *unit, const char *fmt, ...)
+{
+    va_list ap;
+    int ret;
+
+    va_start(ap, fmt);
+    ret = AddV(batch, frnum, unit, fmt, ap);
+    va_end(ap);
+    return ret;
+}
+
 int IotBatch_Send(const IotBatch *batch, const char *devTypeId)
 {
+    // 按设备配置采集时带上被采设备的编号和名称；旧的批量设备保持原样（空）
+    const bool hasCfg = (DevCfg_Get() != NULL);
     HostCmdIdentity id;
     size_t size;
     char *buf;
@@ -197,14 +218,14 @@ int IotBatch_Send(const IotBatch *batch, const char *devTypeId)
         return -1;
     }
 
-    len = snprintf(buf, size, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"\",\n    \"devName\":\"\",\n    \"devStatus\":\"\",\n"
+    len = snprintf(buf, size, "{\n    \"devId\":\"%s\",\n    \"devNumber\":\"%s\",\n    \"devName\":\"%s\",\n    \"devStatus\":\"\",\n"
         "    \"devTypeId\": \"%s\",\n    \"orderName\":\"%s\",\n    \"orderId\":\"%s\",\n"
         "    \"ParameterIds\":\"%s\",\n"
         "    \"ParameterValues\":\"%s\",\n"
         "    \"ParameterUnits\":\"%s\",\n"
         "    \"value\":\"\",\n    \"devIP\":\"%s\",\n    \"timeStampNeed\":\"%s\",\n    \"timeStamp\":\"%lld\",\n"
         "    \"valueUnit\":\"\",\n    \"expand\":\"\",\n    \"isAnswer\":\"no\"\n}" IOT_MSG_END,
-        id.devId, devTypeId, id.orderName, IOT_BATCH_ORDER_ID,
+        id.devId, hasCfg ? IOT_DEV_NUMBER : "", hasCfg ? DevCfg_DevName() : "", devTypeId, id.orderName, IOT_BATCH_ORDER_ID,
         batch->ids, batch->values, batch->units,
         GetStaIp(), DEVTIMEMODE, (long long)GetMilliTimeNow());
     if (len < 0 || (size_t)len >= size) {
