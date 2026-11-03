@@ -195,7 +195,7 @@ html { scroll-behavior: smooth; }
   <p class="lead">本手册规定数采网关从现场调研、采集点位整理、安装接线到配置导入与验收的标准作业流程，适用于实施人员及参与调研的现场人员。每台网关对应一台被采集设备；网关出厂时统一烧录固件，现场接入的设备及采集内容均由《设备数采现场调研表》确定，无需修改程序。</p>
   <div class="meta">
     <span>适用固件：<b>iot_base（dev-beta，采集页含“下载调研表模板”）</b></span>
-    <span>配套文件：<b>设备数采现场调研表.xlsx</b></span>
+    <span>配套文件：<b>现场调研.html</b>、<b>设备数采现场调研表.xlsx</b></span>
     <span>版本：<b>2026-10-29</b></span>
   </div>
 </header>
@@ -203,7 +203,7 @@ html { scroll-behavior: smooth; }
 <!-- ================================================================ 0 -->
 <section id="flow">
   <h2><span class="no">0</span>实施流程概述</h2>
-  <p>每个工厂使用<b>一份</b>调研表。第 1~3 步在调研表中完成；第 4~6 步在现场按每台网关逐一执行。</p>
+  <p>每个工厂使用<b>一份</b>调研表：第 1 步由现场人员在“现场调研页面”中完成并导出调研表，第 2、3 步由实施人员在 Excel 中补全；第 4~6 步在现场按每台网关逐一执行。</p>
   <figure>
     <div class="fig">
       <svg viewBox="0 0 1000 250" role="img" aria-label="实施流程六个步骤：设备调研、采集点位整理、实施配置、安装与接线、配置导入、现场验收">
@@ -219,8 +219,8 @@ html { scroll-behavior: smooth; }
             <rect width="140" height="104" rx="10" class="box"/>
             <circle cx="24" cy="26" r="14" style="fill:var(--g-dev)"/><text x="24" y="31" text-anchor="middle" class="w" font-weight="700" font-size="13">1</text>
             <text x="46" y="31" font-weight="700">设备调研</text>
-            <text x="16" y="60" font-size="12.5" class="m">每台设备一行</text>
-            <text x="16" y="80" font-size="12.5" class="m">基本信息与需求</text>
+            <text x="16" y="60" font-size="12.5" class="m">现场调研页面</text>
+            <text x="16" y="80" font-size="12.5" class="m">逐台点选、导出</text>
           </g>
           <g transform="translate(180,64)">
             <rect width="140" height="104" rx="10" class="box"/>
@@ -280,7 +280,7 @@ html { scroll-behavior: smooth; }
   <div class="tbl"><table>
     <thead><tr><th>角色</th><th>职责</th><th>能力要求</th></tr></thead>
     <tbody>
-      <tr><td class="k">现场人员</td><td>第 1 步：填写设备清单，拍摄铭牌及电柜照片，向设备厂商索取 PLC 点位表</td><td>熟悉现场设备，能识读设备铭牌</td></tr>
+      <tr><td class="k">现场人员</td><td>第 1 步：使用现场调研页面录入设备并导出调研表，拍摄铭牌及电柜照片，向设备厂商索取 PLC 点位表</td><td>熟悉现场设备，能识读设备铭牌</td></tr>
       <tr><td class="k">设备厂商</td><td>提供设备的 PLC 点位表（地址表），通常为整台设备的全部点位</td><td>—</td></tr>
       <tr><td class="k">实施人员</td><td>第 2 步：筛选并录入采集点位；第 3 步：填写实施配置；第 4~6 步：现场安装、配置导入与验收</td><td>具备接线能力，熟悉浏览器操作；持有厂家账号</td></tr>
     </tbody>
@@ -294,7 +294,8 @@ html { scroll-behavior: smooth; }
     <div>
       <h3>资料</h3>
       <ul class="check">
-        <li>调研表模板：在任一网关配置页“采集”中点击“下载调研表模板”获取，或使用研发提供的 <code>设备数采现场调研表-模板.xlsx</code></li>
+        <li>现场调研页面 <code>现场调研.html</code>：离线页面，复制到手机或电脑后用浏览器直接打开，无需联网</li>
+        <li>空白调研表模板（实施人员备用）：在任一网关配置页“采集”中点击“下载调研表模板”获取，或使用研发提供的 <code>设备数采现场调研表-模板.xlsx</code></li>
         <li>厂家账号：用户名 <code>factory</code>，密码向研发负责人申请；密码不得写入调研表</li>
         <li>上位机地址及端口：向上位机负责人确认</li>
       </ul>
@@ -303,7 +304,7 @@ html { scroll-behavior: smooth; }
       <h3>工具</h3>
       <ul class="check">
         <li>笔记本电脑，安装新版 Chrome 或 Edge 浏览器</li>
-        <li>手机或相机，用于拍摄铭牌及电柜</li>
+        <li>手机：打开现场调研页面，拍摄铭牌及电柜</li>
         <li>网关及电源；按设备通讯接口准备 RS485 双绞线、RS232 线缆或网线</li>
         <li>一字螺丝刀、扎带</li>
       </ul>
@@ -315,7 +316,75 @@ html { scroll-behavior: smooth; }
 <section id="s1">
   <h2><span class="no">1</span>设备调研</h2>
   <div class="who"><span class="chip"><i style="background:var(--g-dev)"></i>责任人：现场人员</span></div>
-  <p>在调研表的“<b>设备清单</b>”工作表中，<b>每台设备填写一行</b>。现场人员填写左侧<span style="color:var(--g-dev);font-weight:700">蓝色</span>、<span style="color:var(--g-com);font-weight:700">绿色</span>、<span style="color:var(--g-req);font-weight:700">橙色</span>三个区域；右侧<span style="color:var(--g-imp);font-weight:700">紫色</span>“实施配置”区域由实施人员填写。</p>
+  <p>现场人员使用<b>现场调研页面</b>（<code>现场调研.html</code>）逐台录入设备。除设备名称、资产编号外，各项均以点选或<b>下拉选择</b>完成，照片在设备编辑页直接拍摄并与该设备绑定；同型号设备在编辑页点击“<b>复制为新设备</b>”，仅需修改名称和编号。录入内容自动保存在本机浏览器中。</p>
+  <p>调研完成后点击“<b>导出调研资料</b>”：有照片或资料时生成资料包 <code>设备数采现场调研资料-工厂名称-日期.zip</code>，内含调研表（.xlsx）及“照片 /”“资料 /”目录，文件按“资产编号-类型-序号”命名（如 <code>AMAJQ0221-铭牌-1.jpg</code>），调研表“照片 / 资料”列自动列出对应文件名；无照片时直接生成调研表 .xlsx。资料提交实施人员，解压后使用其中的 .xlsx 导入网关。调研表“<b>设备清单</b>”工作表中，现场录入内容位于左侧<span style="color:var(--g-dev);font-weight:700">蓝色</span>、<span style="color:var(--g-com);font-weight:700">绿色</span>、<span style="color:var(--g-req);font-weight:700">橙色</span>区域，“设备类别”按设备类型和控制器品牌自动换算，“通信协议”按控制器品牌和通讯口自动生成，“实施状态”按调研结果自动标记；右侧<span style="color:var(--g-imp);font-weight:700">紫色</span>“实施配置”区域由实施人员填写。需修改时，在页面中点击“打开调研资料”选择已导出的 .zip 或 .xlsx 文件，照片按资产编号归回各设备，实施人员已填写的内容将保留。</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 960 330" role="img" aria-label="现场调研页面：左侧为设备列表，右侧为设备编辑页，各项以点选完成">
+        <g font-size="13">
+          <g transform="translate(40,10)">
+            <rect width="250" height="310" rx="22" class="box2"/>
+            <rect x="12" y="16" width="226" height="282" rx="10" class="box"/>
+            <text x="26" y="42" font-weight="700" font-size="14">设备数采现场调研</text>
+            <rect x="26" y="54" width="86" height="24" rx="6" class="acc"/><text x="69" y="71" text-anchor="middle" class="w" font-size="12">＋ 新增设备</text>
+            <rect x="118" y="54" width="104" height="24" rx="6" class="box2"/><text x="170" y="71" text-anchor="middle" font-size="12">导出调研资料</text>
+            <g transform="translate(26,90)">
+              <rect width="196" height="54" rx="8" class="box2"/>
+              <text x="12" y="22" font-weight="700">1# 冲床 <tspan class="m" font-weight="400">AM001</tspan></text>
+              <text x="12" y="42" font-size="11.5" class="m">欧姆龙 CP1H · RS232</text>
+              <rect x="146" y="9" width="42" height="18" rx="9" style="fill:var(--ok)" opacity=".2"/><text x="167" y="22" text-anchor="middle" font-size="10.5" style="fill:var(--ok)">已完成</text>
+            </g>
+            <g transform="translate(26,152)">
+              <rect width="196" height="54" rx="8" class="box2"/>
+              <text x="12" y="22" font-weight="700">2# 冲床 <tspan class="m" font-weight="400">AM002</tspan></text>
+              <text x="12" y="42" font-size="11.5" class="m">未知 · RS485</text>
+              <rect x="146" y="9" width="42" height="18" rx="9" style="fill:var(--warn)" opacity=".2"/><text x="167" y="22" text-anchor="middle" font-size="10.5" style="fill:var(--warn)">待确认</text>
+            </g>
+            <text x="125" y="236" text-anchor="middle" font-size="12" class="m">设备列表</text>
+          </g>
+          <path d="M300,165 H350" class="accs" marker-end="url(#ar1a)"/>
+          <defs><marker id="ar1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker></defs>
+          <g transform="translate(360,10)">
+            <rect width="560" height="310" rx="14" class="box2"/>
+            <rect x="12" y="12" width="536" height="286" rx="10" class="box"/>
+            <text x="28" y="40" font-weight="700" font-size="14">设备 1：1# 冲床</text>
+            <text x="28" y="70" class="m" font-size="12">设备类别</text>
+            <g transform="translate(28,78)" font-size="12">
+              <rect width="96" height="24" rx="12" class="acc"/><text x="48" y="16" text-anchor="middle" class="w">PLC 控制设备</text>
+              <rect x="104" width="80" height="24" rx="12" class="box2"/><text x="144" y="16" text-anchor="middle">注塑机</text>
+              <rect x="192" width="96" height="24" rx="12" class="box2"/><text x="240" y="16" text-anchor="middle">仪表 / 测试仪</text>
+            </g>
+            <text x="28" y="124" class="m" font-size="12">需要采集的数据（可多选）</text>
+            <g transform="translate(28,132)" font-size="12">
+              <rect width="96" height="24" rx="12" class="acc"/><text x="48" y="16" text-anchor="middle" class="w">✓ 产量 / 计数</text>
+              <rect x="104" width="108" height="24" rx="12" class="box2"/><text x="158" y="16" text-anchor="middle">运行 / 停机状态</text>
+              <rect x="220" width="62" height="24" rx="12" class="acc"/><text x="251" y="16" text-anchor="middle" class="w">✓ 报警</text>
+              <rect x="290" width="72" height="24" rx="12" class="box2"/><text x="326" y="16" text-anchor="middle">故障代码</text>
+            </g>
+            <text x="28" y="178" class="m" font-size="12">控制器品牌 / 型号</text>
+            <g transform="translate(28,186)" font-size="12">
+              <rect width="52" height="24" rx="12" class="box2"/><text x="26" y="16" text-anchor="middle">三菱</text>
+              <rect x="60" width="62" height="24" rx="12" class="acc"/><text x="91" y="16" text-anchor="middle" class="w">欧姆龙</text>
+              <rect x="130" width="62" height="24" rx="12" class="box2"/><text x="161" y="16" text-anchor="middle">西门子</text>
+              <rect x="210" width="56" height="24" rx="12" class="box2"/><text x="238" y="16" text-anchor="middle">CP1E</text>
+              <rect x="274" width="56" height="24" rx="12" class="acc"/><text x="302" y="16" text-anchor="middle" class="w">CP1H</text>
+              <rect x="338" width="56" height="24" rx="12" class="box2"/><text x="366" y="16" text-anchor="middle">CJ2M</text>
+            </g>
+            <text x="28" y="232" class="m" font-size="12">预留通讯口</text>
+            <g transform="translate(28,240)" font-size="12">
+              <rect width="62" height="24" rx="12" class="box2"/><text x="31" y="16" text-anchor="middle">RS485</text>
+              <rect x="70" width="62" height="24" rx="12" class="acc"/><text x="101" y="16" text-anchor="middle" class="w">RS232</text>
+              <rect x="140" width="52" height="24" rx="12" class="box2"/><text x="166" y="16" text-anchor="middle">网口</text>
+              <rect x="200" width="52" height="24" rx="12" class="box2"/><text x="226" y="16" text-anchor="middle">未知</text>
+            </g>
+            <rect x="384" y="250" width="56" height="28" rx="6" class="acc"/><text x="412" y="269" text-anchor="middle" class="w" font-size="12">保存</text>
+            <rect x="446" y="250" width="90" height="28" rx="6" class="box2"/><text x="491" y="269" text-anchor="middle" font-size="12">复制为新设备</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <figcaption><b>图 1a</b>现场调研页面。左：设备列表，按录入情况标记“已完成 / 待确认 / 不采集”；右：设备编辑页，各项以点选完成。</figcaption>
+  </figure>
 
   <figure>
     <div class="fig">
@@ -327,23 +396,23 @@ html { scroll-behavior: smooth; }
         <tr><td class="rn">6</td><td>钣金车间</td><td>激光切割机</td><td>AMAJQ0233</td><td>数控机床 / 工控机设备</td><td>宏石激光</td><td>工控机</td><td></td><td>网口</td><td>待定</td><td>加工数量</td><td></td><td></td><td></td></tr>
       </table>
     </div>
-    <figcaption><b>图 1</b>设备清单样例。第 3 行为“填写要求”，第 4 行为“示例”，二者均不参与导入；数据自第 5 行起填写。</figcaption>
+    <figcaption><b>图 1b</b>导出的调研表“设备清单”样例。第 3 行为“填写要求”，第 4 行为“示例”，二者均不参与导入；数据自第 5 行起。</figcaption>
   </figure>
 
-  <h3>填写说明</h3>
+  <h3>录入说明</h3>
   <div class="tbl"><table>
-    <thead><tr><th>列</th><th>填写要求</th></tr></thead>
+    <thead><tr><th>项目</th><th>录入要求</th></tr></thead>
     <tbody>
       <tr><td class="k">设备名称 *</td><td>填写现场通用名称，如“1# 高速冲床”。该名称仅用于配置网页及上位机界面显示。</td></tr>
       <tr><td class="k">资产编号 *</td><td>填写设备铭牌编号或固定资产编号，<b>全厂唯一</b>，仅限字母、数字及 <code>- _ .</code>。上位机以此编号区分设备，更换网关时保持不变。</td></tr>
-      <tr><td class="k">设备类别 *</td><td>从下拉列表选择：PLC 控制设备、数控机床 / 工控机设备、注塑机、仪表 / 测试仪、自研控制板设备、无控制器设备。</td></tr>
-      <tr><td class="k">厂家、型号、联系人</td><td>依据设备铭牌及采购资料填写。“厂家能否提供通讯资料”选择“可提供 / 不可提供 / 待确认”；能否取得 PLC 点位表是判断该设备能否采集的前提。</td></tr>
-      <tr><td class="k">控制器品牌、型号</td><td>以电柜内 PLC 或触摸屏的铭牌为准（如 三菱 FX3U、欧姆龙 CP1H、西门子 S7-200）。无法确认时选择“未知”，并附照片供实施人员判断。</td></tr>
-      <tr><td class="k">预留通讯口</td><td>控制器上可用于数据采集的通讯接口，识别方法见图 2。无法确认时选择“未知”。</td></tr>
-      <tr><td class="k">现场网络</td><td>设备安装位置的网络条件：有线网络 / 无线网络 / 无网络。</td></tr>
-      <tr><td class="k">照片 / 资料</td><td>填写照片文件名，如 <code>AMAJQ0221-1.jpg</code>。每台设备应至少拍摄设备铭牌、电柜内控制器、通讯接口特写各一张。设备厂商提供的 PLC 点位表文件名一并记录于此。</td></tr>
-      <tr><td class="k">是否采集</td><td>选择“是 / 否 / 待定”。选择“否”的设备在导入时不予列出。</td></tr>
-      <tr><td class="k">需要采集的数据</td><td>按业务需求描述，如“冲压次数、运行状态、报警”，无需填写协议或地址。</td></tr>
+      <tr><td class="k">设备类型 *</td><td>下拉选择，按金属成形、机械加工、塑料与橡胶、焊接、装配与包装、表面处理与热处理、检测与试验、动力与公用、仪表分组；列表以外的选择“其他（手动填写）”。网关使用的“设备类别”（PLC 控制设备、数控机床 / 工控机设备、注塑机、仪表 / 测试仪、自研控制板设备、无控制器设备）由页面自动换算。</td></tr>
+      <tr><td class="k">厂商配合</td><td>“需厂商提供 / 配合”勾选数据采集需设备厂商提供的资料或配合事项，可多选：PLC 点位表、通讯协议文档、开放通讯权限 / 解除加密、开放数据接口（数据库 / OPC UA / Modbus TCP）、数控系统通讯选项授权、修改 PLC 程序、通讯扩展模块、通讯参数、电气图纸、现场配合调试；列表以外的事项在“其他”中录入。页面按控制器品牌以虚线框标出建议项：PLC 设备通常需要点位表，工控机通常需要开放数据接口和协议文档，自研控制器通常需要协议文档和现场配合调试。“厂商配合情况”点选“已提供 / 已同意 / 需付费 / 不配合 / 待沟通”。厂商的配合情况是判断该设备能否采集的前提；设备厂家、型号、联系人依据铭牌及采购资料填写。</td></tr>
+      <tr><td class="k">控制器品牌、型号</td><td>以电柜内 PLC 或触摸屏的铭牌为准，下拉选择。选择品牌后列出该品牌常见型号，列表中没有的型号选择“其他（手动填写）”按铭牌录入。无法确认时选择“未知”，并附照片供实施人员判断。</td></tr>
+      <tr><td class="k">预留通讯口</td><td>点选控制器上可用于数据采集的通讯接口，识别方法见图 2。无法确认时选择“未知”。</td></tr>
+      <tr><td class="k">现场网络</td><td>点选设备安装位置的网络条件：有线网络 / 无线网络 / 无网络。</td></tr>
+      <tr><td class="k">照片与资料</td><td>在设备编辑页按“铭牌 / 电柜 / 通讯口 / 其他照片 / 厂商资料”分类点击“＋”，直接拍摄或从相册、文件中选择。每台设备应至少拍摄设备铭牌、电柜内控制器、通讯接口特写各一张。照片自动压缩至长边 2048 像素，导出时按“资产编号-类型-序号”命名。</td></tr>
+      <tr><td class="k">是否采集</td><td>点选“是 / 否 / 待定”，默认为“是”。选择“否”的设备在导入时不予列出。</td></tr>
+      <tr><td class="k">需要采集的数据</td><td>勾选需求项（产量 / 计数、运行 / 停机状态、报警等，可多选），列表以外的需求在“其他需求”中录入。无需填写协议或地址。</td></tr>
     </tbody>
   </table></div>
 
@@ -550,7 +619,7 @@ html { scroll-behavior: smooth; }
   <p>在“设备清单”右侧<span style="color:var(--g-imp);font-weight:700">紫色</span>“实施配置”区域填写以下内容。未填写的参数由网关按协议默认值处理。</p>
 
   <div class="tbl"><table>
-    <thead><tr><th>列</th><th>填写要求</th></tr></thead>
+    <thead><tr><th>项目</th><th>录入要求</th></tr></thead>
     <tbody>
       <tr><td class="k">网关编号</td><td>计划安装于该设备的网关编号，见网关标签（如 <code>JXGS001</code>）。导入时将据此自动选中该设备。</td></tr>
       <tr><td class="k">点表名称</td><td>同型号设备填写相同名称（见第 2 步）；为空时按资产编号对应点位。</td></tr>
@@ -792,7 +861,7 @@ html { scroll-behavior: smooth; }
     <tbody>
       <tr><td class="k">三菱 FX 编程口</td><td>RS232 / RS422</td><td class="mono">9600 7E1</td><td>D（仅限整数）</td></tr>
       <tr><td class="k">三菱 FX 计算机链接</td><td>RS485 / RS232</td><td class="mono">9600 7E1，站号 0</td><td>D、M、X、Y</td></tr>
-      <tr><td class="k">三菱 MC 协议</td><td>网口</td><td class="mono">端口 5000</td><td>D、M、X、Y</td></tr>
+      <tr><td class="k">三菱 MC 协议</td><td>网口</td><td class="mono">端口 1025</td><td>D、M、X、Y</td></tr>
       <tr><td class="k">欧姆龙 HostLink</td><td>RS232 / RS485</td><td class="mono">115200 8N1，单元号 0</td><td>DM、CIO</td></tr>
       <tr><td class="k">西门子 PPI（S7-200）</td><td>RS485</td><td class="mono">9600 8E1，站号 2</td><td>V、I、Q、M</td></tr>
       <tr><td class="k">西门子 S7comm</td><td>网口</td><td class="mono">端口 102，机架 0 槽 1</td><td>V、I、Q、M</td></tr>

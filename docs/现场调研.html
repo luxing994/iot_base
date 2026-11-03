@@ -1,0 +1,1646 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设备数采现场调研</title>
+<!--
+  现场调研页面：独立离线页面，不写入网关，不依赖网络。用手机或电脑浏览器直接打开。
+  现场人员逐台勾选设备信息，导出“设备数采现场调研表”（.xlsx）；实施人员在 Excel 中补全采集点位与实施配置后，
+  在网关配置页“采集”中导入。导出的文件与网关页面“下载调研表模板”的格式一致。
+  xlsx 读写模块复制自 main/web/index.html 的 XL 模块（增加：多设备写入、公式附带计算结果、调研信息行），修改该模块时两处同步。
+  协议列表为固件 main/protocol/proto_lib.c 的快照，仅用于自动带出“通信协议”与填写说明，协议增减时同步更新。
+-->
+<style>
+:root {
+  --bg: #f4f6f9; --card: #fff; --fg: #1d2330; --muted: #6b7385; --line: #dde2ea;
+  --acc: #2f5597; --acc-fg: #fff; --acc-soft: #e3ebf8;
+  --ok: #2e7d32; --ok-soft: #e4f3e5; --warn: #b26a00; --warn-soft: #fdf0db; --err: #c62828; --err-soft: #fbe3e3;
+  --shadow: 0 1px 3px rgba(20, 30, 50, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171d; --card: #1d2129; --fg: #e6e9ef; --muted: #98a0b0; --line: #2f3542;
+    --acc: #6f9be0; --acc-fg: #0d1420; --acc-soft: #22324c;
+    --ok: #6cc070; --ok-soft: #1f3322; --warn: #e3a845; --warn-soft: #3a2e1a; --err: #ef7a7a; --err-soft: #3d2222;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171d; --card: #1d2129; --fg: #e6e9ef; --muted: #98a0b0; --line: #2f3542;
+  --acc: #6f9be0; --acc-fg: #0d1420; --acc-soft: #22324c;
+  --ok: #6cc070; --ok-soft: #1f3322; --warn: #e3a845; --warn-soft: #3a2e1a; --err: #ef7a7a; --err-soft: #3d2222;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+button, input, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 16px 16px 96px; }
+header h1 { font-size: 20px; margin: 4px 0 2px; }
+header p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 600px) { .grid3 { grid-template-columns: 1fr; } }
+label.f { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+label.f b { color: var(--err); font-weight: 400; }
+input[type=text], input[type=tel], input[type=date], textarea, select {
+  width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); min-height: 40px;
+}
+input:focus, textarea:focus { outline: 2px solid var(--acc); outline-offset: -1px; }
+textarea { min-height: 60px; resize: vertical; }
+select { color: var(--fg); }
+select.unset { color: var(--muted); }
+option, optgroup { color: var(--fg); background: var(--card); }
+.btn {
+  border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 9px 14px; cursor: pointer; min-height: 40px;
+}
+.btn.pri { background: var(--acc); border-color: var(--acc); color: var(--acc-fg); }
+.btn.dan { color: var(--err); }
+.btn:disabled { opacity: .5; cursor: default; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.bar .sp { flex: 1; }
+.stat { color: var(--muted); font-size: 13px; }
+
+/* 设备列表 */
+.dev { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.dev:hover { border-color: var(--acc); }
+.dev .no { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--acc-soft); color: var(--acc); display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+.dev .main { flex: 1; min-width: 0; }
+.dev .t { font-weight: 600; overflow-wrap: anywhere; }
+.dev .s { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.err { background: var(--err-soft); color: var(--err); }
+.pill.off { background: var(--bg); color: var(--muted); }
+.empty { text-align: center; color: var(--muted); padding: 36px 12px; }
+
+/* 编辑 */
+.ed { position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 10; display: none; }
+.ed.on { display: block; }
+.ed .top { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); }
+.ed .top .in { max-width: 860px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 8px; align-items: center; }
+.ed .top h2 { font-size: 16px; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec h3 { font-size: 15px; margin: 0 0 10px; }
+.sec h3 small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.row { margin-bottom: 12px; }
+.row:last-child { margin-bottom: 0; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--line); background: var(--card); border-radius: 18px; padding: 6px 14px; cursor: pointer; min-height: 36px;
+  user-select: none; -webkit-user-select: none;
+}
+.chip.on { background: var(--acc); border-color: var(--acc); color: var(--acc-fg); }
+.chip.multi.on::before { content: "✓ "; }
+.chip.rec:not(.on) { border-color: var(--acc); border-style: dashed; color: var(--acc); }
+.chip.sm { padding: 4px 11px; min-height: 32px; font-size: 14px; }
+.bot { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--line); }
+.bot .in { max-width: 860px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+.bot .in .sp { flex: 1; }
+.err-t { color: var(--err); font-size: 13px; }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg);
+  padding: 8px 16px; border-radius: 8px; font-size: 14px; z-index: 20; display: none; max-width: calc(100% - 32px);
+}
+/* 照片与资料 */
+.frow { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); }
+.frow:first-child { border-top: 0; padding-top: 0; }
+.frow .fk { flex: none; width: 52px; font-size: 13px; color: var(--muted); padding-top: 4px; }
+.thumbs { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.th { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.th img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.th .x, .doc .x {
+  position: absolute; top: 3px; right: 3px; width: 24px; height: 24px; border-radius: 50%; border: 0; padding: 0;
+  background: rgba(0, 0, 0, .6); color: #fff; font-size: 15px; line-height: 24px; cursor: pointer;
+}
+.doc { position: relative; display: flex; align-items: center; gap: 6px; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 6px 34px 6px 10px; font-size: 13px; min-height: 40px; overflow-wrap: anywhere; }
+.doc .x { top: 50%; transform: translateY(-50%); }
+.add { width: 72px; height: 72px; border: 1.5px dashed var(--line); border-radius: 8px; background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
+.add b { display: block; font-size: 22px; font-weight: 400; line-height: 1.1; }
+.viewer { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, .88); display: none; align-items: center; justify-content: center; flex-direction: column; }
+.viewer.on { display: flex; }
+.viewer img { max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; }
+.viewer .cap { color: #fff; font-size: 13px; padding: 8px 16px; }
+.note { font-size: 13px; color: var(--muted); }
+.warnbox { background: var(--warn-soft); border-color: var(--warn); color: var(--fg); font-size: 14px; }
+.warnbox[hidden] { display: none; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+a.btn.pri { color: var(--acc-fg); }
+.dlg { position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, .45); display: none; align-items: center; justify-content: center; padding: 16px; }
+.dlg.on { display: flex; }
+.dlg .box { background: var(--card); border-radius: 12px; padding: 18px; width: 100%; max-width: 440px; box-shadow: 0 8px 30px rgba(0, 0, 0, .25); }
+.dlg h3 { margin: 0 0 6px; font-size: 16px; }
+.dlg p { margin: 0 0 12px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.dlg .bar { margin: 0 0 10px; }
+.note ol { margin: 6px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>设备数采现场调研</h1>
+    <p>离线页面，录入内容与照片自动保存在本机浏览器。调研完成后导出调研资料，交实施人员补全采集点位后导入网关。</p>
+  </header>
+
+  <div class="card warnbox" id="inApp" hidden>当前页面在应用内置浏览器中打开，<b>导出文件和保存照片可能无法使用</b>。请将本文件保存到手机后，用 Chrome、Edge 或手机自带浏览器打开。</div>
+
+  <div class="card">
+    <div class="grid3">
+      <div><label class="f" for="iFactory">工厂名称 <b>*</b></label><input type="text" id="iFactory" placeholder="如 宁波某某电器"></div>
+      <div><label class="f" for="iPerson">调研人</label><input type="text" id="iPerson"></div>
+      <div><label class="f" for="iDate">调研日期</label><input type="date" id="iDate"></div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="btn pri" id="bAdd">＋ 新增设备</button>
+    <button class="btn" id="bOpen">打开调研资料</button>
+    <button class="btn" id="bExport">导出调研资料</button>
+    <span class="sp"></span>
+    <span class="stat" id="stat"></span>
+  </div>
+  <input type="file" id="file" accept=".xlsx,.zip" hidden>
+
+  <div id="list"></div>
+
+  <div class="card note">
+    <b>使用说明</b>
+    <ol>
+      <li>填写工厂名称后，点击“新增设备”逐台录入；同型号设备可在编辑页点击“复制为新设备”，仅需修改名称和编号。</li>
+      <li>无法确认的项目选择“未知”或留空，不得估填。</li>
+      <li>照片在设备编辑页直接拍摄或从相册选择，每台设备应至少拍摄铭牌、电柜内控制器、通讯接口各一张；厂商提供的点位表、协议文档等资料可一并添加。</li>
+      <li>点击“导出调研资料”：有照片或资料时导出 .zip 资料包（内含调研表 .xlsx 及按“资产编号-类型-序号”命名的照片），否则导出调研表 .xlsx。实施人员解压后使用其中的 .xlsx 导入网关。</li>
+      <li>需继续修改时，点击“打开调研资料”选择已导出的 .zip 或 .xlsx 文件；实施人员已填写的采集点位和实施配置将保留。</li>
+      <li>数据仅保存在当前浏览器中，清除浏览器数据会丢失，请及时导出。</li>
+    </ol>
+  </div>
+  <div class="bar"><span class="sp"></span><button class="btn dan" id="bClear">清空全部数据</button></div>
+</div>
+
+<!-- 设备编辑 -->
+<div class="ed" id="ed">
+  <div class="top"><div class="in">
+    <button class="btn" id="eBack">‹ 返回</button>
+    <h2 id="eTitle">新增设备</h2>
+  </div></div>
+  <div class="wrap" style="padding-bottom:16px">
+    <div class="card sec">
+      <h3>基本信息</h3>
+      <div class="row"><label class="f">车间 / 产线</label><input type="text" id="e_shop" list="dlShop"><div class="chips" id="c_shop" style="margin-top:8px"></div></div>
+      <div class="row"><label class="f" for="e_name">设备名称 <b>*</b></label><input type="text" id="e_name" placeholder="现场通用名称，如 1# 高速冲床"></div>
+      <div class="row"><label class="f" for="e_number">资产编号 <b>*</b></label><input type="text" id="e_number" placeholder="设备铭牌或固定资产编号" autocapitalize="characters">
+        <div class="hint">仅限字母、数字及 - _ .，全厂唯一</div></div>
+      <div class="row"><label class="f" for="s_dtype">设备类型 <b>*</b></label><select id="s_dtype"></select>
+        <input type="text" id="e_dtype" placeholder="填写设备类型" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card sec">
+      <h3>采集需求</h3>
+      <div class="row"><label class="f">是否采集</label><div class="chips" id="c_collect"></div></div>
+      <div class="row"><label class="f">需要采集的数据 <small>（可多选）</small></label><div class="chips" id="c_want"></div>
+        <input type="text" id="e_wantOther" placeholder="其他需求" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card sec">
+      <h3>控制器与通讯 <small>以 PLC 或触摸屏铭牌为准，无法确认时选择“未知”</small></h3>
+      <div class="row"><label class="f" for="s_brand">控制器品牌</label><select id="s_brand"></select></div>
+      <div class="row"><label class="f" for="s_ctrl">控制器型号</label><select id="s_ctrl"></select>
+        <input type="text" id="e_ctrl" placeholder="铭牌上的型号，如 FX3U-48MR" style="margin-top:8px"></div>
+      <div class="row"><label class="f">预留通讯口</label><div class="chips" id="c_iface"></div>
+        <div class="hint">RS485：2~3 芯接线端子（A/B、D+/D-、485+/485-）　RS232：9 针 DB9 串口　RS422：三菱 FX 圆形 8 针编程口　网口：RJ45 水晶头</div></div>
+      <div class="row"><label class="f">现场网络</label><div class="chips" id="c_net"></div></div>
+    </div>
+
+    <div class="card sec">
+      <h3>厂商配合 <small>数据采集需设备厂商提供的资料或配合事项</small></h3>
+      <div class="row"><label class="f">需厂商提供 / 配合 <small>（可多选）</small></label><div class="chips" id="c_need"></div>
+        <div class="hint" id="needHint"></div>
+        <input type="text" id="e_needOther" placeholder="其他需厂商提供或配合的事项" style="margin-top:8px"></div>
+      <div class="row"><label class="f">厂商配合情况</label><div class="chips" id="c_help"></div></div>
+      <div class="row"><label class="f" for="e_maker">设备厂家</label><input type="text" id="e_maker" list="dlMaker"></div>
+      <div class="row"><label class="f" for="e_model">设备型号</label><input type="text" id="e_model"></div>
+      <div class="row"><label class="f" for="e_contact">厂家联系人 / 电话</label><input type="text" id="e_contact"></div>
+    </div>
+
+    <div class="card sec">
+      <h3>照片与资料 <small>点击“＋”拍摄或选择；导出时按资产编号命名</small></h3>
+      <div id="files"></div>
+    </div>
+
+    <div class="card sec">
+      <h3>调研备注</h3>
+      <textarea id="e_remark" placeholder="如 侧面扩展 485 板、通讯口已被触摸屏占用"></textarea>
+    </div>
+  </div>
+  <div class="bot"><div class="in">
+    <button class="btn pri" id="eSave">保存</button>
+    <button class="btn" id="eCopy">复制为新设备</button>
+    <span class="sp"></span>
+    <button class="btn dan" id="eDel">删除</button>
+  </div><div class="in" style="padding-top:0"><span class="err-t" id="eErr"></span></div></div>
+</div>
+
+<input type="file" id="fileIn" multiple hidden>
+<div class="viewer" id="viewer"><img alt=""><div class="cap"></div></div>
+<datalist id="dlShop"></datalist>
+<datalist id="dlMaker"></datalist>
+<div class="dlg" id="dlg"><div class="box">
+  <h3>导出文件已生成</h3>
+  <p id="dlgName"></p>
+  <div class="bar">
+    <a class="btn pri" id="dlgSave" href="#" download>保存文件</a>
+    <button class="btn" id="dlgShare" type="button">分享 / 发送</button>
+    <span class="sp"></span>
+    <button class="btn" id="dlgClose" type="button">关闭</button>
+  </div>
+  <div class="hint">点击“保存文件”后，文件一般在手机的“下载”（Download）目录中。若点击后无反应，说明当前浏览器不支持下载：请使用 Chrome、Edge 或手机自带浏览器打开本页面，不要在微信、QQ 或文件管理器的预览窗口中使用。</div>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+/* 协议列表：固件 main/protocol/proto_lib.c 的快照（/api/devcfg/protocols 的内容） */
+var N=["i16","u16","i32","u32","f32","bcd16"];
+var FX=[{name:"D",types:N},{name:"M",types:["bit"]},{name:"X",types:["bit"]},{name:"Y",types:["bit"]}];
+var S7=[{name:"V",types:["bit","i16","u16","i32","u32","f32"]},{name:"I",types:["bit"]},{name:"Q",types:["bit"]},{name:"M",types:["bit"]}];
+var MBA=[{name:"HR",types:["bit"].concat(N)},{name:"IR",types:["bit"].concat(N)},{name:"COIL",types:["bit"]},{name:"DI",types:["bit"]}];
+function P(id,name,ifaces,np,baud,db,par,sb,st,mx,port,areas,ver){var o={id:id,name:name,ifaces:ifaces,needPoints:np,verified:!!ver,station:st,maxStation:mx,areas:areas};if(baud){o.baud=baud;o.dataBits=db;o.parity=par;o.stopBits=sb;}if(port){o.port=port;}return o;}
+var PROTOS=[
+P("fx_prog","三菱 FX 编程口",["rs232","rs422"],true,9600,7,"E",1,0,0,0,[{name:"D",types:["i16","u16"]}]),
+P("fx_link","三菱 FX 计算机链接",["rs485","rs232"],true,9600,7,"E",1,0,15,0,FX),
+P("fx_mc","三菱 MC 协议（以太网）",["eth"],true,0,0,"",0,0,0,1025,FX),
+P("hostlink","欧姆龙 HostLink",["rs485","rs232"],true,115200,8,"N",1,0,31,0,[{name:"DM",types:["bit"].concat(N)},{name:"CIO",types:["bit"]}],1),
+P("ppi","西门子 PPI（S7-200）",["rs485"],true,9600,8,"E",1,2,126,0,S7),
+P("s7","西门子 S7comm（以太网）",["eth"],true,0,0,"",0,0,0,102,S7),
+P("modbus_rtu","Modbus RTU",["rs485","rs232"],true,9600,8,"N",1,1,247,0,MBA),
+P("modbus_tcp","Modbus TCP",["eth"],true,0,0,"",0,1,255,502,MBA),
+P("dbs","DBS 真空计",["rs232"],false,9600,8,"N",1,0,0,0,[]),
+P("t76","76T 安规测试仪",["rs485","rs232"],false,9600,8,"N",1,1,99,0,[]),
+P("ainuo","艾诺安规测试仪",["rs485","rs232"],false,19200,8,"N",1,1,255,0,[])
+];
+
+var XL = (function () {
+  /* 下拉列表：[取值, 表中显示] */
+  var CAT = [['plc', 'PLC 控制设备'], ['cnc', '数控机床 / 工控机设备'], ['imm', '注塑机'], ['meter', '仪表 / 测试仪'],
+    ['board', '自研控制板设备'], ['legacy', '无控制器设备']];
+  /*
+   * 设备类型（现场调研页面）：[分组, [[类型, 默认设备类别], ...]]；设备类别写入网关配置，固件只认上面 CAT 的 6 种，
+   * 由设备类型和控制器品牌换算（见 baseCat）
+   */
+  var DTYPE = [
+    ['金属成形', [['冲床 / 压力机', 'plc'], ['折弯机', 'plc'], ['剪板机', 'plc'], ['液压机', 'plc'], ['弯管机', 'plc'], ['锻压设备', 'plc'], ['滚压 / 辊压成型机', 'plc']]],
+    ['机械加工', [['数控车床', 'cnc'], ['加工中心 / 数控铣床', 'cnc'], ['钻攻中心', 'cnc'], ['磨床', 'cnc'], ['激光切割机', 'cnc'], ['等离子 / 火焰切割机', 'cnc'],
+      ['线切割 / 电火花', 'cnc'], ['普通机床（车 / 铣 / 钻）', 'legacy']]],
+    ['塑料与橡胶', [['注塑机', 'imm'], ['挤出机', 'plc'], ['吹塑机', 'plc'], ['吸塑 / 热成型机', 'plc'], ['硫化机', 'plc']]],
+    ['焊接', [['焊接机器人 / 焊接专机', 'plc'], ['点焊机', 'plc'], ['钎焊 / 火焰焊设备', 'plc']]],
+    ['装配与包装', [['自动化装配线', 'plc'], ['输送线', 'plc'], ['工业机器人', 'plc'], ['包装机', 'plc'], ['贴标 / 打码机', 'plc'], ['灌装机', 'plc'],
+      ['AGV / 立体仓库', 'plc']]],
+    ['表面处理与热处理', [['喷涂 / 涂装线', 'plc'], ['电镀线', 'plc'], ['热处理炉 / 烘箱', 'plc'], ['清洗机', 'plc']]],
+    ['检测与试验', [['安规测试仪', 'meter'], ['氦检 / 气密检测设备', 'plc'], ['视觉检测设备', 'plc'], ['试验台 / 测试工装', 'board']]],
+    ['动力与公用', [['空压机', 'plc'], ['冷水机 / 冷却塔', 'plc'], ['锅炉', 'plc'], ['真空泵', 'plc'], ['风机 / 水泵', 'plc'], ['变频器', 'meter']]],
+    ['仪表', [['电能表 / 能耗仪表', 'meter'], ['温控仪表', 'meter'], ['流量计', 'meter'], ['压力 / 液位变送器', 'meter'], ['称重仪表', 'meter'], ['真空计', 'meter']]]
+  ];
+  var IFACE = [['rs485', 'RS485'], ['rs232', 'RS232'], ['rs422', 'RS422'], ['eth', '网口'], ['', '无'], ['', '未知']];
+  var BRAND = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德', '发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代',
+    '华中数控', '弘讯', '艾诺', '工控机', '自研电路板', '无控制器', '未知', '其他'];
+  var HELP = [['done', '已提供'], ['agree', '已同意'], ['paid', '需付费'], ['no', '不配合'], ['tbd', '待沟通']];
+  var NET = [['wire', '有线网络'], ['wifi', '无线网络'], ['none', '无网络']];
+  var COLLECT = [['yes', '是'], ['no', '否'], ['tbd', '待定']];
+  var REPORT = [['each', '逐点'], ['batch', '批量']];
+  var STATE = [['s1', '待调研'], ['s2', '待厂商资料'], ['s3', '待实施'], ['s4', '已上线'], ['s5', '不实施']];
+  var PCAT = [['count', '产量计数'], ['state', '运行状态'], ['alarm', '报警'], ['param', '工艺参数'], ['energy', '能耗'], ['other', '其他']];
+  var MODE = [['cycle', '周期上报'], ['change', '变化上报']];
+  var ORDER = [['ABCD', 'ABCD'], ['CDAB', 'CDAB'], ['BADC', 'BADC'], ['DCBA', 'DCBA']];
+  var TYPE = [['bit', '开关量 0/1'], ['i16', '整数'], ['u16', '无符号整数'], ['i32', '双字整数'], ['u32', '无符号双字'],
+    ['f32', '浮点数'], ['bcd16', 'BCD 码']];
+  var DHCP = [[true, '自动获取'], [false, '固定 IP']];
+  /* 控制器品牌 + 通讯口 -> 协议（自动带出，实施人员可改）；未列出的组合手动选 */
+  var MB = { rs485: 'modbus_rtu', rs232: 'modbus_rtu', eth: 'modbus_tcp' };
+  var BRAND_PROTO = {
+    '三菱': { rs485: 'fx_link', rs232: 'fx_link', rs422: 'fx_prog', eth: 'fx_mc' },
+    '欧姆龙': { rs232: 'hostlink', rs485: 'hostlink' },
+    '西门子': { rs485: 'ppi', eth: 's7' },
+    '台达': MB, '汇川': MB, '信捷': MB, '施耐德': MB,
+    '艾诺': { rs232: 'ainuo', rs485: 'ainuo' }
+  };
+
+  /*
+   * 设备清单的列：键、表头、分组、宽度、下拉、填写要求、示例
+   * 分组 0 设备信息 / 1 通讯情况 / 2 采集需求 / 3 实施配置（实施人员填）
+   */
+  var DEV = [
+    ['seq', '序号', 0, 6, '', '', '示例'],
+    ['shop', '车间 / 产线', 0, 12, '', '', '换热器车间'],
+    ['name', '设备名称 *', 0, 18, '', '现场通用名称', '1# 高速冲床'],
+    ['number', '资产编号 *', 0, 13, '', '设备铭牌或固定资产编号，全厂唯一', 'AMAJQ0221'],
+    ['dtype', '设备类型', 0, 16, 'dtype', '从列表选择；列表以外填写实际类型', '冲床 / 压力机'],
+    ['category', '设备类别 *', 0, 14, 'cat', '按设备类型和控制器品牌自动生成，用于网关显示', 'PLC 控制设备'],
+    ['maker', '设备厂家', 0, 18, '', '', '宁波精达成型装备'],
+    ['model', '设备型号', 0, 14, '', '', 'GC60P'],
+    ['contact', '厂家联系人 / 电话', 0, 16, '', '', '王工 159xxxx4023'],
+    ['need', '需厂商提供 / 配合', 0, 24, '', '如 PLC 点位表、通讯协议文档、开放通讯权限', 'PLC 点位表（地址表）'],
+    ['help', '厂商配合情况', 0, 10, 'help', '', '已同意'],
+    ['brand', '控制器品牌', 1, 11, 'brand', '以 PLC 或触摸屏铭牌为准；无法确认时选“未知”', '三菱'],
+    ['ctrl', '控制器型号', 1, 12, '', '以铭牌为准，如 FX3U、CP1H、S7-200', 'FX3U'],
+    ['iface', '预留通讯口', 1, 10, 'iface', '控制器上可用于数据采集的通讯接口', 'RS485'],
+    ['net', '现场网络', 1, 10, 'net', '设备安装位置的网络条件', '有线网络'],
+    ['photo', '照片 / 资料', 1, 14, '', '铭牌、电柜、通讯口照片及厂商点位表的文件名', 'AMAJQ0221-1.jpg'],
+    ['collect', '是否采集', 2, 8, 'collect', '', '是'],
+    ['want', '需要采集的数据', 2, 24, '', '按业务需求描述，如 冲压次数、运行状态、报警', '冲压次数、运行状态'],
+    ['remark', '调研备注', 2, 18, '', '', '三菱侧面扩展 485 板'],
+    ['gw', '网关编号', 3, 11, '', '网关标签上的编号', 'JXGS001'],
+    ['tpl', '点表名称', 3, 12, '', '同型号设备填写相同名称以共用点位；为空时按资产编号对应', '精达GC冲床'],
+    ['protocol', '通信协议', 3, 18, 'proto', '按控制器品牌和通讯口自动生成，可修改', ''],
+    ['serial', '通讯参数', 3, 12, '', '串口设备填写，如 9600 7E1；为空时取协议默认值', '9600 7E1'],
+    ['station', '站号', 3, 6, '', '为空时取协议默认值', '0'],
+    ['ip', '设备 IP', 3, 13, '', '网口设备必填', ''],
+    ['port', '设备端口', 3, 8, '', '为空时取协议默认值', ''],
+    ['gwip', '网关 IP', 3, 13, '', '为空时自动获取', ''],
+    ['pollMs', '采集周期 ms', 3, 9, '', '默认 1000', '1000'],
+    ['report', '上报方式', 3, 8, 'report', '默认逐点', '逐点'],
+    ['devTypeId', '设备类型 ID', 3, 10, '', '按上位机约定填写英文，如 LM', 'LM'],
+    ['orderName', '订单名称', 3, 10, '', '英文，选填', ''],
+    ['state', '实施状态', 3, 10, 'state', '', '待实施']
+  ];
+  /* 采集点位的列：键、表头、宽度、下拉、填写要求、示例 */
+  var PT = [
+    ['tpl', '点表名称 *', 13, '', '与设备清单中的“点表名称”一致；未设点表名称时填资产编号', '示例'],
+    ['fr', '编号 *', 7, '', '上报编号 1~999，同一设备内唯一', '1'],
+    ['name', '数据名称 *', 18, '', '', '冲压次数'],
+    ['addr', '地址 *', 12, '', '如 D200、M10、X17、DM8101、CIO100.00、V100、V10.3、40001', 'D200'],
+    ['type', '数据类型 *', 12, 'type', '', '双字整数'],
+    ['unit', '单位', 7, '', '限英文，如 MPa、C', ''],
+    ['scale', '倍率', 7, '', '上报值 = 读数 × 倍率，默认 1', ''],
+    ['dec', '小数位', 7, '', '', ''],
+    ['cat', '数据分类', 10, 'pcat', '', '产量计数'],
+    ['mode', '上报方式', 10, 'mode', '默认周期上报', '变化上报'],
+    ['dead', '变化死区', 8, '', '变化量超过该值时上报', ''],
+    ['order', '字序', 7, 'order', '32 位数据适用，默认按协议', ''],
+    ['note', '厂商点表出处', 20, '', '厂商点位表中的原名称或页码，便于追溯', '冲压计数 D200（第 3 页）']
+  ];
+  /* 上位机与网络（全厂共用） */
+  var NETCFG = [
+    ['hostAddr', '上位机地址', '', 'IPv4 地址，如 192.168.8.254'],
+    ['hostReportPort', '数据上报端口', 'n', '0 表示停用'],
+    ['hostLinkPort', '上线心跳端口', 'n', '0 表示停用'],
+    ['hostOtaPort', 'OTA 端口', 'n', '0 表示停用'],
+    ['cmdPort', '网关命令端口', 'n', ''],
+    ['filePort', '网关文件端口', 'n', ''],
+    ['ethMask', '子网掩码', '', '网关使用固定 IP 时填写'],
+    ['ethGateway', '默认网关', '', '网关使用固定 IP 时填写'],
+    ['ethDns', 'DNS', '', '选填']
+  ];
+  var DEV_ROWS = 100, PT_ROWS = 600, FIRST = 5;     // 第 1 行分组、2 表头、3 填写要求、4 示例，数据从第 5 行起
+  var INFO = '调研信息：';      // 填写说明第 3 行：工厂、调研人、日期
+  var GROUPS = ['设备信息（现场人员填写）', '通讯情况（无法确认时可留空）', '采集需求', '实施配置（实施人员填写）'];
+
+  /* 样式编号（见 STYLES） */
+  var X = { title: 1, group: [2, 3, 4, 14], head: [5, 6, 7, 15], hint: 8, eg: 9, text: 10, num: 11, bold: 12, wrap: 13 };
+
+  function lists(protos) {
+    return {
+      cat: CAT, iface: IFACE.filter(function (x, i) { return i < 4 || x[1] !== ''; }), help: HELP, net: NET, collect: COLLECT,
+      report: REPORT, state: STATE, pcat: PCAT, mode: MODE, order: ORDER, type: TYPE, dhcp: DHCP,
+      brand: BRAND.map(function (b) { return [b, b]; }),
+      dtype: DTYPE.reduce(function (a, g) { return a.concat(g[1].map(function (t) { return [t[0], t[0]]; })); }, []).concat([['其他', '其他']]),
+      proto: protos.map(function (p) { return [p.id, p.name]; })
+    };
+  }
+  function label(list, v) {
+    for (var i = 0; list && i < list.length; i++) { if (list[i][0] === v && v !== '') { return list[i][1]; } }
+    return v;
+  }
+  function value(list, text) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i][1] === text || (list[i][0] !== '' && String(list[i][0]).toLowerCase() === text.toLowerCase())) { return list[i][0]; }
+    }
+    return text;
+  }
+
+  /* ------------ 写 xlsx（zip 只存储不压缩） ------------ */
+
+  var crcTab = null;
+  function crc32(b) {
+    var crc = 0xFFFFFFFF, i;
+    if (!crcTab) {
+      crcTab = [];
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) { c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
+        crcTab[n] = c >>> 0;
+      }
+    }
+    for (i = 0; i < b.length; i++) { crc = crcTab[(crc ^ b[i]) & 0xFF] ^ (crc >>> 8); }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zip(files) {
+    var enc = new TextEncoder(), parts = [], central = [], off = 0, size = 0;
+    files.forEach(function (f) {
+      var name = enc.encode(f[0]), data = typeof f[1] === 'string' ? enc.encode(f[1]) : f[1], crc = crc32(data);   // 文字或 Uint8Array
+      var h = new DataView(new ArrayBuffer(30)), c = new DataView(new ArrayBuffer(46));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);   // 文件名 UTF-8
+      h.setUint16(12, 0x21, true);                                                              // 1980-01-01
+      h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true);
+      h.setUint16(26, name.length, true);
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint16(14, 0x21, true);
+      c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+      c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      parts.push(h, name, data);
+      central.push(c, name);
+      off += 30 + name.length + data.length;
+      size += 46 + name.length;
+    });
+    var e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+    e.setUint32(12, size, true); e.setUint32(16, off, true);
+    return new Blob(parts.concat(central, [e]), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+
+  function colName(i) {
+    var s = '';
+    for (i++; i > 0; i = Math.floor((i - 1) / 26)) { s = String.fromCharCode(65 + (i - 1) % 26) + s; }
+    return s;
+  }
+
+  // 单元格 { v: 字符串 / 数字, f: 公式, s: 样式 }，或直接给字符串 / 数字
+  function cellXml(ref, x) {
+    var o = (x !== null && typeof x === 'object') ? x : { v: x };
+    var s = o.s ? ' s="' + o.s + '"' : '';
+    if (o.f) {     // 带计算结果时一并写入，未经 Excel 重新保存也能直接导入网关
+      return o.v ? '<c r="' + ref + '"' + s + ' t="str"><f>' + esc(o.f) + '</f><v>' + esc(o.v) + '</v></c>'
+        : '<c r="' + ref + '"' + s + '><f>' + esc(o.f) + '</f></c>';
+    }
+    if (o.v === undefined || o.v === null || o.v === '') { return s ? '<c r="' + ref + '"' + s + '/>' : ''; }
+    if (typeof o.v === 'number') { return '<c r="' + ref + '"' + s + '><v>' + o.v + '</v></c>'; }
+    return '<c r="' + ref + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">' + esc(o.v) + '</t></is></c>';
+  }
+
+  /*
+   * o: { rows: [{ c: [单元格], ht: 行高 }], cols: [宽度], freeze: [列数, 行数], merge: ['A1:C1'],
+   *      valid: [[区域, 列表引用, 只能从列表选]] }
+   */
+  function sheetXml(o) {
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    if (o.freeze) {
+      var fx = o.freeze[0], fy = o.freeze[1];
+      x += '<sheetViews><sheetView workbookViewId="0"' + (o.grid === false ? ' showGridLines="0"' : '') + '><pane' +
+        (fx ? ' xSplit="' + fx + '"' : '') + ' ySplit="' + fy + '" topLeftCell="' + colName(fx) + (fy + 1) +
+        '" activePane="' + (fx ? 'bottomRight' : 'bottomLeft') + '" state="frozen"/></sheetView></sheetViews>';
+    } else if (o.grid === false) {
+      x += '<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>';
+    }
+    x += '<sheetFormatPr defaultRowHeight="16.5"/>';
+    if (o.cols) {
+      x += '<cols>' + o.cols.map(function (w, i) {
+        return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>';
+      }).join('') + '</cols>';
+    }
+    x += '<sheetData>' + o.rows.map(function (r, i) {
+      var cells = (r && r.c) || r || [];
+      return '<row r="' + (i + 1) + '"' + (r && r.ht ? ' ht="' + r.ht + '" customHeight="1"' : '') + '>' +
+        cells.map(function (c, k) { return cellXml(colName(k) + (i + 1), c); }).join('') + '</row>';
+    }).join('') + '</sheetData>';
+    if (o.merge && o.merge.length) {
+      x += '<mergeCells count="' + o.merge.length + '">' + o.merge.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>';
+    }
+    if (o.valid && o.valid.length) {
+      x += '<dataValidations count="' + o.valid.length + '">' + o.valid.map(function (v) {
+        return '<dataValidation type="list" allowBlank="1" showErrorMessage="' + (v[2] ? 1 : 0) + '" sqref="' + v[0] + '"><formula1>' +
+          esc(v[1]) + '</formula1></dataValidation>';
+      }).join('') + '</dataValidations>';
+    }
+    return x + '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>' +
+      (o.landscape ? '<pageSetup paperSize="9" orientation="landscape"/>' : '') + '</worksheet>';
+  }
+
+  var B = 'borderId="1" applyBorder="1"', C = '<alignment horizontal="center" vertical="center" wrapText="1"/>';
+  var STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="6">' +
+    '<font><sz val="10"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '<font><b/><sz val="10"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '<font><sz val="9"/><color rgb="FF7F7F7F"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '<font><b/><sz val="14"/><color rgb="FF1F3864"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '<font><i/><sz val="9"/><color rgb="FF8C8C8C"/><name val="微软雅黑"/><family val="2"/><charset val="134"/></font>' +
+    '</fonts>' +
+    '<fills count="12"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+    ['FF2F5597', 'FF548235', 'FFC55A11', 'FFDDEBF7', 'FFE2EFDA', 'FFFBE5D6', 'FFF5F5F5', 'FF7030A0', 'FFEDE4F5', 'FFFFFFFF']
+      .map(function (c) { return '<fill><patternFill patternType="solid"><fgColor rgb="' + c + '"/></patternFill></fill>'; }).join('') +
+    '</fills>' +
+    '<borders count="2"><border/><border>' +
+    ['left', 'right', 'top', 'bottom'].map(function (s) { return '<' + s + ' style="thin"><color rgb="FFBFBFBF"/></' + s + '>'; }).join('') +
+    '<diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf/></cellStyleXfs>' +
+    '<cellXfs count="16"><xf/>' +
+    '<xf fontId="3" applyFont="1"><alignment vertical="center"/></xf>' +                                   // 1 标题
+    '<xf fontId="4" fillId="2" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 2 分组：蓝
+    '<xf fontId="4" fillId="3" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 3 分组：绿
+    '<xf fontId="4" fillId="4" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 4 分组：橙
+    '<xf fontId="1" fillId="5" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 5 表头：蓝
+    '<xf fontId="1" fillId="6" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 6 表头：绿
+    '<xf fontId="1" fillId="7" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 7 表头：橙
+    '<xf fontId="2" fillId="11" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +   // 8 填写要求
+    '<xf fontId="5" fillId="8" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' + // 9 示例
+    '<xf numFmtId="49" ' + B + ' applyNumberFormat="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>' +   // 10 数据
+    '<xf ' + B + ' applyAlignment="1"><alignment vertical="center"/></xf>' +                                // 11 数据（公式）
+    '<xf fontId="1" applyFont="1"><alignment vertical="center"/></xf>' +                                     // 12 粗体
+    '<xf applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +                                  // 13 换行
+    '<xf fontId="4" fillId="9" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +   // 14 分组：紫
+    '<xf fontId="1" fillId="10" ' + B + ' applyFont="1" applyFill="1" applyAlignment="1">' + C + '</xf>' +  // 15 表头：紫
+    '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+  /* ------------ 地址：表中写法（D200、CIO100.00、40001）<-> 配置（area / addr / bit） ------------ */
+
+  function isModbus(proto) { return /^modbus/.test(proto || ''); }
+
+  function parseAddr(text, proto) {
+    var s = String(text).toUpperCase().replace(/\s+/g, ''), m;
+    if (isModbus(proto) && (m = /^([0134])X?(\d{4,5})(?:\.(\d+))?$/.exec(s))) {
+      var a = { area: { 0: 'COIL', 1: 'DI', 3: 'IR', 4: 'HR' }[m[1]], addr: String(+m[2] - 1) };
+      if (m[3] !== undefined) { a.bit = +m[3]; }
+      return +m[2] >= 1 ? a : null;
+    }
+    if (!(m = /^([A-Z]+)(\d+)(?:\.(\d+))?$/.exec(s))) { return null; }
+    var r = { area: m[1].replace(/^V[BWD]$/, 'V'), addr: m[2] };        // S7 的 VB / VW / VD 都是 V 区
+    if (m[3] !== undefined) { r.bit = +m[3]; }
+    return r;
+  }
+
+  function addrText(p, proto) {
+    var n = +p.addr;
+    var base = (isModbus(proto) && { COIL: '0', DI: '1', IR: '3', HR: '4' }[p.area] !== undefined && !isNaN(n))
+      ? { COIL: '0', DI: '1', IR: '3', HR: '4' }[p.area] + ('0000' + (n + 1)).slice(-4) : p.area + p.addr;
+    return base + (p.bit !== undefined ? '.' + (p.area === 'CIO' ? ('0' + p.bit).slice(-2) : p.bit) : '');
+  }
+
+  /* 串口参数：“9600 7E1”“9600,8,N,1”“19200 8N1” */
+  function parseSerial(text, d) {
+    var s = String(text).toUpperCase(), m = /(\d{3,6})/.exec(s), f;
+    if (m) { d.baud = +m[1]; s = s.slice(m.index + m[1].length); }
+    f = /([78])\W*([NEO无偶奇])\W*([12])/.exec(s);
+    if (f) {
+      d.dataBits = +f[1];
+      d.parity = { '无': 'N', '偶': 'E', '奇': 'O' }[f[2]] || f[2];
+      d.stopBits = +f[3];
+    }
+    return !!(m || f);
+  }
+
+  /* ------------ 生成调研表 ------------ */
+
+  /*
+   * protos：/api/devcfg/protocols 的协议列表
+   * data：导出时为当前配置 { meta, device, gateway, points }，生成空模板时为 null
+   */
+  function build(protos, data) {
+    var L = lists(protos), dict = [], refs = {}, keys = Object.keys(L), i;
+
+    // 字典（隐藏）：每个下拉列表一列，最后两列是“控制器品牌|通讯口 -> 协议”
+    keys.forEach(function (k, c) {
+      (dict[0] = dict[0] || [])[c] = k;
+      L[k].forEach(function (it, r) { (dict[r + 1] = dict[r + 1] || [])[c] = it[1]; });
+      refs[k] = '\'字典\'!$' + colName(c) + '$2:$' + colName(c) + '$' + (L[k].length + 1);
+    });
+    var mc = keys.length, n = 0;
+    dict[0][mc] = 'brand|iface';
+    Object.keys(BRAND_PROTO).forEach(function (b) {
+      IFACE.forEach(function (f) {
+        var id = f[0] && BRAND_PROTO[b][f[0]];
+        if (id && protos.some(function (p) { return p.id === id; })) {
+          n++;
+          (dict[n] = dict[n] || [])[mc] = b + '|' + f[1];
+          dict[n][mc + 1] = label(L.proto, id);
+        }
+      });
+    });
+    var mapRef = '\'字典\'!$' + colName(mc) + '$2:$' + colName(mc + 1) + '$' + (n + 1);
+    for (i = 0; i < dict.length; i++) { dict[i] = dict[i] || []; }
+
+    /* 设备清单 */
+    var col = {};
+    DEV.forEach(function (c, k) { col[c[0]] = colName(k); });
+    var groupRow = [], headRow = [], hintRow = [], egRow = [], merge = [], start = 0;
+    DEV.forEach(function (c, k) {
+      groupRow.push({ v: (k === 0 || DEV[k - 1][2] !== c[2]) ? GROUPS[c[2]] : '', s: X.group[c[2]] });
+      headRow.push({ v: c[1], s: X.head[c[2]] });
+      hintRow.push({ v: c[5], s: X.hint });
+      egRow.push({ v: c[6], s: X.eg });
+      if (k === DEV.length - 1 || DEV[k + 1][2] !== c[2]) {
+        merge.push(colName(start) + '1:' + colName(k) + '1');
+        start = k + 1;
+      }
+    });
+    hintRow[0] = { v: '填写要求', s: X.hint };
+    var devRows = [{ c: groupRow, ht: 22 }, { c: headRow, ht: 32 }, { c: hintRow, ht: 40 }, { c: egRow }];
+    var dev = data ? (data.rows || [deviceRow(data, L)]) : [];
+    var nDev = Math.max(DEV_ROWS, dev.length + 20);     // 设备行数（含空行），下拉校验覆盖同样范围
+    for (i = 0; i < nDev; i++) {
+      var r = FIRST + i, vals = dev[i] || {};
+      devRows.push({ c: DEV.map(function (c) {
+        if (c[0] === 'protocol' && vals.protocol === undefined) {
+          return { f: 'IF(' + col.brand + r + '="","",IFERROR(VLOOKUP(' + col.brand + r + '&"|"&' + col.iface + r + ',' + mapRef + ',2,FALSE),""))',
+            v: autoProto(protos, vals.brand, vals.iface), s: X.num };
+        }
+        return { v: c[0] === 'seq' && vals.number ? i + 1 : vals[c[0]], s: X.text };
+      }) });
+    }
+    var devValid = [];
+    DEV.forEach(function (c, k) {
+      if (c[4]) {
+        devValid.push([colName(k) + FIRST + ':' + colName(k) + (FIRST + nDev - 1), refs[c[4]], c[4] !== 'brand' && c[4] !== 'dtype']);
+      }
+    });
+
+    /* 采集点位 */
+    var ptRows = [
+      { c: PT.map(function (c, k) { return { v: k === 0 ? '采集点位（实施人员填写：依据厂商提供的 PLC 点位表，录入“需要采集的数据”对应的点位，每行一个点位）' : '', s: X.group[3] }; }), ht: 22 },
+      { c: PT.map(function (c) { return { v: c[1], s: X.head[3] }; }), ht: 32 },
+      { c: PT.map(function (c, k) { return { v: k === 0 ? '填写要求' : c[4], s: X.hint }; }), ht: 52 },
+      { c: PT.map(function (c) { return { v: c[5], s: X.eg }; }) }
+    ];
+    var pts = (data && (data.ptRows || data.points)) || [], proto = data && data.device && data.device.protocol;
+    for (i = 0; i < Math.max(PT_ROWS, pts.length); i++) {
+      var p = pts[i];
+      ptRows.push({ c: PT.map(function (c) {
+        var v;
+        if (p && data.ptRows) {
+          v = p[c[0]];           // 读回的表格行，原样写回
+        } else if (p) {
+          v = c[0] === 'tpl' ? data.device.number : c[0] === 'addr' ? addrText(p, proto) : p[c[0]];
+          if (c[3] && v !== undefined) { v = label(L[c[3]], v); }
+        }
+        return { v: v, s: X.text };
+      }) });
+    }
+    var ptValid = [];
+    PT.forEach(function (c, k) {
+      if (c[3]) { ptValid.push([colName(k) + FIRST + ':' + colName(k) + (FIRST + Math.max(PT_ROWS, pts.length) - 1), refs[c[3]], true]); }
+    });
+
+    /* 上位机与网络 */
+    var g = (data && data.gateway) || {};
+    var netRows = [
+      { c: [{ v: '上位机与网络（全厂通用，由实施人员填写；留空的项目保持网关原有设置）', s: X.group[3] }, { v: '', s: X.group[3] }, { v: '', s: X.group[3] }], ht: 22 },
+      { c: [{ v: '项目', s: X.head[3] }, { v: '填写', s: X.head[3] }, { v: '说明', s: X.head[3] }], ht: 24 }
+    ];
+    NETCFG.forEach(function (f) {
+      netRows.push({ c: [{ v: f[1], s: X.text }, { v: g[f[0]], s: X.text }, { v: f[3], s: X.hint }] });
+    });
+
+    /* 填写说明 */
+    var help = [
+      { c: [{ v: '设备数据采集现场调研表', s: X.title }], ht: 30 },
+      { c: [{ v: '每个工厂使用一份调研表。现场人员填写“设备清单”左侧信息并向设备厂商索取 PLC 点位表；实施人员依据点位表填写“采集点位”，并补全“设备清单”右侧的“实施配置”。', s: X.wrap }], ht: 20 },
+      data && data.info ? { c: [{ v: INFO + data.info, s: X.bold }] } : [],
+      { c: [{ v: '填写步骤', s: X.bold }] },
+      { c: [{ v: '1. 设备清单：每台设备占一行。蓝色区域为设备基本信息与联系方式；绿色区域为控制器与通讯接口信息，以现场铭牌为准，无法确认时选“未知”或留空。', s: X.wrap }], ht: 32 },
+      { c: [{ v: '2. 采集需求：按业务需求描述需采集的数据（如 冲压次数、运行状态、报警），无需填写协议或地址。', s: X.wrap }] },
+      { c: [{ v: '3. 采集点位：设备厂商一般提供 PLC 全部点位的清单。实施人员依据“需要采集的数据”从中筛选对应点位，逐行录入“采集点位”，并在“厂商点表出处”注明原名称或页码。同型号设备只录入一份点位，并在设备清单中填写相同的“点表名称”。', s: X.wrap }] },
+      { c: [{ v: '4. 实施配置：由实施人员填写网关编号、通讯参数等；“通信协议”按控制器品牌和通讯口自动生成，未生成时手动选择。', s: X.wrap }] },
+      { c: [{ v: '5. 导入：在网关配置页“采集”中选择本文件及该网关对应的设备，依次执行“校验”“导入并重启”。表中网关编号与本机一致的设备将自动选中。', s: X.wrap }], ht: 32 },
+      [],
+      { c: [{ v: '注意', s: X.bold }] },
+      { c: [{ v: '· 灰色斜体的“示例”行不参与导入，可保留或删除。', s: X.wrap }] },
+      { c: [{ v: '· 资产编号仅限字母、数字及 - _ .；单位、订单名称、设备类型 ID 将写入上报报文，仅限英文字符。', s: X.wrap }] },
+      { c: [{ v: '· 地址按厂商资料的写法填写：三菱 D200 / M10 / X17（X、Y 为八进制）；欧姆龙 DM8101 / CIO100.00；西门子 V100 / V10.3 / I0.1；Modbus 写 40001（保持寄存器）、30001、00001、10001。', s: X.wrap }], ht: 32 },
+      [],
+      { c: [{ v: '本网关固件支持的协议', s: X.bold }] },
+      { c: [{ v: '协议', s: X.head[0] }, { v: '通讯口', s: X.head[0] }, { v: '默认参数', s: X.head[0] }, { v: '地址区：数据类型', s: X.head[0] }], ht: 22 }
+    ];
+    protos.forEach(function (p) {
+      var def = (p.baud ? p.baud + ' ' + p.dataBits + p.parity + p.stopBits : '') + (p.port ? '端口 ' + p.port : '') +
+        (p.maxStation ? '，站号 ' + p.station : '');
+      help.push({ c: [
+        { v: p.name + (p.verified ? '' : '（未实测）'), s: X.text },
+        { v: p.ifaces.map(function (f) { return label(IFACE, f); }).join(' / '), s: X.text },
+        { v: def, s: X.text },
+        { v: p.needPoints ? p.areas.map(function (a) {
+          return a.name + '：' + a.types.map(function (t) { return label(TYPE, t); }).join('、');
+        }).join('；') : '内置模板，无需填写点位', s: X.text }
+      ] });
+    });
+
+    var sheets = [
+      ['填写说明', sheetXml({ rows: help, cols: [36, 16, 22, 70], grid: false })],
+      ['设备清单', sheetXml({ rows: devRows, cols: DEV.map(function (c) { return c[3]; }), freeze: [4, 2], merge: merge, valid: devValid, landscape: true })],
+      ['采集点位', sheetXml({ rows: ptRows, cols: PT.map(function (c) { return c[2]; }), freeze: [1, 2], merge: ['A1:' + colName(PT.length - 1) + '1'], valid: ptValid, landscape: true })],
+      ['上位机与网络', sheetXml({ rows: netRows, cols: [16, 24, 36], freeze: [0, 2], merge: ['A1:C1'] })],
+      ['字典', sheetXml({ rows: dict })]
+    ];
+    var R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var files = [
+      ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        sheets.map(function (s, k) {
+          return '<Override PartName="/xl/worksheets/sheet' + (k + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+        }).join('') + '</Types>'],
+      ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="' + R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + R + '">' +
+        '<bookViews><workbookView activeTab="1"/></bookViews><sheets>' +
+        sheets.map(function (s, k) {
+          return '<sheet name="' + s[0] + '" sheetId="' + (k + 1) + '"' + (s[0] === '字典' ? ' state="hidden"' : '') + ' r:id="rId' + (k + 1) + '"/>';
+        }).join('') + '</sheets><calcPr fullCalcOnLoad="1"/></workbook>'],
+      ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        sheets.map(function (s, k) {
+          return '<Relationship Id="rId' + (k + 1) + '" Type="' + R + '/worksheet" Target="worksheets/sheet' + (k + 1) + '.xml"/>';
+        }).join('') +
+        '<Relationship Id="rId' + (sheets.length + 1) + '" Type="' + R + '/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', STYLES]
+    ];
+    sheets.forEach(function (s, k) { files.push(['xl/worksheets/sheet' + (k + 1) + '.xml', s[1]]); });
+    return zip(files);
+  }
+
+  // 当前配置 -> 设备清单的一行
+  function deviceRow(data, L) {
+    var d = data.device || {}, g = data.gateway || {}, r = {};
+    r.name = d.name; r.number = d.number; r.category = label(L.cat, d.category); r.model = d.model;
+    r.brand = d.brand; r.iface = label(L.iface, d.iface); r.protocol = label(L.proto, d.protocol);
+    r.collect = '是'; r.gw = g.devId; r.station = d.station; r.ip = d.ip; r.port = d.port;
+    r.pollMs = d.pollMs; r.report = label(L.report, d.report); r.devTypeId = d.devTypeId; r.orderName = d.orderName;
+    r.gwip = g.ethDhcp === false ? g.ethIp : undefined;
+    if (d.baud) { r.serial = d.baud + ' ' + (d.dataBits || '') + (d.parity || '') + (d.stopBits || ''); }
+    r.state = '已上线';
+    Object.keys(r).forEach(function (k) { if (r[k] !== undefined && typeof r[k] !== 'string') { r[k] = String(r[k]); } });
+    return r;
+  }
+
+  /* ------------ 读 xlsx ------------ */
+
+  function inflate(method, data) {
+    if (method === 0) { return Promise.resolve(data); }
+    if (method !== 8) { return Promise.reject(new Error('Excel 文件使用了不支持的压缩方式')); }
+    if (typeof DecompressionStream === 'undefined') {
+      return Promise.reject(new Error('浏览器版本太旧，不能读取 Excel：请用新版 Chrome / Edge，或导入 .jsonl 文件'));
+    }
+    var s = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(s).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+
+  // 解出 zip 中的 .xml / .rels（all 为 true 时解出全部文件）：{ 文件名: Uint8Array }
+  function unzip(buf, all) {
+    var v = new DataView(buf), u = new Uint8Array(buf), dec = new TextDecoder(), e = -1, i, out = {}, jobs = [];
+    for (i = buf.byteLength - 22; i >= 0 && i >= buf.byteLength - 65557; i--) {
+      if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    }
+    if (e < 0) {
+      return Promise.reject(new Error('不是 .xlsx 文件：旧版 .xls 请在 Excel 中“另存为”Excel 工作簿（.xlsx）后再导入'));
+    }
+    var n = v.getUint16(e + 10, true), p = v.getUint32(e + 16, true);
+    function entry(name, method, data) {
+      jobs.push(inflate(method, data).then(function (b) { out[name] = b; }));
+    }
+    for (i = 0; i < n; i++) {
+      var nlen = v.getUint16(p + 28, true), loc = v.getUint32(p + 42, true);
+      var name = dec.decode(u.subarray(p + 46, p + 46 + nlen));
+      var start = loc + 30 + v.getUint16(loc + 26, true) + v.getUint16(loc + 28, true);
+      if (all || /\.(xml|rels)$/.test(name)) { entry(name, v.getUint16(p + 10, true), u.subarray(start, start + v.getUint32(p + 20, true))); }
+      p += 46 + nlen + v.getUint16(p + 30, true) + v.getUint16(p + 32, true);
+    }
+    return Promise.all(jobs).then(function () { return out; });
+  }
+
+  function parseXml(b) { return new DOMParser().parseFromString(new TextDecoder().decode(b), 'application/xml'); }
+  function tags(node, name) { return Array.prototype.slice.call(node.getElementsByTagNameNS('*', name)); }
+
+  // 读出各工作表：{ 表名: { 行号: { 列号(从 0 起): 文字 } } }
+  function readBook(buf) {
+    return unzip(buf).then(function (f) {
+      var shared = [], target = {}, book = {};
+      if (!f['xl/workbook.xml'] || !f['xl/_rels/workbook.xml.rels']) { throw new Error('不是有效的 Excel（.xlsx）文件'); }
+      if (f['xl/sharedStrings.xml']) {
+        shared = tags(parseXml(f['xl/sharedStrings.xml']), 'si').map(function (si) {
+          return tags(si, 't').filter(function (t) { return t.parentNode.localName !== 'rPh'; })
+            .map(function (t) { return t.textContent; }).join('');
+        });
+      }
+      tags(parseXml(f['xl/_rels/workbook.xml.rels']), 'Relationship').forEach(function (r) {
+        var t = r.getAttribute('Target');
+        target[r.getAttribute('Id')] = (t.charAt(0) === '/') ? t.slice(1) : 'xl/' + t;
+      });
+      tags(parseXml(f['xl/workbook.xml']), 'sheet').forEach(function (s) {
+        var id = s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') || s.getAttribute('r:id');
+        var data = f[target[id]], rows = {};
+        if (!data) { return; }
+        tags(parseXml(data), 'c').forEach(function (c) {
+          var m = /^([A-Z]+)(\d+)$/.exec(c.getAttribute('r') || ''), t = c.getAttribute('t'), v = tags(c, 'v')[0], val, col = 0, k;
+          if (!m) { return; }
+          if (t === 'inlineStr') { val = tags(c, 't').map(function (x) { return x.textContent; }).join(''); }
+          else if (!v) { return; }
+          else if (t === 's') { val = shared[+v.textContent]; }
+          else { val = v.textContent; }
+          val = String(val === undefined ? '' : val).trim();
+          if (val === '') { return; }
+          for (k = 0; k < m[1].length; k++) { col = col * 26 + m[1].charCodeAt(k) - 64; }
+          (rows[+m[2]] = rows[+m[2]] || {})[col - 1] = val;
+        });
+        book[s.getAttribute('name')] = rows;
+      });
+      return book;
+    });
+  }
+
+  function cutBytes(s, max) {
+    var enc = new TextEncoder();
+    s = String(s);
+    while (enc.encode(s).length > max) { s = s.slice(0, -1); }
+    return s;
+  }
+  function pad(x) { return (x < 10 ? '0' : '') + x; }
+  function plain(h) { return String(h).replace(/\s*\*\s*$/, '').replace(/\s+/g, ''); }
+
+  // 表 -> [{ _row: 行号, 键: 文字 }]：按表头文字定列，跳过“填写要求”“示例”行
+  function readTable(rows, defs) {
+    var head = 0, cols = {}, out = [];
+    Object.keys(rows).map(Number).sort(function (a, b) { return a - b; }).forEach(function (r) {
+      var row = rows[r], o = { _row: r }, any = false;
+      if (!head) {
+        defs.forEach(function (c) {
+          Object.keys(row).forEach(function (k) { if (plain(row[k]) === plain(c[1])) { cols[c[0]] = +k; } });
+        });
+        if (Object.keys(cols).length >= 3) { head = r; } else { cols = {}; }
+        return;
+      }
+      if (row[0] === '填写要求' || row[0] === '示例') { return; }
+      defs.forEach(function (c) {
+        var v = row[cols[c[0]]];
+        if (cols[c[0]] !== undefined && v !== undefined) { o[c[0]] = v; any = true; }
+      });
+      if (any) { out.push(o); }
+    });
+    return head ? out : null;
+  }
+
+  /* 读调研表：{ devices: [设备清单的行], points: [采集点位的行], net: {上位机与网络} } */
+  function read(buf) {
+    return readBook(buf).then(function (book) {
+      var devices = book['设备清单'] && readTable(book['设备清单'], DEV);
+      if (!devices) { throw new Error('找不到“设备清单”工作表或表头，请使用网关页面下载的调研表模板'); }
+      var points = (book['采集点位'] && readTable(book['采集点位'], PT)) || [], net = {};
+      Object.keys(book['上位机与网络'] || {}).forEach(function (r) {
+        var row = book['上位机与网络'][r];
+        NETCFG.forEach(function (f) { if (plain(row[0] || '') === plain(f[1]) && row[1] !== undefined) { net[f[0]] = row[1]; } });
+      });
+      var info = ((book['填写说明'] || {})[3] || {})[0] || '';
+      return {
+        info: info.indexOf(INFO) === 0 ? info.slice(INFO.length) : '',
+        devices: devices.filter(function (d) { return d.number || d.name; }),
+        points: points,
+        net: net
+      };
+    });
+  }
+
+  /* 调研表中的一台设备 -> 设备配置（JSON Lines 文本）；表中写法有误时抛出带位置的错误 */
+  function toJsonl(sheet, index, fileName, protos) {
+    var L = lists(protos), r = sheet.devices[index], where = '设备清单第 ' + r._row + ' 行：', now = new Date();
+    var d = { t: 'device', src: '设备清单!' + r._row }, g = { t: 'gateway', src: '设备清单!' + r._row }, lines, k;
+    function num(v) { return isNaN(+v) ? v : +v; }
+
+    if (!r.protocol) { throw new Error(where + '“通信协议”未填写（实施配置）'); }
+    var iface = value(L.iface, r.iface || '');
+    if (!iface || iface === r.iface && ['rs485', 'rs232', 'rs422', 'eth'].indexOf(iface) < 0) {
+      throw new Error(where + '“预留通讯口”应为 RS485 / RS232 / RS422 / 网口' + (r.iface ? '（现为“' + r.iface + '”）' : ''));
+    }
+    d.name = cutBytes(r.name || r.number, 31);      // 只用于显示，过长截断
+    d.number = r.number;
+    d.category = value(L.cat, r.category || '');
+    if (r.brand) { d.brand = cutBytes(r.brand, 15); }
+    if (r.model || r.ctrl) { d.model = cutBytes(r.model || r.ctrl, 23); }
+    d.protocol = value(L.proto, r.protocol);
+    d.iface = iface;
+    if (r.serial && !parseSerial(r.serial, d)) { throw new Error(where + '“通讯参数”格式不正确，应如 9600 7E1'); }
+    ['station', 'port', 'pollMs'].forEach(function (key) { if (r[key] !== undefined) { d[key] = num(r[key]); } });
+    if (r.ip) { d.ip = r.ip; }
+    if (r.report) { d.report = value(L.report, r.report); }
+    if (r.devTypeId) { d.devTypeId = r.devTypeId; }
+    if (r.orderName) { d.orderName = r.orderName; }
+
+    var meta = { t: 'meta', schema: 1, source: cutBytes(fileName, 47),
+      rev: now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes()),
+      created: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + ' ' +
+        pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds()) };
+    if (r.shop) { meta.note = cutBytes(r.shop, 63); }
+    lines = [meta, d];
+
+    // 网关：网关编号只用于核对；全厂共用的上位机与网络参数；网关 IP 填了即固定 IP
+    if (r.gw) { g.devId = r.gw; }
+    NETCFG.forEach(function (f) {
+      if (sheet.net[f[0]] !== undefined && f[0].indexOf('eth') !== 0) { g[f[0]] = f[2] === 'n' ? num(sheet.net[f[0]]) : sheet.net[f[0]]; }
+    });
+    if (r.gwip) {
+      g.ethDhcp = false;
+      g.ethIp = r.gwip;
+      ['ethMask', 'ethGateway', 'ethDns'].forEach(function (key) { if (sheet.net[key] !== undefined) { g[key] = sheet.net[key]; } });
+    }
+    for (k in g) { if (k !== 't' && k !== 'src') { lines.push(g); break; } }
+
+    var tpl = r.tpl || r.number;
+    sheet.points.forEach(function (row) {
+      if (row.tpl !== tpl) { return; }
+      var p = { t: 'point', src: '采集点位!' + row._row }, a;
+      if (row.addr !== undefined) {
+        a = parseAddr(row.addr, d.protocol);
+        if (!a) { throw new Error('采集点位第 ' + row._row + ' 行：地址“' + row.addr + '”无法识别，应如 D200、DM8101、CIO100.00、V10.3、40001'); }
+        p.area = a.area; p.addr = a.addr;
+        if (a.bit !== undefined) { p.bit = a.bit; }
+      }
+      if (row.fr !== undefined) { p.fr = num(row.fr); }
+      if (row.name !== undefined) { p.name = row.name; }
+      if (row.type !== undefined) { p.type = value(L.type, row.type); }
+      if (row.unit !== undefined) { p.unit = row.unit; }
+      ['scale', 'dec', 'dead'].forEach(function (key) { if (row[key] !== undefined) { p[key] = num(row[key]); } });
+      if (row.cat !== undefined) { p.cat = value(L.pcat, row.cat); }
+      if (row.mode !== undefined) { p.mode = value(L.mode, row.mode); }
+      if (row.order !== undefined) { p.order = row.order; }
+      lines.push(p);
+    });
+    return lines.map(function (o) { return JSON.stringify(o); }).join('\n') + '\n';
+  }
+
+  /* 设备配置（JSON Lines 文本）-> 调研表（一台设备） */
+  function fromJsonl(text, protos) {
+    var data = { points: [] };
+    text.split(/\r?\n/).forEach(function (s) {
+      var o;
+      if (!s.trim()) { return; }
+      try { o = JSON.parse(s); } catch (e) { return; }
+      if (o.t === 'point') { data.points.push(o); } else if (o.t) { data[o.t] = o; }
+    });
+    return build(protos, data);
+  }
+
+  /* 控制器品牌 + 通讯口（表中文字）-> 自动带出的协议名称；无对应时为空 */
+  function autoProto(protos, brand, ifaceText) {
+    var f = value(IFACE, ifaceText || ''), id = brand && BRAND_PROTO[brand] && BRAND_PROTO[brand][f];
+    for (var i = 0; id && i < protos.length; i++) { if (protos[i].id === id) { return protos[i].name; } }
+    return '';
+  }
+
+  return { build: build, read: read, autoProto: autoProto, lists: lists, label: label, zip: zip, unzip: unzip, DEV: DEV, DTYPE: DTYPE };
+})();
+
+/* ---------------- 现场调研页面 ---------------- */
+
+// 多选项以“、”连接保存，选项文字中不得含“、”
+var WANT = ['产量 / 计数', '运行 / 停机状态', '报警', '故障代码', '工艺参数（温度 / 压力 / 速度）', '能耗', '开机时长', '产品型号 / 配方', '节拍 / 周期'];
+/* 照片与资料的类型：[键, 名称（用于文件名）, 只收图片] */
+var KINDS = [['plate', '铭牌', true], ['cabinet', '电柜', true], ['port', '通讯口', true], ['photo', '其他照片', true], ['doc', '厂商资料', false]];
+var NEED = ['PLC 点位表（地址表）', '通讯协议文档', '开放通讯权限 / 解除加密', '开放数据接口（数据库 / OPC UA / Modbus TCP）',
+  '数控系统通讯选项授权', '修改 PLC 程序（映射数据）', '通讯扩展模块 / 扩展板', '通讯参数（站号 / IP / 波特率）', '电气图纸', '现场配合调试'];
+/* 按控制器给出建议的厂商配合事项（NEED 的下标） */
+var NEED_REC = {
+  plc: [0, 7], cnc: [4, 1, 7], ipc: [3, 1], board: [1, 9], imm: [1, 7]
+};
+/* 常见控制器型号，按品牌列出 */
+var MODELS = {
+  '三菱': ['FX1S', 'FX1N', 'FX2N', 'FX3U', 'FX3G', 'FX3SA', 'FX5U', 'Q 系列', 'L 系列'],
+  '欧姆龙': ['CP1E', 'CP1L', 'CP1H', 'CP2E', 'CJ2M', 'CJ1M', 'NX1P'],
+  '西门子': ['S7-200', 'S7-200 SMART', 'S7-300', 'S7-1200', 'S7-1500', 'LOGO!'],
+  '台达': ['DVP-ES2', 'DVP-EX2', 'DVP-SS2', 'DVP-SX2', 'AS300'],
+  '汇川': ['H1U', 'H2U', 'H3U', 'H5U', 'AM400'],
+  '信捷': ['XC3', 'XD3', 'XD5', 'XL5'],
+  '施耐德': ['TM218', 'TM221', 'TM241'],
+  '发那科 FANUC': ['0i-MF', '0i-TF', '0i-MD', '0i-TD'],
+  '广数 GSK': ['980TDi', '980MDi', '218MC'],
+  '凯恩帝 KND': ['K1000', 'KND2000'],
+  '新代': ['21MA', '22MA', '210'],
+  '华中数控': ['HNC-808', 'HNC-818', 'HNC-848'],
+  '弘讯': ['TECH2', 'AK668', 'KS8']
+};
+var CNC_BRANDS = ['发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代', '华中数控', '工控机'];
+var PLC_BRANDS = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德'];
+
+function recNeed(d) {
+  var k = d.brand === '工控机' ? 'ipc' : CNC_BRANDS.indexOf(d.brand) >= 0 ? 'cnc' : PLC_BRANDS.indexOf(d.brand) >= 0 ? 'plc' :
+    d.brand === '自研电路板' ? 'board' : (d.brand === '弘讯' || d.brand === '艾诺') ? 'imm' : '';
+  return (NEED_REC[k] || []).map(function (i) { return NEED[i]; });
+}
+var OTHER = '__other';
+var KEY = 'iotSurvey.v1';
+var L = XL.lists(PROTOS);
+var DBASE = {};          // 设备类型 -> 默认设备类别
+XL.DTYPE.forEach(function (g) { g[1].forEach(function (t) { DBASE[t[0]] = t[1]; }); });
+
+var S = { info: {}, devices: [], points: [], net: {} };    // 调研数据；devices 每项的键与“设备清单”列一致，值为表中文字，另有 _id
+var FILES = [];          // 照片与资料：{ id, dev: 设备 _id, kind, name, type, blob }，保存在 IndexedDB
+var cur = null, curIdx = -1, dirty = false;
+var pushed = false;      // 打开编辑页时压入一条历史记录，手机返回键即关闭编辑页
+var dtypeOther = false, ctrlOther = false;
+
+function $(s) { return document.querySelector(s); }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function labels(list) { return list.map(function (x) { return x[1]; }); }
+function split(s) { return s ? String(s).split(/[、，,；;]\s*/).filter(Boolean) : []; }
+function pad(x) { return (x < 10 ? '0' : '') + x; }
+function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function kindOf(k) { for (var i = 0; i < KINDS.length; i++) { if (KINDS[i][0] === k) { return KINDS[i]; } } return KINDS[3]; }
+function filesOf(id, kind) { return FILES.filter(function (f) { return f.dev === id && (!kind || f.kind === kind); }); }
+
+var toastTimer;
+function toast(t) {
+  var e = $('#toast');
+  e.textContent = t;
+  e.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { e.style.display = 'none'; }, 2600);
+}
+
+/* ------------ 保存：调研数据在 localStorage，照片在 IndexedDB ------------ */
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
+function load() {
+  try {
+    var o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (o && o.devices) { S = o; }
+  } catch (e) {}
+  S.info = S.info || {};
+  S.points = S.points || [];
+  S.net = S.net || {};
+  S.devices.forEach(function (d) { if (!d._id) { d._id = newId(); } });
+  if (!S.info.date) { S.info.date = today(); }
+}
+
+var dbp = null, dbOk = true;
+function db() {
+  if (!dbp) {
+    dbp = new Promise(function (res, rej) {
+      var r = indexedDB.open('iotSurvey', 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('files', { keyPath: 'id' }); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  return dbp;
+}
+// 对 files 表执行一次操作；IndexedDB 不可用时照片只保存在内存中
+function store(mode, fn) {
+  if (!dbOk) { return Promise.resolve(); }
+  return db().then(function (d) {
+    return new Promise(function (res, rej) {
+      var t = d.transaction('files', mode), q = fn(t.objectStore('files'));
+      t.oncomplete = function () { res(q && q.result); };
+      t.onerror = t.onabort = function () { rej(t.error); };
+    });
+  }).catch(function (e) {
+    if (dbOk) { dbOk = false; alert('浏览器不支持本地保存照片（' + (e && e.message || e) + '），照片在关闭页面后会丢失，请及时导出。'); }
+  });
+}
+function putFile(f) { FILES.push(f); return store('readwrite', function (s) { return s.put(f); }); }
+function delFiles(list) {
+  var ids = list.map(function (f) { return f.id; });
+  FILES = FILES.filter(function (f) { return ids.indexOf(f.id) < 0; });
+  return store('readwrite', function (s) { ids.forEach(function (id) { s['delete'](id); }); });
+}
+function loadFiles() {
+  try { indexedDB; } catch (e) { dbOk = false; }
+  if (typeof indexedDB === 'undefined') { dbOk = false; }
+  return store('readonly', function (s) { return s.getAll(); }).then(function (all) { FILES = all || []; });
+}
+// 未属于任何设备的照片（如新增设备未保存即返回）
+function purge() {
+  var ids = S.devices.map(function (d) { return d._id; });
+  var lost = FILES.filter(function (f) { return ids.indexOf(f.dev) < 0; });
+  if (lost.length) { delFiles(lost); }
+}
+
+/* ------------ 设备类别：由设备类型与控制器品牌换算（网关只认 6 种） ------------ */
+
+function baseCat(d) {
+  var b = DBASE[d.dtype] || '';
+  if (d.brand === '无控制器') { b = 'legacy'; }
+  else if (d.brand === '自研电路板') { b = 'board'; }
+  else if (CNC_BRANDS.indexOf(d.brand) >= 0 && b !== 'imm' && b !== 'meter') { b = 'cnc'; }
+  else if (d.brand === '弘讯') { b = 'imm'; }
+  else if (b === 'legacy' && d.brand && d.brand !== '未知') { b = 'plc'; }
+  if (!b) { return d.category || XL.label(L.cat, 'plc'); }      // 列表以外的类型：保留原值，默认 PLC 控制设备
+  return XL.label(L.cat, b);
+}
+
+/* ------------ 设备列表 ------------ */
+
+// 有需厂商提供或配合的事项，且厂商尚未提供
+function vendorPending(d) { return !!d.need && d.help !== '已提供'; }
+
+function status(d) {
+  if (d.collect === '否') { return ['off', '不采集']; }
+  if (d.brand === '无控制器') { return ['warn', '无控制器，需另行评估']; }
+  var miss = [];
+  if (!d.brand || d.brand === '未知') { miss.push('控制器品牌'); }
+  if (!d.iface || d.iface === '未知') { miss.push('通讯口'); }
+  if (miss.length) { return ['warn', '待确认：' + miss.join('、')]; }
+  if (d.help === '不配合') { return ['err', '厂商不配合']; }
+  if (vendorPending(d)) { return ['warn', '待厂商配合']; }
+  return ['ok', '已完成'];
+}
+
+function render() {
+  var n = S.devices.length, todo = 0;
+  $('#list').innerHTML = n ? S.devices.map(function (d, i) {
+    var st = status(d), proto = d.protocol || XL.autoProto(PROTOS, d.brand, d.iface), nf = filesOf(d._id).length;
+    if (st[0] === 'warn') { todo++; }
+    var line = [d.dtype || d.category, [d.brand, d.ctrl].filter(Boolean).join(' '), d.iface].filter(Boolean).join(' · ');
+    return '<div class="card dev" data-i="' + i + '"><div class="no">' + (i + 1) + '</div><div class="main">' +
+      '<div class="t">' + esc(d.name || '（未命名）') + ' <span class="s">' + esc(d.number || '') + '</span></div>' +
+      '<div class="s">' + esc([d.shop, line].filter(Boolean).join(' · ') || '未填写控制器信息') + '</div>' +
+      (d.want ? '<div class="s">采集：' + esc(d.want) + '</div>' : '') +
+      (proto && d.collect !== '否' ? '<div class="s">通信协议：' + esc(proto) + '</div>' : '') +
+      '<div class="s">照片与资料：' + (nf ? nf + ' 个' : '无') + '</div>' +
+      '</div><span class="pill ' + st[0] + '">' + esc(st[1]) + '</span></div>';
+  }).join('') : '<div class="card empty">尚无设备，点击“新增设备”开始调研</div>';
+  $('#stat').textContent = n ? '共 ' + n + ' 台' + (todo ? '，' + todo + ' 台待确认' : '') : '';
+  $('#dlShop').innerHTML = uniq('shop').map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
+  $('#dlMaker').innerHTML = uniq('maker').map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
+}
+
+function uniq(key) {
+  var seen = {}, out = [];
+  S.devices.forEach(function (d) { if (d[key] && !seen[d[key]]) { seen[d[key]] = 1; out.push(d[key]); } });
+  return out;
+}
+
+$('#list').onclick = function (ev) {
+  var c = ev.target.closest('.dev');
+  if (c) { openEd(+c.getAttribute('data-i')); }
+};
+
+/* ------------ 调研信息 ------------ */
+
+['Factory', 'Person', 'Date'].forEach(function (k) {
+  var e = $('#i' + k), key = k.toLowerCase();
+  e.oninput = function () { S.info[key] = e.value.trim(); save(); };
+});
+function showInfo() {
+  $('#iFactory').value = S.info.factory || '';
+  $('#iPerson').value = S.info.person || '';
+  $('#iDate').value = S.info.date || '';
+}
+
+/* ------------ 编辑：选项少的用点选，选项多的用下拉 ------------ */
+
+// 点选：单选再次点击取消；多选逐个切换
+function chips(id, items, key, multi) {
+  var box = $('#c_' + id);
+  box.innerHTML = items.map(function (t) {
+    return '<button type="button" class="chip' + (multi ? ' multi' : '') + '" data-v="' + esc(t) + '">' + esc(t) + '</button>';
+  }).join('');
+  box.onclick = function (ev) {
+    var b = ev.target.closest('.chip'), v;
+    if (!b) { return; }
+    v = b.getAttribute('data-v');
+    if (multi) {
+      var arr = split(cur[key]), k = arr.indexOf(v);
+      if (k < 0) { arr.push(v); } else { arr.splice(k, 1); }
+      cur[key] = arr.join('、');
+    } else {
+      cur[key] = cur[key] === v ? '' : v;
+    }
+    dirty = true;
+    paint();
+  };
+}
+
+// 下拉：groups 为 [[分组, [选项]]]，分组为空时不分组；other 为 true 时末尾加“其他（手动填写）”
+function options(sel, groups, other) {
+  $(sel).innerHTML = '<option value="">请选择</option>' + groups.map(function (g) {
+    var o = g[1].map(function (t) { return '<option value="' + esc(t) + '">' + esc(t) + '</option>'; }).join('');
+    return g[0] ? '<optgroup label="' + esc(g[0]) + '">' + o + '</optgroup>' : o;
+  }).join('') + (other ? '<option value="' + OTHER + '">其他（手动填写）</option>' : '');
+}
+function inList(sel, v) {
+  return Array.prototype.some.call($(sel).options, function (o) { return o.value === v && v !== OTHER; });
+}
+
+options('#s_dtype', XL.DTYPE.map(function (g) { return [g[0], g[1].map(function (t) { return t[0]; })]; }), true);
+options('#s_brand', [['', labels(L.brand)]], false);
+
+$('#s_dtype').onchange = function () {
+  dtypeOther = this.value === OTHER;
+  cur.dtype = dtypeOther ? '' : this.value;
+  dirty = true;
+  paint();
+  if (dtypeOther) { $('#e_dtype').focus(); }
+};
+$('#s_brand').onchange = function () {
+  cur.brand = this.value;
+  if (cur.brand === '无控制器') { cur.iface = '无'; }
+  if (cur.ctrl && !(MODELS[cur.brand] && MODELS[cur.brand].indexOf(cur.ctrl) >= 0)) { cur.ctrl = ''; }
+  ctrlOther = false;
+  dirty = true;
+  paint();
+};
+$('#s_ctrl').onchange = function () {
+  ctrlOther = this.value === OTHER;
+  cur.ctrl = ctrlOther ? '' : this.value;
+  dirty = true;
+  paint();
+  if (ctrlOther) { $('#e_ctrl').focus(); }
+};
+
+function paint() {
+  ['shop', 'collect', 'iface', 'net', 'help'].forEach(function (k) {
+    Array.prototype.forEach.call(document.querySelectorAll('#c_' + k + ' .chip'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-v') === cur[k]);
+    });
+  });
+  var rec = recNeed(cur);
+  [['want', WANT], ['need', NEED]].forEach(function (m) {
+    var arr = split(cur[m[0]]);
+    Array.prototype.forEach.call(document.querySelectorAll('#c_' + m[0] + ' .chip'), function (b) {
+      b.classList.toggle('on', arr.indexOf(b.getAttribute('data-v')) >= 0);
+      b.classList.toggle('rec', m[0] === 'need' && rec.indexOf(b.getAttribute('data-v')) >= 0);
+    });
+    var e = $('#e_' + m[0] + 'Other');
+    if (document.activeElement !== e) { e.value = arr.filter(function (w) { return m[1].indexOf(w) < 0; }).join('、'); }
+  });
+  $('#needHint').textContent = rec.length ? '按控制器建议（虚线框）：' + rec.join('、') : '';
+
+  // 设备类型：列表以外的值显示为“其他”加输入框
+  if (cur.dtype && !inList('#s_dtype', cur.dtype)) { dtypeOther = true; }
+  $('#s_dtype').value = dtypeOther ? OTHER : (cur.dtype || '');
+  $('#e_dtype').style.display = dtypeOther ? '' : 'none';
+
+  $('#s_brand').value = inList('#s_brand', cur.brand) ? cur.brand : '';
+
+  // 控制器型号：有常见型号的品牌用下拉，其余直接输入
+  var models = MODELS[cur.brand];
+  if (models) {
+    options('#s_ctrl', [['', models]], true);
+    if (cur.ctrl && models.indexOf(cur.ctrl) < 0) { ctrlOther = true; }
+    $('#s_ctrl').value = ctrlOther ? OTHER : (cur.ctrl || '');
+  }
+  $('#s_ctrl').style.display = models ? '' : 'none';
+  $('#e_ctrl').style.display = !models || ctrlOther ? '' : 'none';
+
+  ['s_dtype', 's_brand', 's_ctrl'].forEach(function (id) { $('#' + id).classList.toggle('unset', !$('#' + id).value); });
+
+  ['shop', 'name', 'number', 'dtype', 'ctrl', 'maker', 'model', 'contact', 'remark'].forEach(function (k) {
+    var e = $('#e_' + k);
+    if (document.activeElement !== e && e.value !== (cur[k] || '')) { e.value = cur[k] || ''; }
+  });
+}
+
+['shop', 'name', 'number', 'dtype', 'ctrl', 'maker', 'model', 'contact', 'remark'].forEach(function (k) {
+  $('#e_' + k).oninput = function () { cur[k] = this.value.trim(); dirty = true; if (k === 'shop') { paint(); } };
+});
+// 多选的“其他”输入框：与已选的固定选项合并保存
+[['want', WANT], ['need', NEED]].forEach(function (m) {
+  $('#e_' + m[0] + 'Other').oninput = function () {
+    var keep = split(cur[m[0]]).filter(function (w) { return m[1].indexOf(w) >= 0; });
+    cur[m[0]] = keep.concat(split(this.value)).join('、');
+    dirty = true;
+  };
+});
+
+chips('collect', labels(L.collect), 'collect');
+chips('want', WANT, 'want', true);
+chips('iface', labels(L.iface), 'iface');
+chips('net', labels(L.net), 'net');
+chips('need', NEED, 'need', true);
+chips('help', labels(L.help), 'help');
+
+/* ------------ 照片与资料（添加、删除即时保存） ------------ */
+
+var urls = [];
+function paintFiles() {
+  urls.forEach(function (u) { URL.revokeObjectURL(u); });
+  urls = [];
+  $('#files').innerHTML = KINDS.map(function (k) {
+    var list = filesOf(cur._id, k[0]);
+    return '<div class="frow"><div class="fk">' + esc(k[1]) + '</div><div class="thumbs">' + list.map(function (f) {
+      if (/^image\//.test(f.type)) {
+        var u = URL.createObjectURL(f.blob);
+        urls.push(u);
+        return '<div class="th"><img src="' + u + '" data-id="' + f.id + '" alt="' + esc(f.name) + '"><button class="x" data-del="' + f.id + '" aria-label="删除">×</button></div>';
+      }
+      return '<div class="doc">' + esc(f.name) + '<button class="x" data-del="' + f.id + '" aria-label="删除">×</button></div>';
+    }).join('') + '<button type="button" class="add" data-add="' + k[0] + '"><b>＋</b>' + (k[2] ? '拍照' : '添加') + '</button></div></div>';
+  }).join('');
+}
+
+var addKind = '';
+$('#files').onclick = function (ev) {
+  var t = ev.target, b = t.closest('[data-add]'), x = t.closest('[data-del]');
+  if (b) {
+    addKind = b.getAttribute('data-add');
+    $('#fileIn').accept = kindOf(addKind)[2] ? 'image/*' : '.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,image/*';
+    $('#fileIn').value = '';
+    $('#fileIn').click();
+  } else if (x) {
+    if (confirm('删除该文件？')) { delFiles(FILES.filter(function (f) { return f.id === x.getAttribute('data-del'); })).then(paintFiles); paintFiles(); }
+  } else if (t.tagName === 'IMG') {
+    var v = $('#viewer');
+    v.querySelector('img').src = t.src;
+    v.querySelector('.cap').textContent = t.alt;
+    v.classList.add('on');
+  }
+};
+$('#viewer').onclick = function () { this.classList.remove('on'); };
+
+$('#fileIn').onchange = function () {
+  var list = Array.prototype.slice.call(this.files), id = cur._id, kind = addKind;
+  if (!list.length) { return; }
+  toast('正在处理 ' + list.length + ' 个文件…');
+  list.reduce(function (p, file) {
+    return p.then(function () { return shrink(file); }).then(function (blob) {
+      return putFile({ id: newId(), dev: id, kind: kind, name: file.name, type: blob.type || file.type || '', blob: blob });
+    });
+  }, Promise.resolve()).then(function () {
+    if (cur && cur._id === id) { paintFiles(); }
+    toast('已添加 ' + list.length + ' 个文件');
+  }).catch(function (e) { alert('添加失败：' + (e && e.message || e)); });
+};
+
+// 照片压缩到长边 2048 像素（JPEG），铭牌文字仍可辨认；非图片及压缩后更大的保持原样
+function shrink(file) {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { return Promise.resolve(file); }
+  return new Promise(function (res) {
+    var u = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k);
+      c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u);
+      c.toBlob(function (b) { res(b && b.size < file.size ? b : file); }, 'image/jpeg', 0.85);
+    };
+    img.onerror = function () { URL.revokeObjectURL(u); res(file); };
+    img.src = u;
+  });
+}
+
+/* ------------ 打开 / 关闭编辑页 ------------ */
+
+function openEd(i, from) {
+  curIdx = i;
+  cur = JSON.parse(JSON.stringify(i >= 0 ? S.devices[i] : (from || { collect: '是' })));
+  if (!cur._id || i < 0) { cur._id = newId(); }
+  dirty = !!from;
+  dtypeOther = ctrlOther = false;
+  $('#eTitle').textContent = i >= 0 ? '设备 ' + (i + 1) + '：' + (cur.name || '') : '新增设备';
+  $('#eDel').style.display = i >= 0 ? '' : 'none';
+  $('#eErr').textContent = '';
+  chips('shop', uniq('shop'), 'shop');
+  paint();
+  paintFiles();
+  $('#ed').classList.add('on');
+  $('#ed').scrollTop = 0;
+  if (!pushed) { try { history.pushState({ ed: 1 }, ''); pushed = true; } catch (e) {} }
+}
+
+function closeEd() {
+  $('#ed').classList.remove('on');
+  cur = null;
+  purge();
+  render();
+}
+
+function check() {
+  if (!cur.name) { return '请填写设备名称'; }
+  if (!cur.number) { return '请填写资产编号'; }
+  if (!/^[A-Za-z0-9._-]+$/.test(cur.number)) { return '资产编号仅限字母、数字及 - _ .'; }
+  for (var i = 0; i < S.devices.length; i++) {
+    if (i !== curIdx && S.devices[i].number === cur.number) { return '资产编号与第 ' + (i + 1) + ' 台设备重复'; }
+  }
+  if (!cur.dtype && !cur.category) { return dtypeOther ? '请填写设备类型' : '请选择设备类型'; }
+  return '';
+}
+
+function commit() {
+  var e = check();
+  if (e) { $('#eErr').textContent = e; toast(e); return false; }
+  cur.category = baseCat(cur);
+  if (curIdx >= 0) { S.devices[curIdx] = cur; } else { S.devices.push(cur); curIdx = S.devices.length - 1; }
+  dirty = false;
+  save();
+  return true;
+}
+
+function back() {
+  if (dirty && !confirm('修改尚未保存，确认放弃？（照片的添加和删除已即时保存）')) { return; }
+  dirty = false;
+  closeEd();
+  if (pushed) { pushed = false; history.back(); }
+}
+
+window.onpopstate = function () {
+  if (!pushed) { return; }      // 由 back() 发起的返回，编辑页已关闭
+  pushed = false;
+  if (!cur) { return; }
+  if ($('#viewer').classList.contains('on')) { $('#viewer').classList.remove('on'); }
+  if (dirty && !confirm('修改尚未保存，确认放弃？')) { try { history.pushState({ ed: 1 }, ''); pushed = true; } catch (e) {} return; }
+  dirty = false;
+  closeEd();
+};
+
+$('#eBack').onclick = back;
+$('#eSave').onclick = function () {
+  if (commit()) { toast('已保存'); back(); }
+};
+// 同型号设备：保留其余信息，清空名称、编号、备注及实施人员按台填写的项目；照片不复制
+$('#eCopy').onclick = function () {
+  if (!commit()) { return; }
+  var c = JSON.parse(JSON.stringify(cur));
+  ['_id', 'name', 'number', 'remark', 'gw', 'ip', 'gwip', 'photo'].forEach(function (k) { delete c[k]; });
+  render();
+  openEd(-1, c);
+  toast('已保存，请填写新设备的名称和编号');
+  $('#e_name').focus();
+};
+$('#eDel').onclick = function () {
+  var nf = filesOf(cur._id).length;
+  if (!confirm('确认删除该设备' + (nf ? '及其 ' + nf + ' 个照片与资料' : '') + '？')) { return; }
+  S.devices.splice(curIdx, 1);
+  save();
+  dirty = false;
+  back();
+};
+$('#bAdd').onclick = function () { openEd(-1); };
+
+/* ------------ 导出 / 打开 / 清空 ------------ */
+
+function infoText() {
+  var i = S.info;
+  return ['工厂：' + (i.factory || ''), '调研人：' + (i.person || ''), '日期：' + (i.date || '')].join('　');
+}
+function parseInfo(t) {
+  var m, o = {};
+  if ((m = /工厂：([^　]*)/.exec(t))) { o.factory = m[1].trim(); }
+  if ((m = /调研人：([^　]*)/.exec(t))) { o.person = m[1].trim(); }
+  if ((m = /日期：([^　]*)/.exec(t))) { o.date = m[1].trim(); }
+  return o;
+}
+
+// 实施状态：实施人员已标记“已上线”的保留，其余按调研结果给出
+function stateOf(d) {
+  if (d.state === '已上线') { return d.state; }
+  if (d.collect === '否') { return '不实施'; }
+  return vendorPending(d) || d.help === '不配合' ? '待厂商资料' : '待实施';
+}
+
+function ext(f) {
+  var m = /\.([A-Za-z0-9]{1,5})$/.exec(f.name);
+  if (f.type === 'image/jpeg') { return 'jpg'; }
+  return m ? m[1].toLowerCase() : (f.type.split('/')[1] || 'bin');
+}
+
+// 照片与资料按“资产编号-类型-序号”命名：照片在“照片/”，其他资料在“资料/”
+function packNames() {
+  var out = [];
+  S.devices.forEach(function (d) {
+    KINDS.forEach(function (k) {
+      filesOf(d._id, k[0]).forEach(function (f, i) {
+        var dir = /^image\//.test(f.type) ? '照片/' : '资料/';
+        out.push({ dev: d, file: f, path: dir + d.number + '-' + k[1] + '-' + (i + 1) + '.' + ext(f) });
+      });
+    });
+  });
+  return out;
+}
+
+// 读取 Blob / File 的内容；旧版浏览器无 Blob.arrayBuffer 时用 FileReader
+function toBuf(blob) {
+  if (blob.arrayBuffer) { return blob.arrayBuffer(); }
+  return new Promise(function (res, rej) {
+    var r = new FileReader();
+    r.onload = function () { res(r.result); };
+    r.onerror = function () { rej(r.error); };
+    r.readAsArrayBuffer(blob);
+  });
+}
+
+/*
+ * 导出文件交给用户保存：弹出窗口，由用户直接点击“保存文件”（脚本自动触发的下载在部分手机浏览器中会被拦截）；
+ * 支持分享文件的浏览器（如 iPhone Safari）另提供“分享 / 发送”
+ */
+var dlgUrl = null;
+function offer(blob, name) {
+  var f = null;
+  if (window.navigator && navigator.msSaveOrOpenBlob) { navigator.msSaveOrOpenBlob(blob, name); return; }
+  if (dlgUrl) { URL.revokeObjectURL(dlgUrl); }
+  dlgUrl = URL.createObjectURL(blob);
+  $('#dlgSave').href = dlgUrl;
+  $('#dlgSave').setAttribute('download', name);
+  $('#dlgName').textContent = name + '（' + (blob.size >= 1048576 ? (blob.size / 1048576).toFixed(1) + ' MB' : Math.ceil(blob.size / 1024) + ' KB') + '）';
+  try { f = new File([blob], name, { type: blob.type }); } catch (e) {}
+  var share = !!(f && navigator.canShare && navigator.canShare({ files: [f] }));
+  $('#dlgShare').style.display = share ? '' : 'none';
+  $('#dlgShare').onclick = function () {
+    navigator.share({ files: [f], title: name }).catch(function (e) { if (e && e.name !== 'AbortError') { alert('分享失败：' + e.message); } });
+  };
+  $('#dlg').classList.add('on');
+}
+$('#dlgClose').onclick = function () { $('#dlg').classList.remove('on'); };
+$('#dlgSave').onclick = function () { setTimeout(function () { toast('若未开始下载，请按下方说明更换浏览器'); }, 1500); };
+
+$('#bExport').onclick = function () {
+  if (!S.info.factory) { toast('请先填写工厂名称'); $('#iFactory').focus(); return; }
+  if (!S.devices.length) { toast('尚无设备'); return; }
+  try {
+    var pack = packNames();
+    var rows = S.devices.map(function (d) {
+      var r = JSON.parse(JSON.stringify(d));
+      r.state = stateOf(d);
+      r.category = baseCat(d);
+      r.photo = pack.filter(function (p) { return p.dev === d; }).map(function (p) { return p.path.replace(/^.*\//, ''); }).join('、');
+      return r;
+    });
+    var base = '设备数采现场调研表-' + S.info.factory.replace(/[\/:*?"<>|\s]+/g, '') + '-' + (S.info.date || today()).replace(/-/g, '');
+    var xlsx = XL.build(PROTOS, { rows: rows, ptRows: S.points, gateway: S.net, info: infoText() });
+  } catch (e) { alert('导出失败：' + (e && e.message || e)); return; }
+  if (!pack.length) { offer(xlsx, base + '.xlsx'); return; }
+  toast('正在打包 ' + pack.length + ' 个照片与资料…');
+  Promise.all([toBuf(xlsx)].concat(pack.map(function (p) { return toBuf(p.file.blob); }))).then(function (bufs) {
+    var files = [[base + '.xlsx', new Uint8Array(bufs[0])]];
+    pack.forEach(function (p, i) { files.push([p.path, new Uint8Array(bufs[i + 1])]); });
+    offer(new Blob([XL.zip(files)], { type: 'application/zip' }), base.replace('调研表', '调研资料') + '.zip');
+  }).catch(function (e) { alert('导出失败：' + (e && e.message || e)); });
+};
+
+$('#bOpen').onclick = function () { $('#file').value = ''; $('#file').click(); };
+$('#file').onchange = function () {
+  var f = this.files[0], isZip;
+  if (!f) { return; }
+  if (S.devices.length && !confirm('打开后将替换当前页面中的 ' + S.devices.length + ' 台设备及其照片，确认继续？')) { return; }
+  toBuf(f).then(function (buf) {
+    isZip = /\.zip$/i.test(f.name);
+    if (!isZip) { return XL.read(buf).then(function (s) { return { sheet: s, files: {} }; }); }
+    // 资料包：其中的 .xlsx 为调研表，照片/、资料/ 下按文件名中的资产编号归属设备
+    return XL.unzip(buf, true).then(function (all) {
+      var name = Object.keys(all).filter(function (n) { return /\.xlsx$/i.test(n) && n.indexOf('/') < 0; })[0];
+      if (!name) { throw new Error('资料包中没有调研表（.xlsx）'); }
+      var b = all[name];
+      return XL.read(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)).then(function (s) { return { sheet: s, files: all }; });
+    });
+  }).then(function (r) {
+    var s = r.sheet, byNumber = {}, added = [];
+    S.devices = s.devices.map(function (d) {
+      delete d._row; delete d.seq; delete d.photo;
+      d._id = newId();
+      // 与自动带出结果相同的协议不保留，导出时仍以公式随品牌、通讯口变化
+      if (d.protocol && d.protocol === XL.autoProto(PROTOS, d.brand, d.iface)) { delete d.protocol; }
+      if (d.number) { byNumber[d.number] = d; }
+      return d;
+    });
+    S.points = s.points.map(function (p) { delete p._row; return p; });
+    S.net = s.net;
+    S.info = parseInfo(s.info);
+    if (!S.info.factory) { S.info.factory = (/调研(?:表|资料)-([^-.]+)/.exec(f.name) || [])[1] || ''; }
+    if (!S.info.date) { S.info.date = today(); }
+    Object.keys(r.files).forEach(function (n) {
+      var m = /^(?:照片|资料)\/(.+)-([^-]+)-\d+\.([A-Za-z0-9]+)$/.exec(n), d, k;
+      if (!m || !(d = byNumber[m[1]])) { return; }
+      k = KINDS.filter(function (x) { return x[1] === m[2]; })[0] || (m[2] === '厂商点位表' ? KINDS[4] : KINDS[3]);
+      var e = m[3].toLowerCase(), type = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf' }[e] || '';
+      added.push({ id: newId(), dev: d._id, kind: k[0], name: n.replace(/^.*\//, ''), type: type, blob: new Blob([r.files[n]], { type: type }) });
+    });
+    return delFiles(FILES.slice()).then(function () {
+      return added.reduce(function (p, x) { return p.then(function () { return putFile(x); }); }, Promise.resolve());
+    }).then(function () {
+      save();
+      showInfo();
+      render();
+      toast('已打开：' + S.devices.length + ' 台设备' + (added.length ? '，' + added.length + ' 个照片与资料' : '') +
+        (S.points.length ? '，' + S.points.length + ' 个采集点位' : ''));
+    });
+  }).catch(function (e) { alert(e.message || e); });
+};
+
+$('#bClear').onclick = function () {
+  if (!confirm('清空本页全部调研数据及照片（不可恢复），确认继续？已导出的文件不受影响。')) { return; }
+  S = { info: { date: today() }, devices: [], points: [], net: {} };
+  save();
+  delFiles(FILES.slice());
+  showInfo();
+  render();
+};
+
+load();
+showInfo();
+render();
+loadFiles().then(render);
+
+// 微信、QQ 等应用的内置浏览器通常不支持下载文件
+if (/MicroMessenger|QQ\/|MQQBrowser|Weibo|DingTalk|Lark|Feishu|AlipayClient/i.test(navigator.userAgent)) { $('#inApp').hidden = false; }
+</script>
+</body>
+</html>
