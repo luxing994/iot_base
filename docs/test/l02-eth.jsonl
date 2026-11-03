@@ -1,0 +1,17 @@
+{"t":"meta","schema":1,"rev":"test-l02-eth-1","source":"L02CPU 真机 网口 测试"}
+{"t":"device","name":"L02CPU 真机网口","number":"TEST-L02-ETH","category":"plc","brand":"三菱","model":"L02CPU","protocol":"fx_mc","iface":"eth","ip":"192.168.3.39","port":1025,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"FXPLC"}
+{"t":"gateway","ethDhcp":false,"ethIp":"192.168.3.200","ethMask":"255.255.255.0","ethGateway":"192.168.3.1"}
+{"t":"point","fr":1,"name":"D0 无符号","area":"D","addr":0,"type":"u16"}
+{"t":"point","fr":2,"name":"D1 有符号","area":"D","addr":1,"type":"i16"}
+{"t":"point","fr":3,"name":"D2 倍率0.1","area":"D","addr":2,"type":"i16","scale":0.1,"dec":1}
+{"t":"point","fr":4,"name":"D10-11 32位","area":"D","addr":10,"type":"i32"}
+{"t":"point","fr":5,"name":"D20-21 浮点","area":"D","addr":20,"type":"f32","dec":2}
+{"t":"point","fr":6,"name":"D30 BCD","area":"D","addr":30,"type":"bcd16"}
+{"t":"point","fr":7,"name":"D7000 高地址","area":"D","addr":7000,"type":"u16"}
+{"t":"point","fr":9,"name":"M0","area":"M","addr":0,"type":"bit"}
+{"t":"point","fr":10,"name":"M5 非整16","area":"M","addr":5,"type":"bit"}
+{"t":"point","fr":11,"name":"M100","area":"M","addr":100,"type":"bit"}
+{"t":"point","fr":12,"name":"X0","area":"X","addr":"0","type":"bit"}
+{"t":"point","fr":13,"name":"X7","area":"X","addr":"7","type":"bit"}
+{"t":"point","fr":15,"name":"Y0","area":"Y","addr":"0","type":"bit"}
+{"t":"point","fr":16,"name":"Y5","area":"Y","addr":"5","type":"bit"}

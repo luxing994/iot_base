@@ -48,7 +48,7 @@ static const ProtoInfo s_protocols[] = {
     /* id            名称                          接口                       点表   波特率  数据 校验 停止 站号 最大站号 端口  字序    devTypeName */
     { "fx_prog",    "三菱 FX 编程口",              IFACE_RS232 | IFACE_RS422, true,  9600,   7, 'E', 1,   0,   0,    0,    "CDAB", "FXPLC",  AREAS(s_fxProgAreas) },
     { "fx_link",    "三菱 FX 计算机链接",          IFACE_RS485 | IFACE_RS232, true,  9600,   7, 'E', 1,   0,   15,   0,    "CDAB", "FXPLC",  AREAS(s_fxAreas) },
-    { "fx_mc",      "三菱 MC 协议（以太网）",      IFACE_ETH,                 true,  0,      0, 'N', 0,   0,   0,    5000, "CDAB", "FXPLC",  AREAS(s_fxAreas) },
+    { "fx_mc",      "三菱 MC 协议（以太网）",      IFACE_ETH,                 true,  0,      0, 'N', 0,   0,   0,    1025, "CDAB", "FXPLC",  AREAS(s_fxAreas) },
     { "hostlink",   "欧姆龙 HostLink",             IFACE_RS232 | IFACE_RS485, true,  115200, 8, 'N', 1,   0,   31,   0,    "CDAB", "HLPLC",  AREAS(s_hostLinkAreas) },
     { "ppi",        "西门子 PPI（S7-200）",        IFACE_RS485,               true,  9600,   8, 'E', 1,   2,   126,  0,    "ABCD", "PPIPLC", AREAS(s_s7Areas) },
     { "s7",         "西门子 S7comm（以太网）",     IFACE_ETH,                 true,  0,      0, 'N', 0,   0,   0,    102,  "ABCD", "PPIPLC", AREAS(s_s7Areas) },
@@ -74,7 +74,7 @@ static const struct {
 /* ------------------------------------------------------------ 查询 */
 
 /* 已在真机上按设备配置采集验证过的协议 */
-static const char *const s_verified[] = { "hostlink" };
+static const char *const s_verified[] = { "hostlink", "fx_link", "fx_mc" };
 
 bool ProtoLib_IsVerified(const ProtoInfo *p)
 {
