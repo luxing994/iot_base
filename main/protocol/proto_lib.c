@@ -22,7 +22,10 @@ static const ProtoArea s_fxAreas[] = {
 
 static const ProtoArea s_hostLinkAreas[] = {
     { "DM",  "数据存储区",  T_ALLNUM | PT_MASK(PT_BIT), 32767, 10, 15, false },
-    { "CIO", "输入输出区",  PT_MASK(PT_BIT),            6143,  10, 15, false },
+    { "CIO", "输入输出区",  T_ALLNUM | PT_MASK(PT_BIT), 6143,  10, 15, false },
+    { "W",   "工作区",      T_ALLNUM | PT_MASK(PT_BIT), 511,   10, 15, false },
+    { "H",   "保持区",      T_ALLNUM | PT_MASK(PT_BIT), 1535,  10, 15, false },
+    { "A",   "辅助区",      T_ALLNUM | PT_MASK(PT_BIT), 959,   10, 15, false },
 };
 
 static const ProtoArea s_s7Areas[] = {
@@ -30,6 +33,14 @@ static const ProtoArea s_s7Areas[] = {
     { "I",  "输入",         PT_MASK(PT_BIT), 255, 10, 7, false },
     { "Q",  "输出",         PT_MASK(PT_BIT), 255, 10, 7, false },
     { "M",  "位存储区",     PT_MASK(PT_BIT), 255, 10, 7, false },
+};
+
+/* 台达 DVP：按软元件写，固件换算成 Modbus 地址（D 最大按 ES2 / EC3） */
+static const ProtoArea s_deltaAreas[] = {
+    { "D",  "数据寄存器",   T_ALLNUM | PT_MASK(PT_BIT), 11999, 10, 15, false },
+    { "M",  "辅助继电器",   PT_MASK(PT_BIT),            4095,  10, 0,  true },
+    { "X",  "输入",         PT_MASK(PT_BIT),            0377,  8,  0,  true },
+    { "Y",  "输出",         PT_MASK(PT_BIT),            0377,  8,  0,  true },
 };
 
 static const ProtoArea s_modbusAreas[] = {
@@ -54,6 +65,8 @@ static const ProtoInfo s_protocols[] = {
     { "s7",         "西门子 S7comm（以太网）",     IFACE_ETH,                 true,  0,      0, 'N', 0,   0,   0,    102,  "ABCD", "PPIPLC", AREAS(s_s7Areas) },
     { "modbus_rtu", "Modbus RTU",                  IFACE_RS485 | IFACE_RS232, true,  9600,   8, 'N', 1,   1,   247,  0,    "ABCD", "MDPLC",  AREAS(s_modbusAreas) },
     { "modbus_tcp", "Modbus TCP",                  IFACE_ETH,                 true,  0,      0, 'N', 0,   1,   255,  502,  "ABCD", "MDPLC",  AREAS(s_modbusAreas) },
+    { "modbus_ascii", "Modbus ASCII",              IFACE_RS485 | IFACE_RS232, true,  9600,   7, 'E', 1,   1,   247,  0,    "ABCD", "MDPLC",  AREAS(s_modbusAreas) },
+    { "delta",      "台达 DVP（Modbus ASCII）",    IFACE_RS485 | IFACE_RS232, true,  9600,   7, 'E', 1,   1,   247,  0,    "CDAB", "MDPLC",  AREAS(s_deltaAreas) },
     { "dbs",        "DBS 真空计",                  IFACE_RS232,               false, 9600,   8, 'N', 1,   0,   0,    0,    "ABCD", "LSPLC",  NO_AREAS },
     { "t76",        "76T 安规测试仪",              IFACE_RS232 | IFACE_RS485, false, 9600,   8, 'N', 1,   1,   99,   0,    "ABCD", "",       NO_AREAS },
     { "ainuo",      "艾诺安规测试仪",              IFACE_RS232 | IFACE_RS485, false, 19200,  8, 'N', 1,   1,   255,  0,    "ABCD", "",       NO_AREAS },

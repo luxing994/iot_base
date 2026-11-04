@@ -125,6 +125,8 @@ Wi-Fi 名称和密码不放在表中（密码不宜写进文件），需要时�
 | `s7` | 西门子 S7comm（S7-200 SMART / 1200 / 1500） | eth | 端口 102，机架 0 槽 1 | 是 |
 | `modbus_rtu` | Modbus RTU | rs485, rs232 | 9600 8N1，站号 1 | 是 |
 | `modbus_tcp` | Modbus TCP | eth | 端口 502，单元号 1 | 是 |
+| `modbus_ascii` | Modbus ASCII | rs485, rs232 | 9600 7E1，站号 1 | 是 |
+| `delta` | 台达 DVP（Modbus ASCII） | rs485, rs232 | 9600 7E1，站号 1 | 是 |
 | `dbs` | DBS 真空计 | rs232 | 9600 8N1 | 否（内置模板） |
 | `t76` | 76T 安规测试仪 | rs232, rs485 | 9600 8N1 | 否（内置模板） |
 | `ainuo` | 艾诺安规测试仪 | rs232, rs485 | 19200 8N1 | 否（内置模板） |
@@ -143,6 +145,17 @@ Wi-Fi 名称和密码不放在表中（密码不宜写进文件），需要时�
 - `s7`：网口 102，机架 0 槽 1，PLC 侧无需设置。V 区按 DB1 读取，S7-1200 / 1500 只能读 DB1（需开 PUT/GET、DB1 取消优化访问）与 I / Q / M
 - `ppi`：本体 485 端口 0（DB9，3 脚 +、8 脚 −），默认站号 2、9600 8E1，网关作主站地址 0；适用老 S7-200 与 S7-200 SMART，S7-1200 / 300 无 PPI
 
+台达协议：
+- `delta`：点位按台达软元件填写（D100、M10、X17），固件按台达通讯地址表换算成 Modbus 地址：X 0400H、Y 0500H、M0~M1535 0800H、
+  M1536 起 B000H、D0~D4095 1000H、D4096 起 9000H；32 位数据低字在前。DVP 系列 COM1（RS-232）、COM2（RS-485）出厂为
+  Modbus ASCII 9600 7E1、站号 1，PLC 程序改过通讯格式时（D1120 / D1121 等）按实际填写。PLC 设为 RTU 时用 `modbus_rtu`，地址按上表自行换算。
+  EC3 系列 16 点及以上型号本体带 COM1 / COM2，10、14 点型号没有串口
+
+欧姆龙协议：
+- `hostlink`：Host Link（C 模式内嵌 FINS 读命令），各区均按字读取，可读 DM、CIO、W、H、A。CP1E-N□□S 型本体只有 RS-232C，N□□S1 型本体另带 RS-485；
+  选件板插槽（CP1W-CIF11 / CIF12 转 RS-485）并非所有型号都有，以实物为准。PLC 设置中所用串口须为“上位链接（Host Link）”，欧姆龙标准为 9600 7E2，配置中须填写与 PLC 一致的串口参数（协议缺省 115200 8N1 为旧现场设备的设置）。
+  CP1E-E 型只有 USB 口，不能采集
+
 存储区（`area`）与类型：
 
 | 协议 | 区 | 类型 |
@@ -150,12 +163,14 @@ Wi-Fi 名称和密码不放在表中（密码不宜写进文件），需要时�
 | fx_prog | `D` | i16, u16 |
 | fx_link, fx_mc | `D` | i16, u16, i32, u32, f32, bcd16 |
 | | `M`, `X`, `Y` | bit |
-| hostlink | `DM` | i16, u16, i32, u32, f32, bcd16, bit（需 bit） |
+| hostlink | `DM` `CIO` `W` `H` `A` | i16, u16, i32, u32, f32, bcd16, bit（需 bit） |
 | | `CIO` | bit（需 bit） |
 | ppi, s7 | `V` | i16, u16, i32, u32, f32, bit（需 bit 0~7） |
 | | `I`, `Q`, `M` | bit（需 bit 0~7） |
-| modbus_rtu, modbus_tcp | `HR`（保持寄存器 4x）, `IR`（输入寄存器 3x） | i16, u16, i32, u32, f32, bcd16, bit（需 bit） |
+| modbus_rtu, modbus_tcp, modbus_ascii | `HR`（保持寄存器 4x）, `IR`（输入寄存器 3x） | i16, u16, i32, u32, f32, bcd16, bit（需 bit） |
 | | `COIL`（线圈 0x）, `DI`（离散输入 1x） | bit |
+| delta | `D` | i16, u16, i32, u32, f32, bcd16, bit（需 bit） |
+| | `M`, `X`, `Y`（X / Y 八进制） | bit |
 
 Modbus 地址为协议地址，从 0 开始（手册中的 40001 填 0）。
 

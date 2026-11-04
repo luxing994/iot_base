@@ -133,6 +133,19 @@ static int HlReadWords(uint8_t area, uint16_t address, HlCtx *ctx)
     return PLC_ERR_RESPONSE;
 }
 
+int HL_ReadWords(HlArea area, uint16_t address, int words, uint32_t *w)
+{
+    HlCtx ctx = { .words = (words == 2) ? 2 : 1 };
+
+    if (HlReadWords((uint8_t)area, address, &ctx) != PLC_OK) {
+        return PLC_ERR_RESPONSE;
+    }
+    for (int i = 0; i < ctx.words; i++) {
+        w[i] = ctx.w[i];
+    }
+    return PLC_OK;
+}
+
 int HL_ReadDM(uint16_t address, HlFormat fmt, PlcValue *out)
 {
     HlCtx ctx = { .words = (fmt == HL_FMT_FLOAT) ? 2 : 1 };

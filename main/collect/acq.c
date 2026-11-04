@@ -146,22 +146,31 @@ static int ReadFxLink(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
     return ret;
 }
 
+/* 欧姆龙各区都按字读：位数据由引擎从字中取出，32 位两个字低字在前 */
 static int ReadHostLink(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
 {
-    PlcValue v;
+    static const struct {
+        const char *name;
+        HlArea area;
+    } areas[] = {
+        { "DM", HL_AREA_DM }, { "CIO", HL_AREA_CIO }, { "W", HL_AREA_WR }, { "H", HL_AREA_HR }, { "A", HL_AREA_AR },
+    };
+    const char *name = AreaName(d, p);
+    HlArea area = HL_AREA_DM;
+    uint32_t w[2] = { 0 };
     int ret;
 
-    if (strcmp(AreaName(d, p), "CIO") == 0) {
-        ret = HL_ReadCIOBit((uint16_t)p->addr, p->bit, &v);
-        r->raw = (uint32_t)v.i & 1;
-        r->isBit = true;
-    } else if (Is32(p->type)) {
-        ret = HL_ReadDM((uint16_t)p->addr, HL_FMT_FLOAT, &v);   // 两个字，低字在前；按位取出再按类型解释
-        memcpy(&r->raw, &v.f, sizeof(r->raw));
+    for (size_t i = 0; i < sizeof(areas) / sizeof(areas[0]); i++) {
+        if (strcmp(name, areas[i].name) == 0) {
+            area = areas[i].area;
+        }
+    }
+    ret = HL_ReadWords(area, (uint16_t)p->addr, Is32(p->type) ? 2 : 1, w);
+    if (Is32(p->type)) {
+        r->raw = (w[1] << 16) | (w[0] & 0xFFFF);
         r->order = "CDAB";
     } else {
-        ret = HL_ReadDM((uint16_t)p->addr, HL_FMT_U16, &v);     // 字区取位由引擎处理
-        r->raw = (uint32_t)v.i & 0xFFFF;
+        r->raw = w[0] & 0xFFFF;
     }
     return ret;
 }
@@ -287,6 +296,56 @@ static int MbTcpRead(uint8_t fc, uint16_t address, uint16_t count, uint16_t *out
 static int ReadModbusTcp(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
 {
     return ReadModbusWith(MbTcpRead, d, p, r);
+}
+
+static int ReadModbusAscii(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    return ReadModbusWith(MB_AsciiRead, d, p, r);
+}
+
+/*
+ * 台达 DVP：软元件换算成 Modbus 地址（台达手册“通讯地址”表），Modbus ASCII 读取
+ *   X0~X377 0400H 起，Y0~Y377 0500H 起（八进制编号按数值），M0~M1535 0800H 起，M1536~ B000H 起，
+ *   D0~D4095 1000H 起，D4096~ 9000H 起；32 位数据低字在前
+ */
+static int ReadDelta(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    const uint32_t n = p->addr;
+    uint16_t w[2] = { 0 };
+    uint8_t fc = MB_FC_READ_HOLDING;
+    uint16_t addr;
+    int ret;
+
+    switch (AreaName(d, p)[0]) {
+    case 'X':
+        fc = MB_FC_READ_DISCRETE;
+        addr = (uint16_t)(0x0400 + n);
+        break;
+    case 'Y':
+        fc = MB_FC_READ_COILS;
+        addr = (uint16_t)(0x0500 + n);
+        break;
+    case 'M':
+        fc = MB_FC_READ_COILS;
+        addr = (uint16_t)((n < 1536) ? 0x0800 + n : 0xB000 + (n - 1536));
+        break;
+    default:
+        addr = (uint16_t)((n < 4096) ? 0x1000 + n : 0x9000 + (n - 4096));
+        break;
+    }
+    if (MB_IsBitFc(fc)) {
+        ret = MB_AsciiRead(fc, addr, 1, w);
+        r->raw = w[0] & 1;
+        r->isBit = true;
+    } else if (Is32(p->type)) {
+        ret = MB_AsciiRead(fc, addr, 2, w);
+        r->raw = ((uint32_t)w[1] << 16) | w[0];
+        r->order = "CDAB";
+    } else {
+        ret = MB_AsciiRead(fc, addr, 1, w);
+        r->raw = w[0];
+    }
+    return ret;
 }
 
 /* ============================================================ 内置模板 */
@@ -593,6 +652,8 @@ static const struct {
     { "s7",         ReadS7,        NULL,      SetupS7,       S7_Handshake },
     { "modbus_rtu", ReadModbusRtu, NULL,      SetupMbRtu,    NULL },
     { "modbus_tcp", ReadModbusTcp, NULL,      SetupMbTcp,    NULL },
+    { "modbus_ascii", ReadModbusAscii, NULL,  SetupMbRtu,    NULL },
+    { "delta",      ReadDelta,     NULL,      SetupMbRtu,    NULL },
     { "dbs",        NULL,          PollDbs,   NULL,          NULL },
     { "t76",        NULL,          PollT76,   NULL,          NULL },
     { "ainuo",      NULL,          PollAinuo, NULL,          NULL },

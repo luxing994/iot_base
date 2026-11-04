@@ -269,11 +269,13 @@ var PROTOS=[
 P("fx_prog","三菱 FX 编程口",["rs232","rs422"],true,9600,7,"E",1,0,0,0,[{name:"D",types:["i16","u16"]}]),
 P("fx_link","三菱 FX 计算机链接",["rs485","rs232"],true,9600,7,"E",1,0,15,0,FX,1),
 P("fx_mc","三菱 MC 协议（以太网）",["eth"],true,0,0,"",0,0,0,1025,FX,1),
-P("hostlink","欧姆龙 HostLink",["rs485","rs232"],true,115200,8,"N",1,0,31,0,[{name:"DM",types:["bit"].concat(N)},{name:"CIO",types:["bit"]}],1),
+P("hostlink","欧姆龙 HostLink",["rs485","rs232"],true,115200,8,"N",1,0,31,0,[{name:"DM",types:["bit"].concat(N)},{name:"CIO",types:["bit"].concat(N)},{name:"W",types:["bit"].concat(N)},{name:"H",types:["bit"].concat(N)},{name:"A",types:["bit"].concat(N)}],1),
 P("ppi","西门子 PPI（S7-200）",["rs485"],true,9600,8,"E",1,2,126,0,S7,1),
 P("s7","西门子 S7comm（以太网）",["eth"],true,0,0,"",0,0,0,102,S7,1),
 P("modbus_rtu","Modbus RTU",["rs485","rs232"],true,9600,8,"N",1,1,247,0,MBA),
 P("modbus_tcp","Modbus TCP",["eth"],true,0,0,"",0,1,255,502,MBA),
+P("modbus_ascii","Modbus ASCII",["rs485","rs232"],true,9600,7,"E",1,1,247,0,MBA),
+P("delta","台达 DVP（Modbus ASCII）",["rs485","rs232"],true,9600,7,"E",1,1,247,0,[{name:"D",types:["bit"].concat(N)},{name:"M",types:["bit"]},{name:"X",types:["bit"]},{name:"Y",types:["bit"]}]),
 P("dbs","DBS 真空计",["rs232"],false,9600,8,"N",1,0,0,0,[]),
 P("t76","76T 安规测试仪",["rs485","rs232"],false,9600,8,"N",1,1,99,0,[]),
 P("ainuo","艾诺安规测试仪",["rs485","rs232"],false,19200,8,"N",1,1,255,0,[])
@@ -301,8 +303,8 @@ var XL = (function () {
     ['仪表', [['电能表 / 能耗仪表', 'meter'], ['温控仪表', 'meter'], ['流量计', 'meter'], ['压力 / 液位变送器', 'meter'], ['称重仪表', 'meter'], ['真空计', 'meter']]]
   ];
   var IFACE = [['rs485', 'RS485'], ['rs232', 'RS232'], ['rs422', 'RS422'], ['eth', '网口'], ['', '无'], ['', '未知']];
-  var BRAND = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德', '发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代',
-    '华中数控', '弘讯', '艾诺', '工控机', '自研电路板', '无控制器', '未知', '其他'];
+  var BRAND = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德', '海为', '发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代',
+    '华中数控', '华兴数控', '弘讯', '艾诺', '工控机', '自研电路板', '无控制器', '未知', '其他'];
   var HELP = [['done', '已提供'], ['agree', '已同意'], ['paid', '需付费'], ['no', '不配合'], ['tbd', '待沟通']];
   var NET = [['wire', '有线网络'], ['wifi', '无线网络'], ['none', '无网络']];
   var COLLECT = [['yes', '是'], ['no', '否'], ['tbd', '待定']];
@@ -320,7 +322,8 @@ var XL = (function () {
     '三菱': { rs485: 'fx_link', rs232: 'fx_link', rs422: 'fx_prog', eth: 'fx_mc' },
     '欧姆龙': { rs232: 'hostlink', rs485: 'hostlink' },
     '西门子': { rs485: 'ppi', eth: 's7' },
-    '台达': MB, '汇川': MB, '信捷': MB, '施耐德': MB,
+    '台达': { rs485: 'delta', rs232: 'delta', eth: 'modbus_tcp' },
+    '汇川': MB, '信捷': MB, '施耐德': MB, '海为': MB,
     '艾诺': { rs232: 'ainuo', rs485: 'ainuo' }
   };
 
@@ -1010,19 +1013,20 @@ var MODELS = {
   '三菱': ['FX1S', 'FX1N', 'FX2N', 'FX3U', 'FX3G', 'FX3SA', 'FX5U', 'Q 系列', 'L 系列'],
   '欧姆龙': ['CP1E', 'CP1L', 'CP1H', 'CP2E', 'CJ2M', 'CJ1M', 'NX1P'],
   '西门子': ['S7-200', 'S7-200 SMART', 'S7-300', 'S7-1200', 'S7-1500', 'LOGO!'],
-  '台达': ['DVP-ES2', 'DVP-EX2', 'DVP-SS2', 'DVP-SX2', 'AS300'],
+  '台达': ['DVP-ES2', 'DVP-EC3', 'DVP-EX2', 'DVP-SS2', 'DVP-SX2', 'AS300'],
   '汇川': ['H1U', 'H2U', 'H3U', 'H5U', 'AM400'],
   '信捷': ['XC3', 'XD3', 'XD5', 'XL5'],
   '施耐德': ['TM218', 'TM221', 'TM241'],
+  '海为': ['T 系列', 'H 系列', 'C 系列'],
   '发那科 FANUC': ['0i-MF', '0i-TF', '0i-MD', '0i-TD'],
   '广数 GSK': ['980TDi', '980MDi', '218MC'],
   '凯恩帝 KND': ['K1000', 'KND2000'],
-  '新代': ['21MA', '22MA', '210'],
+  '新代': ['21MA', '22MA', '22MA plus', '210'],
   '华中数控': ['HNC-808', 'HNC-818', 'HNC-848'],
   '弘讯': ['TECH2', 'AK668', 'KS8']
 };
-var CNC_BRANDS = ['发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代', '华中数控', '工控机'];
-var PLC_BRANDS = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德'];
+var CNC_BRANDS = ['发那科 FANUC', '广数 GSK', '凯恩帝 KND', '新代', '华中数控', '华兴数控', '工控机'];
+var PLC_BRANDS = ['三菱', '欧姆龙', '西门子', '台达', '汇川', '信捷', '施耐德', '海为'];
 
 function recNeed(d) {
   var k = d.brand === '工控机' ? 'ipc' : CNC_BRANDS.indexOf(d.brand) >= 0 ? 'cnc' : PLC_BRANDS.indexOf(d.brand) >= 0 ? 'plc' :

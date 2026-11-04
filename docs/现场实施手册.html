@@ -642,7 +642,8 @@ html { scroll-behavior: smooth; }
       <tr><td class="k">三菱</td><td>FX 计算机链接</td><td>FX 计算机链接</td><td>FX 编程口</td><td>MC 协议</td></tr>
       <tr><td class="k">欧姆龙</td><td>HostLink</td><td>HostLink</td><td>—</td><td>—</td></tr>
       <tr><td class="k">西门子</td><td>PPI（S7-200）</td><td>—</td><td>—</td><td>S7comm</td></tr>
-      <tr><td class="k">台达、汇川、信捷、施耐德</td><td>Modbus RTU</td><td>Modbus RTU</td><td>—</td><td>Modbus TCP</td></tr>
+      <tr><td class="k">台达</td><td>台达 DVP</td><td>台达 DVP</td><td>—</td><td>Modbus TCP</td></tr>
+      <tr><td class="k">汇川、信捷、施耐德、海为</td><td>Modbus RTU</td><td>Modbus RTU</td><td>—</td><td>Modbus TCP</td></tr>
       <tr><td class="k">艾诺</td><td>艾诺安规测试仪</td><td>艾诺安规测试仪</td><td>—</td><td>—</td></tr>
     </tbody>
   </table></div>
@@ -863,11 +864,13 @@ html { scroll-behavior: smooth; }
       <tr><td class="k">三菱 FX 编程口</td><td>RS232 / RS422</td><td class="mono">9600 7E1</td><td>D（仅限整数）</td></tr>
       <tr><td class="k">三菱 FX 计算机链接</td><td>RS485 / RS232</td><td class="mono">9600 7E1，站号 0</td><td>D、M、X、Y</td></tr>
       <tr><td class="k">三菱 MC 协议</td><td>网口</td><td class="mono">端口 1025</td><td>D、M、X、Y</td></tr>
-      <tr><td class="k">欧姆龙 HostLink</td><td>RS232 / RS485</td><td class="mono">115200 8N1，单元号 0</td><td>DM、CIO</td></tr>
+      <tr><td class="k">欧姆龙 HostLink</td><td>RS232 / RS485</td><td class="mono">115200 8N1，单元号 0</td><td>DM、CIO、W、H、A</td></tr>
       <tr><td class="k">西门子 PPI（S7-200）</td><td>RS485</td><td class="mono">9600 8E1，站号 2</td><td>V、I、Q、M</td></tr>
       <tr><td class="k">西门子 S7comm</td><td>网口</td><td class="mono">端口 102，机架 0 槽 1</td><td>V、I、Q、M</td></tr>
       <tr><td class="k">Modbus RTU</td><td>RS485 / RS232</td><td class="mono">9600 8N1，站号 1</td><td>4xxxx、3xxxx、0xxxx、1xxxx</td></tr>
       <tr><td class="k">Modbus TCP</td><td>网口</td><td class="mono">端口 502，单元号 1</td><td>同上</td></tr>
+      <tr><td class="k">Modbus ASCII</td><td>RS485 / RS232</td><td class="mono">9600 7E1，站号 1</td><td>同上</td></tr>
+      <tr><td class="k">台达 DVP</td><td>RS485 / RS232</td><td class="mono">9600 7E1，站号 1</td><td>D、M、X、Y（按 PLC 软元件填写）</td></tr>
       <tr><td class="k">DBS 真空计 / 76T、艾诺安规测试仪</td><td>RS232 / RS485</td><td class="mono">9600 / 19200 8N1</td><td>内置模板，无需填写点位</td></tr>
     </tbody>
   </table></div>

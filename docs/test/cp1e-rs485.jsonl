@@ -1,0 +1,14 @@
+{"t":"meta","schema":1,"rev":"test-cp1e-485-1","source":"CP1E-N60S 真机 RS485 测试"}
+{"t":"device","name":"CP1E 真机485","number":"TEST-CP1E-485","category":"plc","brand":"欧姆龙","model":"CP1E-N60SDR-A","protocol":"hostlink","iface":"rs485","baud":9600,"dataBits":7,"parity":"E","stopBits":2,"station":0,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"HLPLC"}
+{"t":"point","fr":1,"name":"D0 无符号","area":"DM","addr":0,"type":"u16"}
+{"t":"point","fr":2,"name":"D1 有符号","area":"DM","addr":1,"type":"i16"}
+{"t":"point","fr":3,"name":"D10-11 32位","area":"DM","addr":10,"type":"i32"}
+{"t":"point","fr":4,"name":"D20-21 浮点","area":"DM","addr":20,"type":"f32","dec":2}
+{"t":"point","fr":5,"name":"D30 BCD","area":"DM","addr":30,"type":"bcd16"}
+{"t":"point","fr":6,"name":"W0 字","area":"W","addr":0,"type":"u16"}
+{"t":"point","fr":7,"name":"W10.03","area":"W","addr":10,"bit":3,"type":"bit"}
+{"t":"point","fr":8,"name":"H0 字","area":"H","addr":0,"type":"u16"}
+{"t":"point","fr":9,"name":"H1.05","area":"H","addr":1,"bit":5,"type":"bit"}
+{"t":"point","fr":10,"name":"CIO0.00 输入","area":"CIO","addr":0,"bit":0,"type":"bit"}
+{"t":"point","fr":11,"name":"CIO100.00 输出","area":"CIO","addr":100,"bit":0,"type":"bit"}
+{"t":"point","fr":12,"name":"A0 字","area":"A","addr":0,"type":"u16"}
