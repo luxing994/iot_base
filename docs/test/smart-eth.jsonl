@@ -1,0 +1,17 @@
+{"t":"meta","schema":1,"rev":"test-smart-eth-1","source":"S7-200 SMART 真机网口测试"}
+{"t":"device","name":"SMART 真机网口","number":"TEST-SMART-ETH","category":"plc","brand":"西门子","model":"S7-200 SMART","protocol":"s7","iface":"eth","ip":"192.168.2.1","port":102,"rack":0,"slot":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"PPIPLC"}
+{"t":"gateway","ethDhcp":false,"ethIp":"192.168.2.200","ethMask":"255.255.255.0","ethGateway":"192.168.2.254"}
+{"t":"point","fr":1,"name":"VW0 有符号","area":"V","addr":0,"type":"i16"}
+{"t":"point","fr":2,"name":"VW2 无符号","area":"V","addr":2,"type":"u16"}
+{"t":"point","fr":3,"name":"VW4 倍率0.1","area":"V","addr":4,"type":"i16","scale":0.1,"dec":1}
+{"t":"point","fr":4,"name":"VD10 32位","area":"V","addr":10,"type":"i32"}
+{"t":"point","fr":5,"name":"VD20 浮点","area":"V","addr":20,"type":"f32","dec":2}
+{"t":"point","fr":6,"name":"VW1000 高地址","area":"V","addr":1000,"type":"u16"}
+{"t":"point","fr":7,"name":"V30.0","area":"V","addr":30,"bit":0,"type":"bit"}
+{"t":"point","fr":8,"name":"V30.5","area":"V","addr":30,"bit":5,"type":"bit"}
+{"t":"point","fr":9,"name":"M0.0","area":"M","addr":0,"bit":0,"type":"bit"}
+{"t":"point","fr":10,"name":"M1.5","area":"M","addr":1,"bit":5,"type":"bit"}
+{"t":"point","fr":11,"name":"I0.0","area":"I","addr":0,"bit":0,"type":"bit"}
+{"t":"point","fr":12,"name":"I0.7","area":"I","addr":0,"bit":7,"type":"bit"}
+{"t":"point","fr":13,"name":"Q0.0","area":"Q","addr":0,"bit":0,"type":"bit"}
+{"t":"point","fr":14,"name":"Q0.5","area":"Q","addr":0,"bit":5,"type":"bit"}

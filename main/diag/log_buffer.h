@@ -28,6 +28,9 @@ void LogBuf_Init(void);
  */
 size_t LogBuf_Read(uint32_t from, char *buf, size_t size, uint32_t *pos);
 
+/* 当前写入位置（累计字节数） */
+uint32_t LogBuf_Pos(void);
+
 /* 复制开机日志，返回字节数 */
 size_t LogBuf_ReadBoot(char *buf, size_t size);
 

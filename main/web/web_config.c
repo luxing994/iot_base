@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_http_server.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_random.h"
@@ -70,6 +71,19 @@ static int64_t NowMs(void)
 
 /* ------------------------------------------------------------ 应答工具 */
 
+// 申请内存失败：记下当时的内存情况便于排查，应答不再申请内存
+static esp_err_t NoMemory(httpd_req_t *req)
+{
+    ESP_LOGW(TAG, "%s: no memory (free %u, largest block %u, min free %u)", req->uri,
+             (unsigned)esp_get_free_heap_size(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+             (unsigned)esp_get_minimum_free_heap_size());
+    httpd_resp_set_status(req, "500 Internal Server Error");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"error\":\"网关内存不足，请稍后重试\"}");
+}
+
+
 // 发送并释放 root
 static esp_err_t SendJson(httpd_req_t *req, cJSON *root)
 {
@@ -78,7 +92,7 @@ static esp_err_t SendJson(httpd_req_t *req, cJSON *root)
 
     cJSON_Delete(root);
     if (text == NULL) {
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
@@ -117,7 +131,7 @@ static cJSON *ReadJson(httpd_req_t *req)
     }
     buf = malloc(req->content_len + 1);
     if (buf == NULL) {
-        httpd_resp_send_500(req);
+        NoMemory(req);
         return NULL;
     }
     while (got < req->content_len) {
@@ -296,6 +310,8 @@ static esp_err_t StatusHandler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "idf", esp_get_idf_version());
     cJSON_AddNumberToObject(root, "uptime", (double)(esp_timer_get_time() / 1000000));
     cJSON_AddNumberToObject(root, "heap", esp_get_free_heap_size());
+    cJSON_AddNumberToObject(root, "heapMin", esp_get_minimum_free_heap_size());
+    cJSON_AddNumberToObject(root, "heapBlock", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     cJSON_AddStringToObject(root, "reset", App_ResetText());
     cJSON_AddStringToObject(root, "collect", App_CollectText());
     if (UART_InterfaceText() != NULL) {
@@ -428,7 +444,7 @@ static esp_err_t SaveArea(httpd_req_t *req, GwArea area)
     cfg = malloc(sizeof(*cfg));     // 结构体约 600 字节，不放 httpd 任务栈上
     if (cfg == NULL) {
         cJSON_Delete(json);
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     *cfg = *GwConfig_Get();
     err = GwConfig_FromJson(cfg, json, area, &why);
@@ -483,7 +499,7 @@ static esp_err_t ScanHandler(httpd_req_t *req)
     }
     aps = calloc(SCAN_MAX, sizeof(*aps));
     if (aps == NULL) {
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     n = NetMgr_ScanWifi(aps, SCAN_MAX);
     if (n < 0) {
@@ -612,45 +628,17 @@ static esp_err_t EventsClearHandler(httpd_req_t *req)
     return SendOk(req);
 }
 
-// 实时日志：返回 from 之后新增的日志，响应头 X-Log-Pos 为下次请求的 from
-static esp_err_t LogHandler(httpd_req_t *req)
-{
-    static char posText[12];
-    char query[24];
-    char val[12];
-    uint32_t from = 0;
-    uint32_t pos;
-    size_t n;
-    char *buf;
-    esp_err_t err;
-
-    if (!CheckAuth(req) || !RequireFactory(req)) {
-        return ESP_OK;
-    }
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
-        httpd_query_key_value(query, "from", val, sizeof(val)) == ESP_OK) {
-        from = (uint32_t)strtoul(val, NULL, 10);
-    }
-    buf = malloc(LOG_BUF_SIZE);
-    if (buf == NULL) {
-        return httpd_resp_send_500(req);
-    }
-    n = LogBuf_Read(from, buf, LOG_BUF_SIZE, &pos);
-    snprintf(posText, sizeof(posText), "%u", (unsigned)pos);
-    httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    httpd_resp_set_hdr(req, "X-Log-Pos", posText);
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    err = httpd_resp_send(req, buf, n);
-    free(buf);
-    return err;
-}
-
-/* 诊断报告：分块发送，攒满 1 KB 发一次 */
+/*
+ * 分块发送，攒满 1 KB 发一次。httpd 只有一个任务、逐个处理请求，缓冲用静态的一份即可，
+ * 不在每次请求时申请（采集页每 2 秒刷新，内存紧张时申请失败会返回 500）
+ */
 typedef struct {
     httpd_req_t *req;
     size_t n;
     char buf[1024];
 } ChunkOut;
+
+static ChunkOut s_chunk;
 
 static void ChunkWrite(void *ctx, const char *text, size_t len)
 {
@@ -671,6 +659,64 @@ static void ChunkWrite(void *ctx, const char *text, size_t len)
     }
 }
 
+static ChunkOut *BeginChunks(httpd_req_t *req, const char *type)
+{
+    ChunkOut *o = &s_chunk;
+
+    o->req = req;
+    o->n = 0;
+    httpd_resp_set_type(req, type);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return o;
+}
+
+static esp_err_t EndChunks(ChunkOut *o)
+{
+    if (o->n > 0) {
+        httpd_resp_send_chunk(o->req, o->buf, o->n);
+    }
+    httpd_resp_send_chunk(o->req, NULL, 0);
+    return ESP_OK;
+}
+
+// 实时日志：返回 from 之后新增的日志，响应头 X-Log-Pos 为下次请求的 from
+static esp_err_t LogHandler(httpd_req_t *req)
+{
+    static char posText[12];
+    char query[24];
+    char val[12];
+    uint32_t from = 0;
+    uint32_t end = LogBuf_Pos();        // 只发到此刻为止，发送期间新增的留给下次
+    uint32_t pos;
+    ChunkOut *o;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "from", val, sizeof(val)) == ESP_OK) {
+        from = (uint32_t)strtoul(val, NULL, 10);
+    }
+    o = BeginChunks(req, "text/plain; charset=utf-8");
+    snprintf(posText, sizeof(posText), "%u", (unsigned)end);
+    httpd_resp_set_hdr(req, "X-Log-Pos", posText);
+    while (from < end) {
+        size_t n = LogBuf_Read(from, o->buf, sizeof(o->buf), &pos);
+
+        if (n == 0) {
+            break;
+        }
+        if (pos > end) {                // 读的过程中有新日志，截到 end
+            n -= pos - end;
+            pos = end;
+        }
+        httpd_resp_send_chunk(req, o->buf, n);
+        from = pos;
+    }
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
 static esp_err_t ExportHandler(httpd_req_t *req)
 {
     static char disposition[96];
@@ -680,12 +726,6 @@ static esp_err_t ExportHandler(httpd_req_t *req)
     if (!CheckAuth(req)) {
         return ESP_OK;
     }
-    o = malloc(sizeof(*o));
-    if (o == NULL) {
-        return httpd_resp_send_500(req);
-    }
-    o->req = req;
-    o->n = 0;
     if (IotTime_IsSynced()) {
         time_t sec = (time_t)(GetMilliTimeNow() / 1000);
         struct tm tm;
@@ -694,18 +734,12 @@ static esp_err_t ExportHandler(httpd_req_t *req)
         strftime(ts, sizeof(ts), "-%Y%m%d-%H%M", &tm);
     }
     snprintf(disposition, sizeof(disposition), "attachment; filename=\"iotgw-%s%s.txt\"", NetMgr_GetHostname(), ts);
-    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    o = BeginChunks(req, "text/plain; charset=utf-8");
     httpd_resp_set_hdr(req, "Content-Disposition", disposition);
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
 
     ESP_LOGI(TAG, "export diagnostics");
     Diag_Export(ChunkWrite, o);
-    if (o->n > 0) {
-        httpd_resp_send_chunk(req, o->buf, o->n);
-    }
-    httpd_resp_send_chunk(req, NULL, 0);
-    free(o);
-    return ESP_OK;
+    return EndChunks(o);
 }
 
 // 异常重启前日志（厂家账号）
@@ -723,7 +757,7 @@ static esp_err_t CrashHandler(httpd_req_t *req)
     }
     buf = malloc(info.len + 128);
     if (buf == NULL) {
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     int head = snprintf(buf, 128, "第 %u 次启动异常重启（%s），重启前日志：\n\n", (unsigned)info.boot, info.reason);
     EvLog_ReadCrash(&info, buf + head, info.len + 1);
@@ -758,7 +792,7 @@ static esp_err_t CoreDumpHandler(httpd_req_t *req)
     }
     buf = malloc(1024);
     if (buf == NULL) {
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     httpd_resp_set_type(req, "application/octet-stream");
     httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"coredump.bin\"");
@@ -833,29 +867,6 @@ static esp_err_t MonitorStopHandler(httpd_req_t *req)
 
 /* ------------------------------------------------------------ 设备配置（格式见 docs/devcfg.md） */
 
-static ChunkOut *BeginChunks(httpd_req_t *req, const char *type)
-{
-    ChunkOut *o = malloc(sizeof(*o));
-
-    if (o != NULL) {
-        o->req = req;
-        o->n = 0;
-        httpd_resp_set_type(req, type);
-        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    }
-    return o;
-}
-
-static esp_err_t EndChunks(ChunkOut *o)
-{
-    if (o->n > 0) {
-        httpd_resp_send_chunk(o->req, o->buf, o->n);
-    }
-    httpd_resp_send_chunk(o->req, NULL, 0);
-    free(o);
-    return ESP_OK;
-}
-
 // 当前配置摘要（客户账号只读查看）
 static esp_err_t DevCfgGetHandler(httpd_req_t *req)
 {
@@ -865,9 +876,6 @@ static esp_err_t DevCfgGetHandler(httpd_req_t *req)
         return ESP_OK;
     }
     o = BeginChunks(req, "application/json; charset=utf-8");
-    if (o == NULL) {
-        return httpd_resp_send_500(req);
-    }
     DevCfg_WriteJson(ChunkWrite, o);
     return EndChunks(o);
 }
@@ -882,14 +890,11 @@ static esp_err_t DevCfgFileHandler(httpd_req_t *req)
         return ESP_OK;
     }
     o = BeginChunks(req, "application/x-ndjson; charset=utf-8");
-    if (o == NULL) {
-        return httpd_resp_send_500(req);
-    }
     snprintf(disposition, sizeof(disposition), "attachment; filename=\"devcfg-%s.jsonl\"", NetMgr_GetHostname());
     httpd_resp_set_hdr(req, "Content-Disposition", disposition);
     esp_err_t err = DevCfg_WriteFile(ChunkWrite, o);
     if (err == ESP_ERR_NOT_FOUND) {
-        free(o);        // 还没有发送任何内容，可以改发错误应答
+        // 还没有发送任何内容，可以改发错误应答
         httpd_resp_set_hdr(req, "Content-Disposition", "inline");
         return SendError(req, "404 Not Found", "没有采集配置");
     }
@@ -919,7 +924,7 @@ static esp_err_t DevCfgPostHandler(httpd_req_t *req)
     DevCfgImport *imp = (buf != NULL) ? DevCfg_ImportBegin(!check) : NULL;
     if (imp == NULL) {
         free(buf);
-        return httpd_resp_send_500(req);
+        return NoMemory(req);
     }
     while (got < req->content_len) {
         size_t want = req->content_len - got;
@@ -1006,9 +1011,6 @@ static esp_err_t AcqHandler(httpd_req_t *req)
         return ESP_OK;
     }
     o = BeginChunks(req, "application/json; charset=utf-8");
-    if (o == NULL) {
-        return httpd_resp_send_500(req);
-    }
     n = snprintf(line, sizeof(line), "{\"running\":%s,\"paused\":%s,\"linkDown\":%s,\"roundAge\":%ld,\"problem\":",
                  Acq_IsRunning() ? "true" : "false", HostCmd_IsCollectEnabled() ? "false" : "true",
                  Acq_IsLinkDown() ? "true" : "false",

@@ -149,6 +149,16 @@ size_t LogBuf_ReadBoot(char *buf, size_t size)
     return n;
 }
 
+uint32_t LogBuf_Pos(void)
+{
+    uint32_t total;
+
+    taskENTER_CRITICAL(&s_lock);
+    total = s_ring.total;
+    taskEXIT_CRITICAL(&s_lock);
+    return total;
+}
+
 size_t LogBuf_Read(uint32_t from, char *buf, size_t size, uint32_t *pos)
 {
     size_t n;
