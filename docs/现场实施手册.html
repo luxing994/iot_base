@@ -194,9 +194,9 @@ html { scroll-behavior: smooth; }
   <h1>现场实施手册</h1>
   <p class="lead">本手册规定数采网关从现场调研、采集点位整理、安装接线到配置导入与验收的标准作业流程，适用于实施人员及参与调研的现场人员。每台网关对应一台被采集设备；网关出厂时统一烧录固件，现场接入的设备及采集内容均由《设备数采现场调研表》确定，无需修改程序。</p>
   <div class="meta">
-    <span>适用固件：<b>iot_base（dev-beta，采集页含“下载调研表模板”）</b></span>
+    <span>适用固件：<b>配置页“采集”含“下载调研表模板”的网关固件</b></span>
     <span>配套文件：<b>现场调研.html</b>、<b>设备数采现场调研表.xlsx</b></span>
-    <span>版本：<b>2026-10-29</b></span>
+    <span>版本：<b>2026-11-04</b></span>
   </div>
 </header>
 
@@ -870,7 +870,7 @@ html { scroll-behavior: smooth; }
       <tr><td class="k">DBS 真空计 / 76T、艾诺安规测试仪</td><td>RS232 / RS485</td><td class="mono">9600 / 19200 8N1</td><td>内置模板，无需填写点位</td></tr>
     </tbody>
   </table></div>
-  <div class="note warn"><b>未实测协议</b>目前仅欧姆龙 HostLink 已在真机上按调研表方式完成验证。其他协议可正常使用，导入时将给出提示；验收时须重点核对数据，验证通过后告知研发。</div>
+  <div class="note warn"><b>协议验证</b>已完成真机验证的协议：欧姆龙 HostLink，三菱 FX 计算机链接（FX5U）、MC 协议（FX5U、L02CPU），西门子 S7comm、PPI（S7-200 SMART）。其他协议导入时给出提示，可继续导入，验收时须逐点核对数据。</div>
 </section>
 </main>
 </div>

@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>设备数采现场调研</title>
 <!--
-  现场调研页面：独立离线页面，不写入网关，不依赖网络。用手机或电脑浏览器直接打开。
-  现场人员逐台勾选设备信息，导出“设备数采现场调研表”（.xlsx）；实施人员在 Excel 中补全采集点位与实施配置后，
-  在网关配置页“采集”中导入。导出的文件与网关页面“下载调研表模板”的格式一致。
-  xlsx 读写模块复制自 main/web/index.html 的 XL 模块（增加：多设备写入、公式附带计算结果、调研信息行），修改该模块时两处同步。
-  协议列表为固件 main/protocol/proto_lib.c 的快照，仅用于自动带出“通信协议”与填写说明，协议增减时同步更新。
+  设备数采现场调研：离线页面，用手机或电脑浏览器直接打开，不依赖网络。
+  逐台录入设备信息后导出“设备数采现场调研表”（.xlsx），格式与网关配置页“下载调研表模板”一致。
 -->
 <style>
 :root {
@@ -262,7 +259,7 @@ a.btn.pri { color: var(--acc-fg); }
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
-/* 协议列表：固件 main/protocol/proto_lib.c 的快照（/api/devcfg/protocols 的内容） */
+/* 协议列表 */
 var N=["i16","u16","i32","u32","f32","bcd16"];
 var FX=[{name:"D",types:N},{name:"M",types:["bit"]},{name:"X",types:["bit"]},{name:"Y",types:["bit"]}];
 var S7=[{name:"V",types:["bit","i16","u16","i32","u32","f32"]},{name:"I",types:["bit"]},{name:"Q",types:["bit"]},{name:"M",types:["bit"]}];
@@ -270,11 +267,11 @@ var MBA=[{name:"HR",types:["bit"].concat(N)},{name:"IR",types:["bit"].concat(N)}
 function P(id,name,ifaces,np,baud,db,par,sb,st,mx,port,areas,ver){var o={id:id,name:name,ifaces:ifaces,needPoints:np,verified:!!ver,station:st,maxStation:mx,areas:areas};if(baud){o.baud=baud;o.dataBits=db;o.parity=par;o.stopBits=sb;}if(port){o.port=port;}return o;}
 var PROTOS=[
 P("fx_prog","三菱 FX 编程口",["rs232","rs422"],true,9600,7,"E",1,0,0,0,[{name:"D",types:["i16","u16"]}]),
-P("fx_link","三菱 FX 计算机链接",["rs485","rs232"],true,9600,7,"E",1,0,15,0,FX),
-P("fx_mc","三菱 MC 协议（以太网）",["eth"],true,0,0,"",0,0,0,1025,FX),
+P("fx_link","三菱 FX 计算机链接",["rs485","rs232"],true,9600,7,"E",1,0,15,0,FX,1),
+P("fx_mc","三菱 MC 协议（以太网）",["eth"],true,0,0,"",0,0,0,1025,FX,1),
 P("hostlink","欧姆龙 HostLink",["rs485","rs232"],true,115200,8,"N",1,0,31,0,[{name:"DM",types:["bit"].concat(N)},{name:"CIO",types:["bit"]}],1),
-P("ppi","西门子 PPI（S7-200）",["rs485"],true,9600,8,"E",1,2,126,0,S7),
-P("s7","西门子 S7comm（以太网）",["eth"],true,0,0,"",0,0,0,102,S7),
+P("ppi","西门子 PPI（S7-200）",["rs485"],true,9600,8,"E",1,2,126,0,S7,1),
+P("s7","西门子 S7comm（以太网）",["eth"],true,0,0,"",0,0,0,102,S7,1),
 P("modbus_rtu","Modbus RTU",["rs485","rs232"],true,9600,8,"N",1,1,247,0,MBA),
 P("modbus_tcp","Modbus TCP",["eth"],true,0,0,"",0,1,255,502,MBA),
 P("dbs","DBS 真空计",["rs232"],false,9600,8,"N",1,0,0,0,[]),
@@ -719,7 +716,7 @@ var XL = (function () {
       var def = (p.baud ? p.baud + ' ' + p.dataBits + p.parity + p.stopBits : '') + (p.port ? '端口 ' + p.port : '') +
         (p.maxStation ? '，站号 ' + p.station : '');
       help.push({ c: [
-        { v: p.name + (p.verified ? '' : '（未实测）'), s: X.text },
+        { v: p.name, s: X.text },
         { v: p.ifaces.map(function (f) { return label(IFACE, f); }).join(' / '), s: X.text },
         { v: def, s: X.text },
         { v: p.needPoints ? p.areas.map(function (a) {

@@ -474,7 +474,8 @@ function loadStatus() {
       // 售后排查用，客户不需要
       dev.push(['出厂参数', s.factorySaved ? '已在网页设置' : 'menuconfig 默认值']);
       dev.push(['上次复位原因', esc(s.reset)]);
-      dev.push(['空闲内存', Math.round(s.heap / 1024) + ' KB']);
+      dev.push(['空闲内存', Math.round(s.heap / 1024) + ' KB <span class="hint">最低 ' + Math.round(s.heapMin / 1024) +
+        ' KB，最大连续 ' + Math.round(s.heapBlock / 1024) + ' KB</span>']);
     }
     $('#stDev').innerHTML = rows(dev);
     // 顶部总结：有问题时点击进入诊断页
@@ -975,7 +976,8 @@ function loadAcqValues() {
   }).catch(function () {});
 }
 
-function loadAcq() {
+// retried：网关忙或内存紧张时偶尔失败，自动重试一次再提示
+function loadAcq(retried) {
   stopAcq();
   api('/api/devcfg').then(function (c) {
     if (!c.loaded) {
@@ -1004,7 +1006,9 @@ function loadAcq() {
     loadAcqValues();
     stopAcq();
     acqTimer = setInterval(loadAcqValues, 2000);
-  }).catch(function (e) { msg(e.message, true); });
+  }).catch(function (e) {
+    if (!retried) { setTimeout(function () { if (tab === 'acq') { loadAcq(true); } }, 1500); } else { msg(e.message, true); }
+  });
 }
 
 function lineText(e) {
@@ -1511,7 +1515,7 @@ var XL = (function () {
       var def = (p.baud ? p.baud + ' ' + p.dataBits + p.parity + p.stopBits : '') + (p.port ? '端口 ' + p.port : '') +
         (p.maxStation ? '，站号 ' + p.station : '');
       help.push({ c: [
-        { v: p.name + (p.verified ? '' : '（未实测）'), s: X.text },
+        { v: p.name, s: X.text },
         { v: p.ifaces.map(function (f) { return label(IFACE, f); }).join(' / '), s: X.text },
         { v: def, s: X.text },
         { v: p.needPoints ? p.areas.map(function (a) {
