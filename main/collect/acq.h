@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "freertos/FreeRTOS.h"
+#include "devcfg.h"
 
 bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio);
 
@@ -37,5 +38,14 @@ int32_t Acq_RoundAgeS(void);
  *   *ageS 为距该值读到的秒数
  */
 int Acq_GetPointText(uint16_t index, char *text, size_t size, uint32_t *ageS);
+
+/*
+ * 试读：按当前设备读一个点，不上报、不影响数据点的实时值（实施时核对点位表用）。
+ * 由采集任务在两轮之间执行，最多等 ACQ_TRY_TIMEOUT_MS。
+ * 成功返回 NULL，value 为按类型、字序、倍率转换后的值；失败返回原因。
+ * 读到数据时 raw 为原始数据（十六进制，32 位按协议字序组成），否则为空串
+ */
+#define ACQ_TRY_TIMEOUT_MS  10000
+const char *Acq_TryRead(const DevCfgPoint *p, char *value, size_t vsize, char *raw, size_t rsize);
 
 #endif

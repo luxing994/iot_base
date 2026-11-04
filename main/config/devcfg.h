@@ -135,4 +135,10 @@ void DevCfg_ImportFeed(DevCfgImport *imp, const char *data, size_t len);
  */
 esp_err_t DevCfg_ImportEnd(DevCfgImport *imp, cJSON **errors, cJSON **warnings, const char **summary);
 
+/*
+ * 按当前设备的协议校验一个点（格式同 point 行，fr、name 可省略），用于试读。
+ * 通过返回 true；否则返回 false，err 为原因
+ */
+bool DevCfg_ParseTryPoint(const cJSON *o, DevCfgPoint *pt, char *err, size_t errSize);
+
 #endif

@@ -211,6 +211,7 @@ Modbus 地址为协议地址，从 0 开始（手册中的 40001 填 0）。
 | `POST /api/devcfg` | 厂家 | 校验通过则保存，重启后生效；请求体为 JSON Lines 原文 |
 | `POST /api/devcfg/clear` | 厂家 | 删除配置（网关停止采集） |
 | `GET /api/devcfg/protocols` | 登录 | 固件支持的协议、接口、默认参数、存储区和类型 |
+| `POST /api/acq/try` | 厂家 | 试读：请求为一个点（同 point 行，fr、name 可省略），按当前设备读一次，不上报、不影响实时数据；应答 `{"ok","addr","value","raw","error"}`，raw 为原始数据（十六进制），读取失败也返回 200。由采集任务在两轮之间执行，最多等 10 秒 |
 | `GET /api/acq` | 登录 | 实时数据：`{"running","paused","roundAge","problem","points":[[状态,值,秒前],...]}`，points 与点列表一一对应；状态 0 未读、1 正常、-1 最近一次读取失败（值为最近一次读到的值） |
 
 校验通过返回 `{"ok":true,"summary":"...","warnings":[...]}`；校验失败返回 HTTP 400：

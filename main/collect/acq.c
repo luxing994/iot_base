@@ -10,6 +10,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "devcfg.h"
@@ -66,6 +67,15 @@ static bool s_running;
 /* 变化上报：上次上报的值 */
 static double *s_reported;
 static bool *s_hasReported;
+
+/* 试读：网页给出一个点（s_tryReq），采集任务读完后给 s_tryDone */
+static struct {
+    DevCfgPoint pt;
+    RawValue raw;
+    int ret;
+} s_try;
+static SemaphoreHandle_t s_tryReq;
+static SemaphoreHandle_t s_tryDone;
 
 static bool Is32(uint8_t type)
 {
@@ -461,6 +471,37 @@ static bool PollRound(const DevCfg *c)
     return linkOk;
 }
 
+/* 执行一次试读。网口链路失效返回 false */
+static bool DoTry(const DevCfg *c)
+{
+    memset(&s_try.raw, 0, sizeof(s_try.raw));
+    s_try.ret = s_read(&c->dev, &s_try.pt, &s_try.raw);
+    xSemaphoreGive(s_tryDone);
+    return s_try.ret != PLC_ERR_LINK;
+}
+
+/* 等到下一轮的时间，期间有试读请求时随到随做。网口链路失效返回 false */
+static bool WaitPoll(const DevCfg *c)
+{
+    const TickType_t wait = pdMS_TO_TICKS(c->dev.pollMs);
+    const TickType_t start = xTaskGetTickCount();
+
+    while (1) {
+        TickType_t passed = xTaskGetTickCount() - start;
+
+        if (passed >= wait) {
+            return true;
+        }
+        if (s_read != NULL && xSemaphoreTake(s_tryReq, wait - passed) == pdTRUE) {
+            if (!DoTry(c)) {
+                return false;
+            }
+        } else if (s_read == NULL) {
+            vTaskDelay(wait - passed);
+        }
+    }
+}
+
 /* 串口设备 */
 static void AcqTask(void *arg)
 {
@@ -468,7 +509,7 @@ static void AcqTask(void *arg)
 
     (void)arg;
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(c->dev.pollMs));
+        WaitPoll(c);
         if (!HostCmd_IsCollectEnabled()) {
             continue;   // 上位机发送 EndFlush 后暂停采集，StartFlush 后恢复
         }
@@ -509,7 +550,9 @@ static void AcqNetTask(void *arg)
         s_linkDown = false;
         s_sock = sock;
         while (1) {
-            vTaskDelay(pdMS_TO_TICKS(c->dev.pollMs));
+            if (!WaitPoll(c)) {
+                break;
+            }
             if (!HostCmd_IsCollectEnabled()) {
                 continue;
             }
@@ -591,6 +634,13 @@ bool Acq_Start(UBaseType_t pollPrio, UBaseType_t uartPrio)
             return true;
         }
     }
+    s_tryReq = xSemaphoreCreateBinary();
+    s_tryDone = xSemaphoreCreateBinary();
+    if (s_tryReq == NULL || s_tryDone == NULL) {
+        strlcpy(s_problem, "内存不足，无法启动采集", sizeof(s_problem));
+        ESP_LOGE(TAG, "%s", s_problem);
+        return true;
+    }
     s_read = s_drivers[i].read;
     s_template = s_drivers[i].poll;
     s_handshake = s_drivers[i].handshake;
@@ -666,4 +716,51 @@ int Acq_GetPointText(uint16_t index, char *text, size_t size, uint32_t *ageS)
         *ageS = (uint32_t)((esp_timer_get_time() - s_times[index]) / 1000000);
     }
     return s_states[index];
+}
+
+const char *Acq_TryRead(const DevCfgPoint *p, char *value, size_t vsize, char *raw, size_t rsize)
+{
+    const DevCfg *c = DevCfg_Get();
+    double v;
+
+    value[0] = 0;
+    raw[0] = 0;
+    if (c == NULL || !s_running) {
+        return (s_problem[0] != 0) ? s_problem : "采集未启动";
+    }
+    if (s_read == NULL) {
+        return "该协议的数据项由固件决定，不能试读";
+    }
+    if (c->dev.iface == IFACE_ETH && s_sock < 0) {
+        return "连不上设备，请检查网线、设备 IP 和端口";
+    }
+    xSemaphoreTake(s_tryDone, 0);           // 丢弃上次超时后才完成的结果
+    s_try.pt = *p;
+    xSemaphoreGive(s_tryReq);
+    if (xSemaphoreTake(s_tryDone, pdMS_TO_TICKS(ACQ_TRY_TIMEOUT_MS)) != pdTRUE) {
+        xSemaphoreTake(s_tryReq, 0);        // 还没被取走的请求作废
+        return "采集任务忙，请稍后重试";
+    }
+    switch (s_try.ret) {
+    case PLC_OK:
+        break;
+    case PLC_ERR_LINK:
+        return "连接中断，网关将自动重连";
+    case PLC_ERR_UNSUPPORTED:
+        return "当前连接方式不支持该数据类型";
+    default:
+        return "设备无应答或返回错误，请检查地址是否存在（详细原因见日志）";
+    }
+    if (s_try.raw.isBit) {
+        snprintf(raw, rsize, "%u", (unsigned)(s_try.raw.raw & 1));
+    } else if (Is32(p->type)) {
+        snprintf(raw, rsize, "0x%08lX", (unsigned long)s_try.raw.raw);
+    } else {
+        snprintf(raw, rsize, "0x%04lX", (unsigned long)(s_try.raw.raw & 0xFFFF));
+    }
+    if (!ToValue(p, &s_try.raw, &v)) {
+        return "读到的数据无效（BCD 含非法数字或浮点数无效），请检查类型";
+    }
+    FormatValue(p, v, value, vsize);
+    return NULL;
 }

@@ -689,6 +689,44 @@ static void ParsePoint(DevCfgImport *imp, const cJSON *o)
     }
 }
 
+bool DevCfg_ParseTryPoint(const cJSON *o, DevCfgPoint *pt, char *err, size_t errSize)
+{
+    const DevCfg *cur = s_cfg;
+    cJSON *copy;
+    DevCfgImport *imp;
+    bool ok;
+
+    if (cur == NULL) {
+        strlcpy(err, "没有设备配置", errSize);
+        return false;
+    }
+    copy = cJSON_Duplicate(o, true);
+    imp = calloc(1, sizeof(*imp));
+    if (copy == NULL || imp == NULL) {
+        cJSON_Delete(copy);
+        free(imp);
+        strlcpy(err, "网关内存不足，请稍后重试", errSize);
+        return false;
+    }
+    if (Item(copy, "fr") == NULL) {
+        cJSON_AddNumberToObject(copy, "fr", 1);
+    }
+    if (Item(copy, "name") == NULL) {
+        cJSON_AddStringToObject(copy, "name", "试读");
+    }
+    imp->cfg.dev = cur->dev;
+    imp->cfg.points = pt;
+    imp->haveDevice = true;
+    ParsePoint(imp, copy);
+    ok = (imp->errorCount == 0 && imp->cfg.count == 1);
+    if (!ok) {
+        strlcpy(err, imp->first[0] != 0 ? imp->first : "点位无效", errSize);
+    }
+    cJSON_Delete(copy);
+    free(imp);
+    return ok;
+}
+
 static void ParseLine(DevCfgImport *imp, char *s)
 {
     // 去掉首尾空白和 UTF-8 BOM

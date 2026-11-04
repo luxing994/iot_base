@@ -1036,6 +1036,50 @@ static esp_err_t AcqHandler(httpd_req_t *req)
     return EndChunks(o);
 }
 
+/*
+ * 试读（厂家账号）：请求为一个点（同 point 行，fr、name 可省略），按当前设备读一次。
+ * 应答 {"ok":true/false,"addr":"D100","value":"12.5","raw":"0x007D","error":"..."}，读取失败也返回 200
+ */
+static esp_err_t AcqTryHandler(httpd_req_t *req)
+{
+    DevCfgPoint pt;
+    char err[200];
+    char value[32];
+    char raw[16] = "";
+    char addr[24] = "";
+    const char *fail;
+    cJSON *json;
+    cJSON *root;
+
+    if (!CheckAuth(req) || !RequireFactory(req)) {
+        return ESP_OK;
+    }
+    json = ReadJson(req);
+    if (json == NULL) {
+        return ESP_OK;
+    }
+    memset(&pt, 0, sizeof(pt));
+    if (!DevCfg_ParseTryPoint(json, &pt, err, sizeof(err))) {
+        fail = err;
+    } else {
+        DevCfg_PointAddrText(&DevCfg_Get()->dev, &pt, addr, sizeof(addr));
+        fail = Acq_TryRead(&pt, value, sizeof(value), raw, sizeof(raw));
+        ESP_LOGI(TAG, "try read %s: %s", addr, (fail != NULL) ? "failed" : value);
+    }
+    cJSON_Delete(json);
+
+    root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "ok", fail == NULL);
+    cJSON_AddStringToObject(root, "addr", addr);
+    if (fail == NULL) {
+        cJSON_AddStringToObject(root, "value", value);
+    } else {
+        cJSON_AddStringToObject(root, "error", fail);
+    }
+    cJSON_AddStringToObject(root, "raw", raw);
+    return SendJson(req, root);
+}
+
 static esp_err_t IndexHandler(httpd_req_t *req)
 {
     if (!CheckSource(req)) {
@@ -1077,6 +1121,7 @@ void WebConfig_Start(void)
         { .uri = "/api/devcfg/clear",     .method = HTTP_POST, .handler = DevCfgClearHandler },
         { .uri = "/api/devcfg/protocols", .method = HTTP_GET,  .handler = ProtocolsHandler },
         { .uri = "/api/acq",              .method = HTTP_GET,  .handler = AcqHandler },
+        { .uri = "/api/acq/try",          .method = HTTP_POST, .handler = AcqTryHandler },
     };
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;

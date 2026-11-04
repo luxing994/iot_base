@@ -233,6 +233,20 @@ pre.log{background:#0f1a24;color:#d6e2ee;font:12px/1.45 Consolas,Menlo,monospace
     <h2>数据点 <small id="acqPtsN"></small></h2>
     <div class="tbl"><table><thead><tr><th>编号</th><th>名称</th><th>当前值</th><th>地址</th><th>类型</th><th>上报</th></tr></thead><tbody id="acqPts"></tbody></table></div>
   </div>
+  <div class="card hide" id="acqTryCard">
+    <h2>试读</h2>
+    <p class="hint">按当前设备读取任意一个地址，不上报、不修改配置，用于核对厂商点位表。点击上方数据点可带入其地址和类型。</p>
+    <div class="grid3">
+      <div><label class="f">存储区</label><select id="tryArea"></select></div>
+      <div><label class="f">地址</label><input id="tryAddr"></div>
+      <div id="tryBitBox"><label class="f">位号</label><input id="tryBit" inputmode="numeric"></div>
+      <div><label class="f">类型</label><select id="tryType"></select></div>
+      <div id="tryOrderBox"><label class="f">字序</label><select id="tryOrder"></select></div>
+      <div><label class="f">倍率 <em>可不填</em></label><input id="tryScale" inputmode="decimal" placeholder="1"></div>
+    </div>
+    <div class="btns"><button id="btnTry">读取</button></div>
+    <div class="tbl hide" id="tryOut" style="margin-top:12px"><table><thead><tr><th>时间</th><th>地址</th><th>类型</th><th>结果</th><th>原始数据</th></tr></thead><tbody id="tryRows"></tbody></table></div>
+  </div>
   <div class="card fac-only hide">
     <h2>导入设备配置</h2>
     <input type="file" id="acqFile" accept=".xlsx,.jsonl,.json,.txt">
@@ -997,10 +1011,11 @@ function loadAcq(retried) {
       ['配置版本', esc(m.rev) + (m.source ? ' <span class="hint">' + esc(m.source) + '</span>' : '')]
     ]);
     show('#acqPtsCard', d.needPoints);
+    setupTry(d);
     $('#acqPtsN').textContent = c.points.length + ' 个';
     acqPoints = c.points;
     $('#acqPts').innerHTML = c.points.map(function (p, i) {
-      return '<tr><td>FR' + ('00' + p.fr).slice(-3) + '</td><td>' + esc(p.name) + '</td><td class="val" id="av' + i + '">…</td><td>' +
+      return '<tr data-i="' + i + '"><td>FR' + ('00' + p.fr).slice(-3) + '</td><td>' + esc(p.name) + '</td><td class="val" id="av' + i + '">…</td><td>' +
         esc(p.addr) + '</td><td>' + esc(p.type) + '</td><td>' + (MODE_TEXT[p.mode] || '') + '</td></tr>';
     }).join('');
     loadAcqValues();
@@ -1010,6 +1025,91 @@ function loadAcq(retried) {
     if (!retried) { setTimeout(function () { if (tab === 'acq') { loadAcq(true); } }, 1500); } else { msg(e.message, true); }
   });
 }
+
+// 试读（厂家账号）：按当前设备读任意一个地址
+var tryProto = null;
+var TYPE_TEXT = { bit: '位', i16: '16 位有符号', u16: '16 位无符号', i32: '32 位有符号', u32: '32 位无符号', f32: '浮点', bcd16: 'BCD' };
+
+function setupTry(d) {
+  var on = isFactory && d.needPoints;
+  show('#acqTryCard', on);
+  if (!on) { return; }
+  protocols().then(function (list) {
+    tryProto = list.filter(function (p) { return p.id === d.protocol; })[0];
+    if (!tryProto) { show('#acqTryCard', false); return; }
+    $('#tryArea').innerHTML = tryProto.areas.map(function (a, i) {
+      return '<option value="' + i + '">' + esc(a.name + '（' + a.text + '）') + '</option>';
+    }).join('');
+    $('#tryOrder').innerHTML = ['ABCD', 'CDAB', 'BADC', 'DCBA'].map(function (o) {
+      return '<option' + (o === tryProto.order ? ' selected' : '') + '>' + o + '</option>';
+    }).join('');
+    tryAreaChanged();
+  }).catch(function () { show('#acqTryCard', false); });
+}
+
+function tryAreaChanged() {
+  var a = tryProto.areas[+$('#tryArea').value], cur = $('#tryType').value;
+  $('#tryType').innerHTML = a.types.map(function (t) {
+    return '<option value="' + t + '"' + (t === cur ? ' selected' : '') + '>' + t + '（' + TYPE_TEXT[t] + '）</option>';
+  }).join('');
+  $('#tryAddr').placeholder = a.base === 8 ? '八进制，如 17' : '如 100';
+  $('#tryBit').placeholder = '0~' + a.maxBit;
+  tryTypeChanged();
+}
+
+function tryTypeChanged() {
+  var a = tryProto.areas[+$('#tryArea').value], t = $('#tryType').value;
+  show('#tryBitBox', t === 'bit' && !a.bitArea);
+  show('#tryOrderBox', /32$/.test(t));
+}
+
+$('#tryArea').onchange = tryAreaChanged;
+$('#tryType').onchange = tryTypeChanged;
+
+// 点击数据点：带入地址（如 D100、V30.5、X17）、类型、字序、倍率
+$('#acqPts').onclick = function (ev) {
+  var tr = ev.target.closest('tr[data-i]'), p = tr && acqPoints[+tr.dataset.i], best = -1, m;
+  if (!p || !tryProto || $('#acqTryCard').classList.contains('hide')) { return; }
+  tryProto.areas.forEach(function (a, i) {
+    if (p.addr.indexOf(a.name) === 0 && /^\d/.test(p.addr.slice(a.name.length)) &&
+        (best < 0 || a.name.length > tryProto.areas[best].name.length)) { best = i; }
+  });
+  m = best >= 0 && /^(\d+)(?:\.(\d+))?$/.exec(p.addr.slice(tryProto.areas[best].name.length));
+  if (!m) { return; }
+  $('#tryArea').value = best;
+  tryAreaChanged();
+  $('#tryType').value = p.type;
+  tryTypeChanged();
+  $('#tryAddr').value = m[1];
+  $('#tryBit').value = m[2] || '';
+  if (p.order) { $('#tryOrder').value = p.order; }
+  $('#tryScale').value = p.scale || '';
+  $('#acqTryCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+$('#btnTry').onclick = function () {
+  var a = tryProto.areas[+$('#tryArea').value], t = $('#tryType').value, btn = this,
+      p = { area: a.name, addr: $('#tryAddr').value.trim(), type: t }, s;
+  if (t === 'bit' && !a.bitArea && $('#tryBit').value.trim() !== '') { p.bit = Number($('#tryBit').value); }
+  if (/32$/.test(t)) { p.order = $('#tryOrder').value; }
+  s = $('#tryScale').value.trim();
+  if (s) { p.scale = Number(s); }
+  btn.disabled = true;
+  btn.textContent = '读取中…';
+  api('/api/acq/try', p).then(function (r) {
+    var now = new Date(), tm = [now.getHours(), now.getMinutes(), now.getSeconds()].map(function (n) { return ('0' + n).slice(-2); }).join(':'),
+        tr = document.createElement('tr'), body = $('#tryRows');
+    tr.innerHTML = '<td>' + tm + '</td><td>' + esc(r.addr || (p.area + p.addr)) + '</td><td>' + esc(t) + '</td>' +
+      (r.ok ? '<td class="val">' + esc(r.value) + '</td>' : '<td class="val old">' + esc(r.error) + '</td>') +
+      '<td>' + esc(r.raw || '') + '</td>';
+    body.insertBefore(tr, body.firstChild);
+    while (body.children.length > 20) { body.removeChild(body.lastChild); }
+    show('#tryOut', true);
+  }).catch(function (e) { msg(e.message, true); }).then(function () {
+    btn.disabled = false;
+    btn.textContent = '读取';
+  });
+};
 
 function lineText(e) {
   return (e.line ? '第 ' + e.line + ' 行' + (e.src ? '（' + esc(e.src) + '）' : '') + '：' : '') + esc(e.msg);
