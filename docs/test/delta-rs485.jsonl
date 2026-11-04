@@ -1,5 +1,5 @@
 {"t":"meta","schema":1,"rev":"test-delta-485-1","source":"台达 DVP 真机 COM2 RS485 测试"}
-{"t":"device","name":"台达真机485","number":"TEST-DELTA-485","category":"plc","brand":"台达","model":"DVP40EC","protocol":"delta","iface":"rs485","baud":9600,"dataBits":7,"parity":"E","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"MDPLC"}
+{"t":"device","name":"台达真机485","number":"TEST-DELTA-485","category":"plc","brand":"台达","model":"DVP40ES2","protocol":"delta","iface":"rs485","baud":9600,"dataBits":7,"parity":"E","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"MDPLC"}
 {"t":"point","fr":1,"name":"D0 无符号","area":"D","addr":0,"type":"u16"}
 {"t":"point","fr":2,"name":"D1 有符号","area":"D","addr":1,"type":"i16"}
 {"t":"point","fr":3,"name":"D2 倍率0.1","area":"D","addr":2,"type":"i16","scale":0.1,"dec":1}

@@ -1,0 +1,14 @@
+{"t":"meta","schema":1,"rev":"test-haiwell-485-1","source":"海为 PLC 真机 RS485 测试"}
+{"t":"device","name":"海为真机485","number":"TEST-HAIWELL-485","category":"plc","brand":"海为","model":"T48S0T","protocol":"haiwell","iface":"rs485","baud":19200,"dataBits":8,"parity":"N","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"MDPLC"}
+{"t":"point","fr":1,"name":"V0 无符号","area":"V","addr":0,"type":"u16"}
+{"t":"point","fr":2,"name":"V1 有符号","area":"V","addr":1,"type":"i16"}
+{"t":"point","fr":3,"name":"V10-11 32位","area":"V","addr":10,"type":"i32"}
+{"t":"point","fr":4,"name":"V20-21 浮点","area":"V","addr":20,"type":"f32","dec":2}
+{"t":"point","fr":5,"name":"V30.3 字中取位","area":"V","addr":30,"bit":3,"type":"bit"}
+{"t":"point","fr":6,"name":"AI0 模拟量","area":"AI","addr":0,"type":"i16"}
+{"t":"point","fr":7,"name":"CV0 计数","area":"CV","addr":0,"type":"u16"}
+{"t":"point","fr":8,"name":"M0","area":"M","addr":0,"type":"bit"}
+{"t":"point","fr":9,"name":"M100","area":"M","addr":100,"type":"bit"}
+{"t":"point","fr":10,"name":"X0","area":"X","addr":0,"type":"bit"}
+{"t":"point","fr":11,"name":"Y0","area":"Y","addr":0,"type":"bit"}
+{"t":"point","fr":12,"name":"SM0 系统位","area":"SM","addr":0,"type":"bit"}

@@ -1,0 +1,15 @@
+{"t":"meta","schema":1,"rev":"test-delta-232-1","source":"台达 DVP 真机 COM1 RS232 测试"}
+{"t":"device","name":"台达真机232","number":"TEST-DELTA-232","category":"plc","brand":"台达","model":"DVP40EC","protocol":"delta","iface":"rs232","baud":9600,"dataBits":7,"parity":"E","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"MDPLC"}
+{"t":"point","fr":1,"name":"D0 无符号","area":"D","addr":0,"type":"u16"}
+{"t":"point","fr":2,"name":"D1 有符号","area":"D","addr":1,"type":"i16"}
+{"t":"point","fr":3,"name":"D2 倍率0.1","area":"D","addr":2,"type":"i16","scale":0.1,"dec":1}
+{"t":"point","fr":4,"name":"D10-11 32位","area":"D","addr":10,"type":"i32"}
+{"t":"point","fr":5,"name":"D20-21 浮点","area":"D","addr":20,"type":"f32","dec":2}
+{"t":"point","fr":6,"name":"D4100 高段","area":"D","addr":4100,"type":"u16"}
+{"t":"point","fr":7,"name":"D40.3 字中取位","area":"D","addr":40,"bit":3,"type":"bit"}
+{"t":"point","fr":8,"name":"M0","area":"M","addr":0,"type":"bit"}
+{"t":"point","fr":9,"name":"M5","area":"M","addr":5,"type":"bit"}
+{"t":"point","fr":10,"name":"M2000 高段","area":"M","addr":2000,"type":"bit"}
+{"t":"point","fr":11,"name":"X0","area":"X","addr":"0","type":"bit"}
+{"t":"point","fr":12,"name":"X10 八进制","area":"X","addr":"10","type":"bit"}
+{"t":"point","fr":13,"name":"Y0","area":"Y","addr":"0","type":"bit"}

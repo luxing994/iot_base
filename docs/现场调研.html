@@ -276,6 +276,7 @@ P("modbus_rtu","Modbus RTU",["rs485","rs232"],true,9600,8,"N",1,1,247,0,MBA),
 P("modbus_tcp","Modbus TCP",["eth"],true,0,0,"",0,1,255,502,MBA),
 P("modbus_ascii","Modbus ASCII",["rs485","rs232"],true,9600,7,"E",1,1,247,0,MBA),
 P("delta","台达 DVP（Modbus ASCII）",["rs485","rs232"],true,9600,7,"E",1,1,247,0,[{name:"D",types:["bit"].concat(N)},{name:"M",types:["bit"]},{name:"X",types:["bit"]},{name:"Y",types:["bit"]}]),
+P("haiwell","海为 PLC（Modbus RTU）",["rs485","rs232"],true,19200,8,"N",1,1,247,0,[{name:"V",types:["bit"].concat(N)},{name:"AI",types:["bit"].concat(N)},{name:"AQ",types:["bit"].concat(N)},{name:"TV",types:N},{name:"CV",types:N},{name:"SV",types:["bit"].concat(N)},{name:"X",types:["bit"]},{name:"Y",types:["bit"]},{name:"M",types:["bit"]},{name:"T",types:["bit"]},{name:"C",types:["bit"]},{name:"S",types:["bit"]},{name:"SM",types:["bit"]}]),
 P("dbs","DBS 真空计",["rs232"],false,9600,8,"N",1,0,0,0,[]),
 P("t76","76T 安规测试仪",["rs485","rs232"],false,9600,8,"N",1,1,99,0,[]),
 P("ainuo","艾诺安规测试仪",["rs485","rs232"],false,19200,8,"N",1,1,255,0,[])
@@ -323,7 +324,8 @@ var XL = (function () {
     '欧姆龙': { rs232: 'hostlink', rs485: 'hostlink' },
     '西门子': { rs485: 'ppi', eth: 's7' },
     '台达': { rs485: 'delta', rs232: 'delta', eth: 'modbus_tcp' },
-    '汇川': MB, '信捷': MB, '施耐德': MB, '海为': MB,
+    '汇川': MB, '信捷': MB, '施耐德': MB,
+    '海为': { rs485: 'haiwell', rs232: 'haiwell', eth: 'modbus_tcp' },
     '艾诺': { rs232: 'ainuo', rs485: 'ainuo' }
   };
 

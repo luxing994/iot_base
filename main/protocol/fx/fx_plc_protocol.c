@@ -48,9 +48,15 @@ static void FxSetValue(FxFormat fmt, const uint32_t *w, PlcValue *out)
  *
  * 读请求：STX '0' 地址(4) 字节数(2) ETX 和校验(2)       地址 = D 寄存器在 PLC 内存中的字节地址
  * 应答：  STX 数据(字节数 * 2) ETX 和校验(2)             数据低字节在前
+ *
+ * 基本读命令 '0' 的 D 区只映射到 D1023（FX1S / FX1N 等老机型的范围）；FX2N / FX3 的 D1024~D7999
+ * 用扩展读命令 "E00"，D 区起始地址 4000H（与 GX Developer 的读法相同，尚未真机验证）
  */
 #define FX_PROG_CMD_READ        '0'
+#define FX_PROG_CMD_READ_EXT    "E00"
 #define FX_PROG_D_BASE          0x1000
+#define FX_PROG_D_EXT_BASE      0x4000
+#define FX_PROG_D_BASIC_MAX     1023
 #define FX_PROG_D_SPECIAL_BASE  0x0E00      // D8000 起的特殊寄存器
 
 typedef struct {
@@ -103,17 +109,27 @@ static int FxProgParse(void *arg)
 
 int FX_ProgReadD(uint16_t address, PlcValue *out)
 {
-    uint8_t f[11];
+    uint8_t f[13];
     FxProgCtx ctx = { .nbytes = 2 };
+    size_t n = 1;
 
     f[0] = FX_STX;
-    f[1] = FX_PROG_CMD_READ;
-    Proto_PutHex(&f[2], FxProgAddress(address), 4);
-    Proto_PutHex(&f[6], ctx.nbytes, 2);
-    f[8] = FX_ETX;
-    Proto_PutSum8Hex(&f[9], &f[1], 8);      // 命令 ~ ETX
+    if (address > FX_PROG_D_BASIC_MAX && address < 8000) {
+        memcpy(&f[n], FX_PROG_CMD_READ_EXT, 3);
+        n += 3;
+        Proto_PutHex(&f[n], FX_PROG_D_EXT_BASE + address * 2u, 4);
+    } else {
+        f[n++] = FX_PROG_CMD_READ;
+        Proto_PutHex(&f[n], FxProgAddress(address), 4);
+    }
+    n += 4;
+    Proto_PutHex(&f[n], ctx.nbytes, 2);
+    n += 2;
+    f[n++] = FX_ETX;
+    Proto_PutSum8Hex(&f[n], &f[1], n - 1);  // 命令 ~ ETX
+    n += 2;
 
-    if (SerialTxn_Request(f, sizeof(f), FxProgParse, &ctx, SERIAL_TXN_TIMEOUT_MS) != 0) {
+    if (SerialTxn_Request(f, n, FxProgParse, &ctx, SERIAL_TXN_TIMEOUT_MS) != 0) {
         return PLC_ERR_RESPONSE;
     }
     PlcValue_SetInt(out, (int32_t)ctx.raw);

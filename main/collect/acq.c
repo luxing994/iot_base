@@ -303,49 +303,72 @@ static int ReadModbusAscii(const DevCfgDevice *d, const DevCfgPoint *p, RawValue
     return ReadModbusWith(MB_AsciiRead, d, p, r);
 }
 
+/* 按软元件换算好的 Modbus 地址读一个点：位用 01 / 02，字用 03 / 04；32 位数据低字在前 */
+static int ReadMbMapped(MbReadFn read, uint8_t fc, uint16_t addr, const DevCfgPoint *p, RawValue *r)
+{
+    uint16_t w[2] = { 0 };
+    int ret;
+
+    if (MB_IsBitFc(fc)) {
+        ret = read(fc, addr, 1, w);
+        r->raw = w[0] & 1;
+        r->isBit = true;
+    } else if (Is32(p->type)) {
+        ret = read(fc, addr, 2, w);
+        r->raw = ((uint32_t)w[1] << 16) | w[0];
+        r->order = "CDAB";
+    } else {
+        ret = read(fc, addr, 1, w);
+        r->raw = w[0];
+    }
+    return ret;
+}
+
 /*
  * 台达 DVP：软元件换算成 Modbus 地址（台达手册“通讯地址”表），Modbus ASCII 读取
  *   X0~X377 0400H 起，Y0~Y377 0500H 起（八进制编号按数值），M0~M1535 0800H 起，M1536~ B000H 起，
- *   D0~D4095 1000H 起，D4096~ 9000H 起；32 位数据低字在前
+ *   D0~D4095 1000H 起，D4096~ 9000H 起
  */
 static int ReadDelta(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
 {
     const uint32_t n = p->addr;
-    uint16_t w[2] = { 0 };
-    uint8_t fc = MB_FC_READ_HOLDING;
-    uint16_t addr;
-    int ret;
 
     switch (AreaName(d, p)[0]) {
     case 'X':
-        fc = MB_FC_READ_DISCRETE;
-        addr = (uint16_t)(0x0400 + n);
-        break;
+        return ReadMbMapped(MB_AsciiRead, MB_FC_READ_DISCRETE, (uint16_t)(0x0400 + n), p, r);
     case 'Y':
-        fc = MB_FC_READ_COILS;
-        addr = (uint16_t)(0x0500 + n);
-        break;
+        return ReadMbMapped(MB_AsciiRead, MB_FC_READ_COILS, (uint16_t)(0x0500 + n), p, r);
     case 'M':
-        fc = MB_FC_READ_COILS;
-        addr = (uint16_t)((n < 1536) ? 0x0800 + n : 0xB000 + (n - 1536));
-        break;
+        return ReadMbMapped(MB_AsciiRead, MB_FC_READ_COILS, (uint16_t)((n < 1536) ? 0x0800 + n : 0xB000 + (n - 1536)), p, r);
     default:
-        addr = (uint16_t)((n < 4096) ? 0x1000 + n : 0x9000 + (n - 4096));
-        break;
+        return ReadMbMapped(MB_AsciiRead, MB_FC_READ_HOLDING, (uint16_t)((n < 4096) ? 0x1000 + n : 0x9000 + (n - 4096)), p, r);
     }
-    if (MB_IsBitFc(fc)) {
-        ret = MB_AsciiRead(fc, addr, 1, w);
-        r->raw = w[0] & 1;
-        r->isBit = true;
-    } else if (Is32(p->type)) {
-        ret = MB_AsciiRead(fc, addr, 2, w);
-        r->raw = ((uint32_t)w[1] << 16) | w[0];
-        r->order = "CDAB";
-    } else {
-        ret = MB_AsciiRead(fc, addr, 1, w);
-        r->raw = w[0];
+}
+
+/* 海为：软元件换算成 Modbus 地址（海为《PLC 通讯地址表》），Modbus RTU 读取 */
+static int ReadHaiwell(const DevCfgDevice *d, const DevCfgPoint *p, RawValue *r)
+{
+    static const struct {
+        const char *name;
+        uint8_t fc;
+        uint16_t base;
+    } map[] = {
+        { "V",  MB_FC_READ_HOLDING,  0x0200 }, { "AI", MB_FC_READ_INPUT,    0x0000 },
+        { "AQ", MB_FC_READ_HOLDING,  0x0100 }, { "TV", MB_FC_READ_HOLDING,  0x3C00 },
+        { "CV", MB_FC_READ_HOLDING,  0x4000 }, { "SV", MB_FC_READ_HOLDING,  0x4400 },
+        { "X",  MB_FC_READ_DISCRETE, 0x0000 }, { "Y",  MB_FC_READ_COILS,    0x0600 },
+        { "M",  MB_FC_READ_COILS,    0x0C00 }, { "T",  MB_FC_READ_COILS,    0x3C00 },
+        { "C",  MB_FC_READ_COILS,    0x4000 }, { "S",  MB_FC_READ_COILS,    0x7000 },
+        { "SM", MB_FC_READ_COILS,    0x4200 },
+    };
+    const char *name = AreaName(d, p);
+
+    for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+        if (strcmp(name, map[i].name) == 0) {
+            return ReadMbMapped(MB_RtuRead, map[i].fc, (uint16_t)(map[i].base + p->addr), p, r);
+        }
     }
-    return ret;
+    return PLC_ERR_UNSUPPORTED;
 }
 
 /* ============================================================ 内置模板 */
@@ -654,6 +677,7 @@ static const struct {
     { "modbus_tcp", ReadModbusTcp, NULL,      SetupMbTcp,    NULL },
     { "modbus_ascii", ReadModbusAscii, NULL,  SetupMbRtu,    NULL },
     { "delta",      ReadDelta,     NULL,      SetupMbRtu,    NULL },
+    { "haiwell",    ReadHaiwell,   NULL,      SetupMbRtu,    NULL },
     { "dbs",        NULL,          PollDbs,   NULL,          NULL },
     { "t76",        NULL,          PollT76,   NULL,          NULL },
     { "ainuo",      NULL,          PollAinuo, NULL,          NULL },

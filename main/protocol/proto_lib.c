@@ -43,6 +43,23 @@ static const ProtoArea s_deltaAreas[] = {
     { "Y",  "输出",         PT_MASK(PT_BIT),            0377,  8,  0,  true },
 };
 
+/* 海为：按软元件写，固件按海为通讯地址表换算成 Modbus 地址（编号均为十进制） */
+static const ProtoArea s_haiwellAreas[] = {
+    { "V",  "数据寄存器",   T_ALLNUM | PT_MASK(PT_BIT), 14847, 10, 15, false },
+    { "AI", "模拟量输入",   T_ALLNUM | PT_MASK(PT_BIT), 255,   10, 15, false },
+    { "AQ", "模拟量输出",   T_ALLNUM | PT_MASK(PT_BIT), 255,   10, 15, false },
+    { "TV", "定时器当前值", T_ALLNUM,                   1023,  10, 0,  false },
+    { "CV", "计数器当前值", T_ALLNUM,                   255,   10, 0,  false },
+    { "SV", "系统寄存器",   T_ALLNUM | PT_MASK(PT_BIT), 900,   10, 15, false },
+    { "X",  "输入",         PT_MASK(PT_BIT),            1023,  10, 0,  true },
+    { "Y",  "输出",         PT_MASK(PT_BIT),            1023,  10, 0,  true },
+    { "M",  "辅助继电器",   PT_MASK(PT_BIT),            12287, 10, 0,  true },
+    { "T",  "定时器触点",   PT_MASK(PT_BIT),            1023,  10, 0,  true },
+    { "C",  "计数器触点",   PT_MASK(PT_BIT),            255,   10, 0,  true },
+    { "S",  "步进继电器",   PT_MASK(PT_BIT),            2047,  10, 0,  true },
+    { "SM", "系统状态位",   PT_MASK(PT_BIT),            215,   10, 0,  true },
+};
+
 static const ProtoArea s_modbusAreas[] = {
     { "HR",   "保持寄存器（4x）", T_ALLNUM | PT_MASK(PT_BIT), 65535, 10, 15, false },
     { "IR",   "输入寄存器（3x）", T_ALLNUM | PT_MASK(PT_BIT), 65535, 10, 15, false },
@@ -67,6 +84,7 @@ static const ProtoInfo s_protocols[] = {
     { "modbus_tcp", "Modbus TCP",                  IFACE_ETH,                 true,  0,      0, 'N', 0,   1,   255,  502,  "ABCD", "MDPLC",  AREAS(s_modbusAreas) },
     { "modbus_ascii", "Modbus ASCII",              IFACE_RS485 | IFACE_RS232, true,  9600,   7, 'E', 1,   1,   247,  0,    "ABCD", "MDPLC",  AREAS(s_modbusAreas) },
     { "delta",      "台达 DVP（Modbus ASCII）",    IFACE_RS485 | IFACE_RS232, true,  9600,   7, 'E', 1,   1,   247,  0,    "CDAB", "MDPLC",  AREAS(s_deltaAreas) },
+    { "haiwell",    "海为 PLC（Modbus RTU）",      IFACE_RS485 | IFACE_RS232, true,  19200,  8, 'N', 1,   1,   247,  0,    "CDAB", "MDPLC",  AREAS(s_haiwellAreas) },
     { "dbs",        "DBS 真空计",                  IFACE_RS232,               false, 9600,   8, 'N', 1,   0,   0,    0,    "ABCD", "LSPLC",  NO_AREAS },
     { "t76",        "76T 安规测试仪",              IFACE_RS232 | IFACE_RS485, false, 9600,   8, 'N', 1,   1,   99,   0,    "ABCD", "",       NO_AREAS },
     { "ainuo",      "艾诺安规测试仪",              IFACE_RS232 | IFACE_RS485, false, 19200,  8, 'N', 1,   1,   255,  0,    "ABCD", "",       NO_AREAS },
