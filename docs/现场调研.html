@@ -134,6 +134,8 @@ a.btn.pri { color: var(--acc-fg); }
 .dlg h3 { margin: 0 0 6px; font-size: 16px; }
 .dlg p { margin: 0 0 12px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .dlg .bar { margin: 0 0 10px; }
+#ask { z-index: 40; }
+#ask p { color: var(--fg); font-size: 14px; }
 .note ol { margin: 6px 0 0; padding-left: 20px; }
 </style>
 </head>
@@ -256,6 +258,10 @@ a.btn.pri { color: var(--acc-fg); }
     <button class="btn" id="dlgClose" type="button">关闭</button>
   </div>
   <div class="hint">点击“保存文件”后，文件一般在手机的“下载”（Download）目录中。若点击后无反应，说明当前浏览器不支持下载：请使用 Chrome、Edge 或手机自带浏览器打开本页面，不要在微信、QQ 或文件管理器的预览窗口中使用。</div>
+</div></div>
+<div class="dlg" id="ask"><div class="box">
+  <p id="askMsg"></p>
+  <div class="bar"><span class="sp"></span><button class="btn" id="askNo" type="button">取消</button> <button class="btn pri" id="askYes" type="button">确定</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -1057,6 +1063,21 @@ function newId() { return Date.now().toString(36) + Math.random().toString(36).s
 function kindOf(k) { for (var i = 0; i < KINDS.length; i++) { if (KINDS[i][0] === k) { return KINDS[i]; } } return KINDS[3]; }
 function filesOf(id, kind) { return FILES.filter(function (f) { return f.dev === id && (!kind || f.kind === kind); }); }
 
+/*
+ * 页内确认框。部分 App 内置的网页查看器不支持浏览器自带的确认框和提示框（直接返回“取消”或不显示），
+ * 因此一律用页内对话框；yes 为点“确定”后执行的操作，okOnly 时只显示“确定”（提示用）
+ */
+function ask(msg, yes, okOnly) {
+  var d = $('#ask');
+  function close() { d.classList.remove('on'); }
+  $('#askMsg').textContent = msg;
+  $('#askNo').style.display = okOnly ? 'none' : '';
+  $('#askNo').onclick = close;
+  $('#askYes').onclick = function () { close(); if (yes) { yes(); } };
+  d.classList.add('on');
+}
+function say(msg) { ask(String(msg), null, true); }
+
 var toastTimer;
 function toast(t) {
   var e = $('#toast');
@@ -1105,7 +1126,7 @@ function store(mode, fn) {
       t.onerror = t.onabort = function () { rej(t.error); };
     });
   }).catch(function (e) {
-    if (dbOk) { dbOk = false; alert('浏览器不支持本地保存照片（' + (e && e.message || e) + '），照片在关闭页面后会丢失，请及时导出。'); }
+    if (dbOk) { dbOk = false; say('浏览器不支持本地保存照片（' + (e && e.message || e) + '），照片在关闭页面后会丢失，请及时导出。'); }
   });
 }
 function putFile(f) { FILES.push(f); return store('readwrite', function (s) { return s.put(f); }); }
@@ -1349,7 +1370,7 @@ $('#files').onclick = function (ev) {
     $('#fileIn').value = '';
     $('#fileIn').click();
   } else if (x) {
-    if (confirm('删除该文件？')) { delFiles(FILES.filter(function (f) { return f.id === x.getAttribute('data-del'); })).then(paintFiles); paintFiles(); }
+    ask('删除该文件？', function () { delFiles(FILES.filter(function (f) { return f.id === x.getAttribute('data-del'); })).then(paintFiles); paintFiles(); });
   } else if (t.tagName === 'IMG') {
     var v = $('#viewer');
     v.querySelector('img').src = t.src;
@@ -1370,7 +1391,7 @@ $('#fileIn').onchange = function () {
   }, Promise.resolve()).then(function () {
     if (cur && cur._id === id) { paintFiles(); }
     toast('已添加 ' + list.length + ' 个文件');
-  }).catch(function (e) { alert('添加失败：' + (e && e.message || e)); });
+  }).catch(function (e) { say('添加失败：' + (e && e.message || e)); });
 };
 
 // 照片压缩到长边 2048 像素（JPEG），铭牌文字仍可辨认；非图片及压缩后更大的保持原样
@@ -1439,7 +1460,11 @@ function commit() {
 }
 
 function back() {
-  if (dirty && !confirm('修改尚未保存，确认放弃？（照片的添加和删除已即时保存）')) { return; }
+  if (dirty) { ask('修改尚未保存，确认放弃？（照片的添加和删除已即时保存）', leave); return; }
+  leave();
+}
+
+function leave() {
   dirty = false;
   closeEd();
   if (pushed) { pushed = false; history.back(); }
@@ -1450,7 +1475,11 @@ window.onpopstate = function () {
   pushed = false;
   if (!cur) { return; }
   if ($('#viewer').classList.contains('on')) { $('#viewer').classList.remove('on'); }
-  if (dirty && !confirm('修改尚未保存，确认放弃？')) { try { history.pushState({ ed: 1 }, ''); pushed = true; } catch (e) {} return; }
+  if (dirty) {
+    try { history.pushState({ ed: 1 }, ''); pushed = true; } catch (e) {}
+    ask('修改尚未保存，确认放弃？', leave);
+    return;
+  }
   dirty = false;
   closeEd();
 };
@@ -1471,11 +1500,11 @@ $('#eCopy').onclick = function () {
 };
 $('#eDel').onclick = function () {
   var nf = filesOf(cur._id).length;
-  if (!confirm('确认删除该设备' + (nf ? '及其 ' + nf + ' 个照片与资料' : '') + '？')) { return; }
-  S.devices.splice(curIdx, 1);
-  save();
-  dirty = false;
-  back();
+  ask('确认删除该设备' + (nf ? '及其 ' + nf + ' 个照片与资料' : '') + '？', function () {
+    S.devices.splice(curIdx, 1);
+    save();
+    leave();
+  });
 };
 $('#bAdd').onclick = function () { openEd(-1); };
 
@@ -1548,7 +1577,7 @@ function offer(blob, name) {
   var share = !!(f && navigator.canShare && navigator.canShare({ files: [f] }));
   $('#dlgShare').style.display = share ? '' : 'none';
   $('#dlgShare').onclick = function () {
-    navigator.share({ files: [f], title: name }).catch(function (e) { if (e && e.name !== 'AbortError') { alert('分享失败：' + e.message); } });
+    navigator.share({ files: [f], title: name }).catch(function (e) { if (e && e.name !== 'AbortError') { say('分享失败：' + e.message); } });
   };
   $('#dlg').classList.add('on');
 }
@@ -1569,21 +1598,26 @@ $('#bExport').onclick = function () {
     });
     var base = '设备数采现场调研表-' + S.info.factory.replace(/[\/:*?"<>|\s]+/g, '') + '-' + (S.info.date || today()).replace(/-/g, '');
     var xlsx = XL.build(PROTOS, { rows: rows, ptRows: S.points, gateway: S.net, info: infoText() });
-  } catch (e) { alert('导出失败：' + (e && e.message || e)); return; }
+  } catch (e) { say('导出失败：' + (e && e.message || e)); return; }
   if (!pack.length) { offer(xlsx, base + '.xlsx'); return; }
   toast('正在打包 ' + pack.length + ' 个照片与资料…');
   Promise.all([toBuf(xlsx)].concat(pack.map(function (p) { return toBuf(p.file.blob); }))).then(function (bufs) {
     var files = [[base + '.xlsx', new Uint8Array(bufs[0])]];
     pack.forEach(function (p, i) { files.push([p.path, new Uint8Array(bufs[i + 1])]); });
     offer(new Blob([XL.zip(files)], { type: 'application/zip' }), base.replace('调研表', '调研资料') + '.zip');
-  }).catch(function (e) { alert('导出失败：' + (e && e.message || e)); });
+  }).catch(function (e) { say('导出失败：' + (e && e.message || e)); });
 };
 
 $('#bOpen').onclick = function () { $('#file').value = ''; $('#file').click(); };
 $('#file').onchange = function () {
-  var f = this.files[0], isZip;
+  var f = this.files[0];
   if (!f) { return; }
-  if (S.devices.length && !confirm('打开后将替换当前页面中的 ' + S.devices.length + ' 台设备及其照片，确认继续？')) { return; }
+  if (S.devices.length) { ask('打开后将替换当前页面中的 ' + S.devices.length + ' 台设备及其照片，确认继续？', function () { openFile(f); }); return; }
+  openFile(f);
+};
+
+function openFile(f) {
+  var isZip;
   toBuf(f).then(function (buf) {
     isZip = /\.zip$/i.test(f.name);
     if (!isZip) { return XL.read(buf).then(function (s) { return { sheet: s, files: {} }; }); }
@@ -1625,16 +1659,17 @@ $('#file').onchange = function () {
       toast('已打开：' + S.devices.length + ' 台设备' + (added.length ? '，' + added.length + ' 个照片与资料' : '') +
         (S.points.length ? '，' + S.points.length + ' 个采集点位' : ''));
     });
-  }).catch(function (e) { alert(e.message || e); });
-};
+  }).catch(function (e) { say(e.message || e); });
+}
 
 $('#bClear').onclick = function () {
-  if (!confirm('清空本页全部调研数据及照片（不可恢复），确认继续？已导出的文件不受影响。')) { return; }
-  S = { info: { date: today() }, devices: [], points: [], net: {} };
-  save();
-  delFiles(FILES.slice());
-  showInfo();
-  render();
+  ask('清空本页全部调研数据及照片（不可恢复），确认继续？已导出的文件不受影响。', function () {
+    S = { info: { date: today() }, devices: [], points: [], net: {} };
+    save();
+    delFiles(FILES.slice());
+    showInfo();
+    render();
+  });
 };
 
 load();
