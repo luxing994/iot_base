@@ -857,6 +857,9 @@ html { scroll-behavior: smooth; }
       <tr><td class="k" style="color:var(--warn)">应答偶有错码（诊断页）</td><td>线路干扰：线缆过长、未接地、靠近动力线</td><td>连接 GND，改用屏蔽双绞线，远离变频器；条件允许时降低波特率。错码已由校验机制拦截，不会上报错误数据</td></tr>
       <tr><td class="k" style="color:var(--bad)">连接不上设备</td><td>网口设备 IP、端口错误，或不在同一网段</td><td>用电脑 ping 设备 IP；确认设备端口及对应协议已开启</td></tr>
       <tr><td class="k">数据异常</td><td>数据类型、倍率或字序设置错误</td><td>数值相差 10 倍或 100 倍时调整倍率；数值明显异常时尝试“双字整数 / 浮点数”，或调整字序（如 CDAB）</td></tr>
+      <tr><td class="k">数据全为 0</td><td>PLC 断电重启后普通（非停电保持）寄存器已清零，或测试值未写入成功；网关只读不写，不会改动 PLC 数据</td><td>用“试读”读取系统寄存器核对（如台达 D1036 应为 134、D1121 为站号）：读数正确说明通讯正常，数据以 PLC 实际值为准；测试时可使用停电保持区地址</td></tr>
+      <tr><td class="k">RS232 接口无法插接</td><td>网关为 DB9 母头，设备编程线多为 DB9 母头</td><td>加装 DB9 公对公转接头：设备编程线按电脑接法设计，先试直通，不通改用交叉（Null Modem）；可用万用表区分收发：以 5 脚为地，空闲时约 −5 ~ −10 V 的为发送端</td></tr>
+      <tr><td class="k">电脑连不上 PLC</td><td>网关接入后改接电脑：通讯管理软件未恢复、COM 口号变化、转接头未拆除</td><td>重启通讯驱动（如台达 COMMGR 先停止再开始）；在设备管理器核对 COM 口号；拆除为接网关加装的转接头；编程口同一时间只能连接一台设备</td></tr>
       <tr><td class="k">上位机已暂停采集</td><td>上位机下发了暂停命令</td><td>联系上位机负责人</td></tr>
       <tr><td class="k">配置页无法打开</td><td>热点已关闭，或电脑代理设置影响访问</td><td>连续按 3 次复位键重新开启热点；关闭代理或将 *.local 设置为直连</td></tr>
     </tbody>
@@ -899,7 +902,7 @@ html { scroll-behavior: smooth; }
       <tr><td class="k">DBS 真空计 / 76T、艾诺安规测试仪</td><td>RS232 / RS485</td><td class="mono">9600 / 19200 8N1</td><td>内置模板，无需填写点位</td></tr>
     </tbody>
   </table></div>
-  <div class="note warn"><b>协议验证</b>已完成真机验证的协议：欧姆龙 HostLink，三菱 FX 计算机链接（FX5U）、MC 协议（FX5U、L02CPU），西门子 S7comm、PPI（S7-200 SMART）。其他协议导入时给出提示，可继续导入，验收时须逐点核对数据。</div>
+  <div class="note warn"><b>协议验证</b>已完成真机验证的协议：欧姆龙 HostLink，三菱 FX 计算机链接（FX5U）、MC 协议（FX5U、L02CPU），西门子 S7comm、PPI（S7-200 SMART），台达 DVP（DVP40ES2、DVP40EC）。其他协议导入时给出提示，可继续导入，验收时须逐点核对数据。</div>
 </section>
 </main>
 </div>

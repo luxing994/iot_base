@@ -105,7 +105,7 @@ static const struct {
 /* ------------------------------------------------------------ 查询 */
 
 /* 已在真机上按设备配置采集验证过的协议 */
-static const char *const s_verified[] = { "hostlink", "fx_link", "fx_mc", "s7", "ppi" };
+static const char *const s_verified[] = { "hostlink", "fx_link", "fx_mc", "s7", "ppi", "delta" };
 
 bool ProtoLib_IsVerified(const ProtoInfo *p)
 {

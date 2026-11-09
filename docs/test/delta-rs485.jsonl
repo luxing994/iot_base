@@ -1,5 +1,6 @@
-{"t":"meta","schema":1,"rev":"test-delta-485-1","source":"台达 DVP 真机 COM2 RS485 测试"}
+{"t":"meta","schema":1,"rev":"test-delta-485-3","source":"台达 DVP 真机 COM2 RS485 测试"}
 {"t":"device","name":"台达真机485","number":"TEST-DELTA-485","category":"plc","brand":"台达","model":"DVP40ES2","protocol":"delta","iface":"rs485","baud":9600,"dataBits":7,"parity":"E","stopBits":1,"station":1,"pollMs":2000,"report":"each","devTypeId":"LM","devTypeName":"MDPLC"}
+{"t":"gateway","ethDhcp":false,"ethIp":"192.168.2.200","ethMask":"255.255.255.0","ethGateway":"192.168.2.254"}
 {"t":"point","fr":1,"name":"D0 无符号","area":"D","addr":0,"type":"u16"}
 {"t":"point","fr":2,"name":"D1 有符号","area":"D","addr":1,"type":"i16"}
 {"t":"point","fr":3,"name":"D2 倍率0.1","area":"D","addr":2,"type":"i16","scale":0.1,"dec":1}
@@ -13,3 +14,12 @@
 {"t":"point","fr":11,"name":"X0","area":"X","addr":"0","type":"bit"}
 {"t":"point","fr":12,"name":"X10 八进制","area":"X","addr":"10","type":"bit"}
 {"t":"point","fr":13,"name":"Y0","area":"Y","addr":"0","type":"bit"}
+{"t":"point","fr":14,"name":"D200 停电保持","area":"D","addr":200,"type":"u16"}
+{"t":"point","fr":15,"name":"D201 停电保持有符号","area":"D","addr":201,"type":"i16"}
+{"t":"point","fr":16,"name":"D210-211 停电保持32位","area":"D","addr":210,"type":"i32"}
+{"t":"point","fr":17,"name":"D220-221 停电保持浮点","area":"D","addr":220,"type":"f32","dec":2}
+{"t":"point","fr":18,"name":"M500 停电保持","area":"M","addr":500,"type":"bit"}
+{"t":"point","fr":19,"name":"D1120 COM2格式","area":"D","addr":1120,"type":"u16"}
+{"t":"point","fr":20,"name":"D1121 站号","area":"D","addr":1121,"type":"u16"}
+{"t":"point","fr":21,"name":"M1000 运行中","area":"M","addr":1000,"type":"bit"}
+{"t":"point","fr":22,"name":"M1013 1秒时钟","area":"M","addr":1013,"type":"bit"}
